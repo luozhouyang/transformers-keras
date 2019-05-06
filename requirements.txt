@@ -1,0 +1,3 @@
+tensorflow==2.0.0a
+matplotlib
+tensorflow_datasets
