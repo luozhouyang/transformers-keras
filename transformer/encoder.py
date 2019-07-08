@@ -10,6 +10,11 @@ class EncoderLayer(tf.keras.layers.Layer):
     def __init__(self, d_model, num_heads, dff, rate=0.1):
         super(EncoderLayer, self).__init__()
 
+        self.d_model = d_model
+        self.num_heads = num_heads
+        self.dff = dff
+        self.dropout_rate = rate
+
         self.mha = MultiHeadAttention(d_model, num_heads)
         self.ffn = PointWiseFeedForwardNetwork(d_model, dff)
 
@@ -22,7 +27,7 @@ class EncoderLayer(tf.keras.layers.Layer):
         self.dropout2 = tf.keras.layers.Dropout(rate)
 
     def call(self, x, training, mask):
-        attn_output, _ = self.mha(x, x, x, mask)  # (batch_size, input_seq_len, d_model)
+        attn_output, attn_weights = self.mha(x, x, x, mask)  # (batch_size, input_seq_len, d_model)
         attn_output = self.dropout1(attn_output, training=training)
         out1 = self.layer_norm1(x + attn_output)  # (batch_size, input_seq_len, d_model)
 
@@ -30,7 +35,17 @@ class EncoderLayer(tf.keras.layers.Layer):
         ffn_output = self.dropout2(ffn_output, training=training)
         out2 = self.layer_norm2(out1 + ffn_output)  # (batch_size, input_seq_len, d_model)
 
-        return out2
+        return out2, attn_weights
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "d_model": self.d_model,
+            "num_heads": self.num_heads,
+            "dff": self.dff,
+            "dropout_rate": self.dropout_rate
+        })
+        return config
 
 
 class Encoder(tf.keras.layers.Layer):
@@ -40,6 +55,10 @@ class Encoder(tf.keras.layers.Layer):
 
         self.d_model = d_model
         self.num_layers = num_layers
+        self.num_heads = num_heads
+        self.dff = dff
+        self.input_vocab_size = input_vocab_size
+        self.dropout_rate = rate
 
         self.embedding = tf.keras.layers.Embedding(input_vocab_size, d_model)
         self.pos_encoding = funcs.positional_encoding(input_vocab_size, self.d_model)
@@ -59,7 +78,21 @@ class Encoder(tf.keras.layers.Layer):
 
         x = self.dropout(x, training=training)
 
+        attn_weights = {}
         for i in range(self.num_layers):
-            x = self.enc_layers[i](x, training, mask)
+            x, weights = self.enc_layers[i](x, training, mask)
+            attn_weights['attn_weights_layer_%d' % i] = weights
 
-        return x  # (batch_size, input_seq_len, d_model)
+        return x, attn_weights  # (batch_size, input_seq_len, d_model)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "num_layers": self.num_layers,
+            "d_model": self.d_model,
+            "num_heads": self.num_heads,
+            "dff": self.dff,
+            "input_vocab_size": self.input_vocab_size,
+            "dropout_rate": self.dropout_rate
+        })
+        return config
