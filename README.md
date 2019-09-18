@@ -4,6 +4,9 @@
 
 Transformer implementation in tensorflow 2.x(with tf.keras).
 
+Here is a tutorial from tensorflow:
+[Transformer model for language understanding](https://www.tensorflow.org/beta/tutorials/text/transformer)
+
 
 ## Jupyter notebook with conda
 

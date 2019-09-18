@@ -26,8 +26,8 @@ class EncoderLayer(tf.keras.layers.Layer):
         self.dropout1 = tf.keras.layers.Dropout(rate)
         self.dropout2 = tf.keras.layers.Dropout(rate)
 
-    def call(self, x, training, mask):
-        attn_output, attn_weights = self.mha(x, x, x, mask)  # (batch_size, input_seq_len, d_model)
+    def call(self, x, training=None, mask=None):
+        attn_output, attn_weights = self.mha((x, x, x), mask=mask)  # (batch_size, input_seq_len, d_model)
         attn_output = self.dropout1(attn_output, training=training)
         out1 = self.layer_norm1(x + attn_output)  # (batch_size, input_seq_len, d_model)
 
@@ -49,6 +49,7 @@ class EncoderLayer(tf.keras.layers.Layer):
 
 
 class Encoder(tf.keras.layers.Layer):
+
     def __init__(self, num_layers, d_model, num_heads, dff, input_vocab_size,
                  rate=0.1):
         super(Encoder, self).__init__()
@@ -68,7 +69,8 @@ class Encoder(tf.keras.layers.Layer):
 
         self.dropout = tf.keras.layers.Dropout(rate)
 
-    def call(self, x, training, mask):
+    def call(self, inputs, training=True, mask=None):
+        x = inputs
         seq_len = tf.shape(x)[1]
 
         # adding embedding and position encoding.

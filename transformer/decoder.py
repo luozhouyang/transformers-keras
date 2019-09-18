@@ -28,15 +28,18 @@ class DecoderLayer(tf.keras.layers.Layer):
         self.dropout2 = tf.keras.layers.Dropout(rate)
         self.dropout3 = tf.keras.layers.Dropout(rate)
 
-    def call(self, x, enc_output, training, look_ahead_mask, padding_mask):
+    def call(self, inputs, training=None, mask=None):
         # enc_output.shape == (batch_size, input_seq_len, d_model)
-
-        attn1, attn_weights_block1 = self.mha1(x, x, x, look_ahead_mask)  # (batch_size, target_seq_len, d_model)
+        x, enc_output = inputs
+        look_ahead_mask, padding_mask = mask
+        attn1, attn_weights_block1 = self.mha1((x, x, x), mask=look_ahead_mask)  # (batch_size, target_seq_len, d_model)
         attn1 = self.dropout1(attn1, training=training)
         out1 = self.layer_norm1(attn1 + x)
 
         attn2, attn_weights_block2 = self.mha2(
-            enc_output, enc_output, out1, padding_mask)  # (batch_size, target_seq_len, d_model)
+            inputs=(enc_output, enc_output, out1),
+            training=training,
+            mask=padding_mask)  # (batch_size, target_seq_len, d_model)
         attn2 = self.dropout2(attn2, training=training)
         out2 = self.layer_norm2(attn2 + out1)  # (batch_size, target_seq_len, d_model)
 
@@ -75,7 +78,9 @@ class Decoder(tf.keras.layers.Layer):
         self.dec_layers = [DecoderLayer(d_model, num_heads, dff, rate) for _ in range(num_layers)]
         self.dropout = tf.keras.layers.Dropout(rate)
 
-    def call(self, x, enc_output, training, look_ahead_mask, padding_mask):
+    def call(self, inputs, training=None, mask=None):
+        x, enc_output = inputs
+        look_ahead_mask, padding_mask = mask
         seq_len = tf.shape(x)[1]
         attention_weights = {}
 
@@ -86,7 +91,8 @@ class Decoder(tf.keras.layers.Layer):
         x = self.dropout(x, training=training)
 
         for i in range(self.num_layers):
-            x, block1, block2 = self.dec_layers[i](x, enc_output, training, look_ahead_mask, padding_mask)
+            x, block1, block2 = self.dec_layers[i](
+                inputs=(x, enc_output), training=training, mask=(look_ahead_mask, padding_mask))
 
             attention_weights['decoder_layer{}_block1'.format(i + 1)] = block1
             attention_weights['decoder_layer{}_block2'.format(i + 1)] = block2
