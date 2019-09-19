@@ -1,3 +1,4 @@
-tensorflow==2.0.0b1
+tensorflow==2.0.0rc
 matplotlib
 tensorflow_datasets
+nlp-datasets
