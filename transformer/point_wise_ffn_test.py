@@ -8,7 +8,7 @@ class PointWiseFeedForwardNetworkTest(tf.test.TestCase):
     def testPointWiseFFN(self):
         ffn = PointWiseFeedForwardNetwork(512, 2048)
         output = ffn(tf.random.uniform((64, 50, 256)))
-        print(output.shape)
+        self.assertAllEqual(output.shape, [64, 50, 512])
 
 
 if __name__ == '__main__':

@@ -24,12 +24,12 @@ class Transformer(tf.keras.Model):
     def call(self, inputs, training=None, mask=None):
         inp, tar = inputs
         enc_padding_mask, look_ahead_mask, dec_padding_mask = mask
-        enc_output = self.encoder(inp, training, enc_padding_mask)  # (batch_size, inp_seq_len, d_model)
+        enc_output, enc_attn_weights = self.encoder(inp, training, enc_padding_mask)  # (batch_size, inp_seq_len, d_model)
 
         # dec_output.shape == (batch_size, tar_seq_len, d_model)
-        dec_output, attention_weights = self.decoder(
+        dec_output, dec_attn_weights = self.decoder(
             (tar, enc_output), training, (look_ahead_mask, dec_padding_mask))
 
         final_output = self.final_layer(dec_output)  # (batch_size, tar_seq_len, target_vocab_size)
 
-        return final_output, attention_weights
+        return final_output, enc_attn_weights, dec_attn_weights

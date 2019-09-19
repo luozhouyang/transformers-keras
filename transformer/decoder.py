@@ -30,9 +30,10 @@ class DecoderLayer(tf.keras.layers.Layer):
 
     def call(self, inputs, training=None, mask=None):
         # enc_output.shape == (batch_size, input_seq_len, d_model)
+        # x shape?
         x, enc_output = inputs
         look_ahead_mask, padding_mask = mask
-        attn1, attn_weights_block1 = self.mha1((x, x, x), mask=look_ahead_mask)  # (batch_size, target_seq_len, d_model)
+        attn1, attn_weights_block1 = self.mha1((x, x, x), training, mask=look_ahead_mask)
         attn1 = self.dropout1(attn1, training=training)
         out1 = self.layer_norm1(attn1 + x)
 
