@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-from transformer.encoder import EncoderLayer, Encoder
+from transformers_keras.transformer.encoder import EncoderLayer, Encoder
 
 
 class EncoderTest(tf.test.TestCase):

@@ -1,7 +1,7 @@
 import tensorflow as tf
 
-from transformer.decoder import Decoder, DecoderLayer
-from transformer.encoder import Encoder, EncoderLayer
+from transformers_keras.transformer.decoder import Decoder, DecoderLayer
+from transformers_keras.transformer.encoder import Encoder, EncoderLayer
 
 
 class DecoderTest(tf.test.TestCase):

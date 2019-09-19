@@ -1,7 +1,7 @@
 import tensorflow as tf
 
-from transformer.decoder import Decoder
-from transformer.encoder import Encoder
+from transformers_keras.transformer.decoder import Decoder
+from transformers_keras.transformer.encoder import Encoder
 
 
 class Transformer(tf.keras.Model):
@@ -24,7 +24,8 @@ class Transformer(tf.keras.Model):
     def call(self, inputs, training=None, mask=None):
         inp, tar = inputs
         enc_padding_mask, look_ahead_mask, dec_padding_mask = mask
-        enc_output, enc_attn_weights = self.encoder(inp, training, enc_padding_mask)  # (batch_size, inp_seq_len, d_model)
+        enc_output, enc_attn_weights = self.encoder(inp, training,
+                                                    enc_padding_mask)  # (batch_size, inp_seq_len, d_model)
 
         # dec_output.shape == (batch_size, tar_seq_len, d_model)
         dec_output, dec_attn_weights = self.decoder(

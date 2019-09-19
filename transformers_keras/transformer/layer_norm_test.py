@@ -1,5 +1,5 @@
 import tensorflow as tf
-from transformer.layer_norm import LayerNormalization
+from transformers_keras.transformer.layer_norm import LayerNormalization
 from tensorflow.python import keras
 
 

@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-from transformer import funcs
+from transformers_keras.transformer import funcs
 
 
 class MultiHeadAttention(tf.keras.layers.Layer):

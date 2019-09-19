@@ -4,9 +4,9 @@ import time
 
 import tensorflow as tf
 
-from transformer import funcs
-from transformer.custom_lr_schedule import CustomLearningRateSchedule
-from transformer.transformer_model import Transformer
+from transformers_keras.transformer import funcs
+from transformers_keras.transformer.custom_lr_schedule import CustomLearningRateSchedule
+from transformers_keras.transformer.transformer_model import Transformer
 from datasets.nlp.xy_dataset import XYSameFileDataset
 
 config = {

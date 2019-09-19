@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-from transformer.point_wise_ffn import PointWiseFeedForwardNetwork
+from transformers_keras.transformer.point_wise_ffn import PointWiseFeedForwardNetwork
 
 
 class PointWiseFeedForwardNetworkTest(tf.test.TestCase):

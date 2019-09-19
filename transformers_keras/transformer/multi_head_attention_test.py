@@ -1,5 +1,5 @@
 import tensorflow as tf
-from transformer.multi_head_attention import MultiHeadAttention
+from transformers_keras.transformer.multi_head_attention import MultiHeadAttention
 
 
 class MultiHeadAttentionTest(tf.test.TestCase):

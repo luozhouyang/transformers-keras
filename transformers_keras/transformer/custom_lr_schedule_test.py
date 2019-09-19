@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-from transformer.custom_lr_schedule import CustomLearningRateSchedule
+from transformers_keras.transformer.custom_lr_schedule import CustomLearningRateSchedule
 
 
 class CustomLearningRateScheduleTest(tf.test.TestCase):

@@ -1,7 +1,7 @@
 import tensorflow as tf
 import numpy as np
 
-from transformer.transformer_model import Transformer
+from transformers_keras.transformer.transformer_model import Transformer
 
 
 class TransformerModelTest(tf.test.TestCase):

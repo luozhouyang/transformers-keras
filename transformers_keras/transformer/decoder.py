@@ -1,9 +1,9 @@
 import tensorflow as tf
 
-from transformer import funcs
-from transformer.layer_norm import LayerNormalization
-from transformer.multi_head_attention import MultiHeadAttention
-from transformer.point_wise_ffn import PointWiseFeedForwardNetwork
+from transformers_keras.transformer import funcs
+from transformers_keras.transformer.layer_norm import LayerNormalization
+from transformers_keras.transformer.multi_head_attention import MultiHeadAttention
+from transformers_keras.transformer.point_wise_ffn import PointWiseFeedForwardNetwork
 
 
 class DecoderLayer(tf.keras.layers.Layer):

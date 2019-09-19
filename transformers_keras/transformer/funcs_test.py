@@ -1,7 +1,7 @@
 import numpy as np
 import tensorflow as tf
 
-from transformer import funcs
+from transformers_keras.transformer import funcs
 
 
 class FuncsTest(tf.test.TestCase):
