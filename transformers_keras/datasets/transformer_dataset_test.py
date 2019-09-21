@@ -11,8 +11,8 @@ class TransformerDatasetTest(tf.test.TestCase):
         tgt_corpus_files = ['testdata/train.tgt.txt']
         src_tokenizer = SpaceTokenizer()
         tgt_tokenizer = SpaceTokenizer()
-        src_tokenizer.tokenize(src_corpus_files)
-        tgt_tokenizer.tokenize(tgt_corpus_files)
+        src_tokenizer.build_from_corpus(src_corpus_files)
+        tgt_tokenizer.build_from_corpus(tgt_corpus_files)
         print('src vocab size: ', src_tokenizer.vocab_size)
         print('tgt vocab size: ', tgt_tokenizer.vocab_size)
         d = TransformerDataset(src_tokenizer, tgt_tokenizer, None)
@@ -27,8 +27,8 @@ class TransformerDatasetTest(tf.test.TestCase):
         tgt_corpus_files = ['testdata/train.tgt.txt']
         src_tokenizer = SpaceTokenizer()
         tgt_tokenizer = SpaceTokenizer()
-        src_tokenizer.tokenize(src_corpus_files)
-        tgt_tokenizer.tokenize(tgt_corpus_files)
+        src_tokenizer.build_from_corpus(src_corpus_files)
+        tgt_tokenizer.build_from_corpus(tgt_corpus_files)
         print('src vocab size: ', src_tokenizer.vocab_size)
         print('tgt vocab size: ', tgt_tokenizer.vocab_size)
         d = TransformerDataset(src_tokenizer, tgt_tokenizer, None)
@@ -41,7 +41,7 @@ class TransformerDatasetTest(tf.test.TestCase):
     def testBuildPredictDataset(self):
         src_corpus_files = ['testdata/train.src.txt']
         src_tokenizer = SpaceTokenizer()
-        src_tokenizer.tokenize(src_corpus_files)
+        src_tokenizer.build_from_corpus(src_corpus_files)
         print('src vocab size: ', src_tokenizer.vocab_size)
         d = TransformerDataset(src_tokenizer, None, None)
 

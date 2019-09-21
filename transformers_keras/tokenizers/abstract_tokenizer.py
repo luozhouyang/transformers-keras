@@ -1,25 +1,98 @@
 import abc
 import logging
 import os
+
 import tensorflow as tf
 
 
-class Tokenizer(abc.ABC):
-    """Abstract tokenizer."""
+class AbstractTokenizer(abc.ABC):
+    """Tokenizer for language. The first line of vocab file is always `0   <UNK>`."""
 
-    def __init__(self, config):
-        self.default_config = self._get_default_config()
+    def __init__(self, config=None):
+        default_config = self._get_default_config()
         if config:
-            self.default_config.update(config)
-        self.config = self.default_config
+            default_config.update(config)
+        self.config = default_config
 
-        self.vocab_size_exclude_special_tokens = None
-        self._tokens2ids_dict = {}
-        self._ids2tokens_dict = {}
-        self.tokens2ids_table = None
-        self.ids2tokens_table = None
+        self._vocab_size = 1  # unk
+        self._id2token_dict = {0: self.config['unk_token']}
+        self._token2id_dict = {self.config['unk_token']: 0}
+        self._id2token_table = None
+        self._token2id_table = None
 
-    def tokenize(self, corpus_files):
+    def _process_line(self, line):
+        raise NotImplementedError()
+
+    @property
+    def vocab_size(self):
+        return self._vocab_size
+
+    @property
+    def unk_id(self):
+        return 0
+
+    @property
+    def unk_token(self):
+        return self.config.get('unk_token', '<UNK>')
+
+    @property
+    def sos_id(self):
+        return self.vocab_size + 1
+
+    @property
+    def sos_token(self):
+        return self.config.get('sos_token', '<SOS>')
+
+    @property
+    def eos_id(self):
+        return self.vocab_size + 2
+
+    @property
+    def eos_token(self):
+        return self.config.get('eos_token', '<EOS>')
+
+    @property
+    def cls_id(self):
+        return self.vocab_size + 3
+
+    @property
+    def cls_token(self):
+        return self.config.get('cls_token', '[CLS]')
+
+    @property
+    def sep_id(self):
+        return self.vocab_size + 4
+
+    @property
+    def sep_token(self):
+        return self.config.get('sep_token', '[SEP]')
+
+    @property
+    def mask_id(self):
+        return self.vocab_size + 5
+
+    @property
+    def mask_token(self):
+        return self.config.get('mask_token', '[MASK]')
+
+    @property
+    def token2id_dict(self):
+        return self._token2id_dict
+
+    @property
+    def id2token_dict(self):
+        return self._id2token_dict
+
+    def encode(self, tokens):
+        """Encode string tokens to ids."""
+        return self._token2id_table.lookup(tokens)
+
+    def decode(self, ids):
+        """Decode ids to string tokens."""
+        return self._id2token_table.lookup(ids)
+
+    def build_from_corpus(self, corpus_files):
+        """Build lookup table and vocab dict from corpus files."""
         for f in corpus_files:
             if not os.path.exists(f):
                 logging.warning('File %s does not exist.' % f)
@@ -31,136 +104,58 @@ class Tokenizer(abc.ABC):
                         continue
                     self._process_line(line)
 
-        assert len(self._tokens2ids_dict.keys()) == len(self._ids2tokens_dict.keys())
-        self.vocab_size_exclude_special_tokens = len(self._tokens2ids_dict.keys())
-        self._tokens2ids_dict[self.unk_token] = self.unk_id
-        self._tokens2ids_dict[self.sos_token] = self.sos_id
-        self._tokens2ids_dict[self.eos_token] = self.eos_id
-        self._tokens2ids_dict[self.cls_token] = self.cls_id
-        self._tokens2ids_dict[self.sep_token] = self.sep_id
-        self._tokens2ids_dict[self.mask_token] = self.mask_id
-        self._ids2tokens_dict[self.unk_id] = self.unk_token
-        self._ids2tokens_dict[self.sos_id] = self.sos_token
-        self._ids2tokens_dict[self.eos_id] = self.eos_token
-        self._ids2tokens_dict[self.cls_id] = self.cls_token
-        self._ids2tokens_dict[self.sep_id] = self.sep_token
-        self._ids2tokens_dict[self.mask_id] = self.mask_token
+        self._build()
 
-    def _process_line(self, line):
-        raise NotImplementedError()
+    def build_from_vocab(self, vocab_file):
+        """Build lookup table from vocab file. Each line of vocab is `id    token`"""
+        with open(vocab_file, mode='rt', encoding='utf8') as fin:
+            for line in fin:
+                line = line.strip('\n').strip()
+                if not line:
+                    continue
+                tokens = line.split('\t')
+                if len(tokens) != 2:
+                    logging.warning('Invalid vocab line: %s' % line)
+                    continue
+                _id = int(tokens[0])
+                token = tokens[1]
+                self._id2token_dict[_id] = token
+                self._token2id_dict[token] = _id
 
-    def initialize_lookup_tables(self):
-        if self.tokens2ids_table is None:
-            token2id_initializer = tf.lookup.KeyValueTensorInitializer(
-                keys=list(self._tokens2ids_dict.keys()),
-                values=list(self._tokens2ids_dict.values()),
-                key_dtype=tf.dtypes.string,
-                value_dtype=tf.dtypes.int64)
-            self.tokens2ids_table = tf.lookup.StaticHashTable(
-                initializer=token2id_initializer,
-                default_value=self.unk_id,
-                name='token2id_table')
-        if self.ids2tokens_table is None:
-            id2token_initializer = tf.lookup.KeyValueTensorInitializer(
-                keys=list(self._ids2tokens_dict.keys()),
-                values=list(self._ids2tokens_dict.values()),
-                key_dtype=tf.dtypes.int64,
-                value_dtype=tf.dtypes.string)
-            self.ids2tokens_table = tf.lookup.StaticHashTable(
-                initializer=id2token_initializer,
-                default_value=self.unk_token,
-                name='id2token_table')
+        self._build()
 
-    def tokens2ids(self, tokens):
-        """Convert tokens to ids.
+    def _build(self):
+        assert len(self._token2id_dict.keys()) == len(self._id2token_dict.keys())
+        self._vocab_size = len(self._token2id_dict.keys())
+        # init lookup tables
+        self._init_lookup_tables()
 
-        Args:
-            tokens: A string tensor
+    def _init_lookup_tables(self):
+        token2id_initializer = tf.lookup.KeyValueTensorInitializer(
+            keys=list(self._token2id_dict.keys()),
+            values=list(self._token2id_dict.values()),
+            key_dtype=tf.dtypes.string,
+            value_dtype=tf.dtypes.int64)
+        self._token2id_table = tf.lookup.StaticHashTable(
+            initializer=token2id_initializer,
+            default_value=0,  # unk id
+            name='token2id_lookup_table')
 
-        Returns:
-            A int tensor
-        """
-        return self.tokens2ids_table.lookup(tokens)
+        id2token_initializer = tf.lookup.KeyValueTensorInitializer(
+            keys=list(self._id2token_dict.keys()),
+            values=list(self._id2token_dict.values()),
+            key_dtype=tf.dtypes.int64,
+            value_dtype=tf.dtypes.string)
+        self._id2token_table = tf.lookup.StaticHashTable(
+            initializer=id2token_initializer,
+            default_value=self.config.get('unk_token', '<UNK>'),
+            name='id2token_lookup_table')
 
-    def ids2tokens(self, ids):
-        """Convert ids to tokens.
-
-        Args:
-            ids: A int tensor
-
-        Returns:
-            A string tensor
-        """
-        return self.ids2tokens_table.lookup(ids)
-
-    def save_vocab(self, output_file):
-        """Save vocab words(include special tokens in the end) to a file."""
+    def save_to_vocab(self, output_file):
         with open(output_file, mode='wt', encoding='utf8') as fout:
-            for k in self._tokens2ids_dict.keys():
-                fout.write(k + '\n')
-        logging.info("Saved vocab to %s." % fout)
-
-    @property
-    def tokens2ids_dict(self):
-        return self._tokens2ids_dict
-
-    @property
-    def ids2tokens_dict(self):
-        return self._ids2tokens_dict
-
-    @property
-    def vocab_size(self):
-        if not self.vocab_size_exclude_special_tokens:
-            raise ValueError('vocab_size_exclude_special_tokens not intialized!')
-        return self.vocab_size_exclude_special_tokens + len(self.default_config.keys())
-
-    @property
-    def unk_token(self):
-        return self.config.get('unk_token', '<UNK>')
-
-    @property
-    def unk_id(self):
-        return self.vocab_size_exclude_special_tokens
-
-    @property
-    def sos_token(self):
-        return self.config.get('sos_token', '<SOS>')
-
-    @property
-    def sos_id(self):
-        return self.vocab_size_exclude_special_tokens + 1
-
-    @property
-    def eos_token(self):
-        return self.config.get('eos_token', '<EOS>')
-
-    @property
-    def eos_id(self):
-        return self.vocab_size_exclude_special_tokens + 2
-
-    @property
-    def cls_token(self):
-        return self.config.get('cls_token', '[CLS]')
-
-    @property
-    def cls_id(self):
-        return self.vocab_size_exclude_special_tokens + 3
-
-    @property
-    def sep_token(self):
-        return self.config.get('sep_token', '[SEP]')
-
-    @property
-    def sep_id(self):
-        return self.vocab_size_exclude_special_tokens + 4
-
-    @property
-    def mask_token(self):
-        return self.config.get('mask_token', '[MASK]')
-
-    @property
-    def mask_id(self):
-        return self.vocab_size_exclude_special_tokens + 5
+            for k, v in sorted(self._id2token_dict.items(), key=lambda it: it[0]):
+                fout.write(str(k) + '\t' + str(v) + '\n')
+        logging.info('Saved vocab to file: %s' % output_file)
 
     @staticmethod
     def _get_default_config():

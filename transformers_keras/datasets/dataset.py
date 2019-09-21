@@ -1,11 +1,12 @@
 import tensorflow as tf
-from transformers_keras.tokenizers.abstract_tokenizer import Tokenizer
+
+from transformers_keras.tokenizers.abstract_tokenizer import AbstractTokenizer
 
 
 class Dataset:
     """Build data input pipeline using `tf.data.Dataset` for models."""
 
-    def __init__(self, src_tokenizer: Tokenizer, tgt_tokenizer: Tokenizer, config: dict = None):
+    def __init__(self, src_tokenizer: AbstractTokenizer, tgt_tokenizer: AbstractTokenizer, config: dict = None):
         """Constructor.
 
         Args:
@@ -105,22 +106,18 @@ class Dataset:
 
     def _convert_tokens_to_ids(self, dataset):
         """Convert string tokens to ids."""
-
-        self.src_tokenizer.initialize_lookup_tables()
-        self.tgt_tokenizer.initialize_lookup_tables()
         dataset = dataset.map(
             lambda x, y: (
-                self.src_tokenizer.tokens2ids(x),
-                self.tgt_tokenizer.tokens2ids(y)),
+                self.src_tokenizer.encode(x),
+                self.tgt_tokenizer.encode(y)),
             num_parallel_calls=self.config['num_parallel_calls']
         ).prefetch(self.config['prefetch_size'])
         return dataset
 
     def _convert_tokens_to_ids_for_predict(self, dataset):
         """Convert string tokens to ids for predict mode."""
-        self.src_tokenizer.initialize_lookup_tables()
         dataset = dataset.map(
-            lambda x: self.src_tokenizer.tokens2ids(x),
+            lambda x: self.src_tokenizer.encode(x),
             num_parallel_calls=self.config['num_parallel_calls']
         ).prefetch(self.config['prefetch_size'])
         return dataset

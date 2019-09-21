@@ -1,5 +1,6 @@
 import os
 import unittest
+
 import tensorflow as tf
 
 from transformers_keras.tokenizers.space_tokenizer import SpaceTokenizer
@@ -11,30 +12,46 @@ class SpaceTokenizerTest(unittest.TestCase):
         tokenizer = SpaceTokenizer()
         corpus = ['train.tgt.txt']
         corpus = [os.path.join('testdata', f) for f in corpus]
-        tokenizer.tokenize(corpus)
+        tokenizer.build_from_corpus(corpus)
         return tokenizer
 
     def testTokenize(self):
         tokenizer = self.buildTokenizer()
-        print(tokenizer.tokens2ids_dict)
-        print(tokenizer.ids2tokens_dict)
+        print(tokenizer.token2id_dict)
+        print(tokenizer.id2token_dict)
         print(tokenizer.vocab_size)
 
     def testConvertTokens2Ids(self):
         tokenizer = self.buildTokenizer()
-        tokenizer.initialize_lookup_tables()
-        print('token2 id vocab: ', tokenizer.tokens2ids_dict)
+        print('token2 id dict: ', tokenizer.token2id_dict)
         words = tf.constant(['I', 'am', 'a', 'developer'])
-        v = tokenizer.tokens2ids(words)
+        v = tokenizer.encode(words)
         print(v)
 
     def testConvertIds2Tokens(self):
         tokenizer = self.buildTokenizer()
-        tokenizer.initialize_lookup_tables()
-        print('id2token vocab: ', tokenizer.ids2tokens_dict)
+        print('id2token dict: ', tokenizer.id2token_dict)
         ids = tf.constant([1, 0, 2, 3, 4], dtype=tf.dtypes.int64)
-        v = tokenizer.ids2tokens(ids)
+        v = tokenizer.decode(ids)
         print(v)
+
+    def testSaveVocabFile(self):
+        tokenizer = self.buildTokenizer()
+        tokenizer.save_to_vocab('testdata/vocab.test.txt')
+
+    def testBuildFromVocab(self):
+        print('============start build from vocab=============')
+        tokenizer = SpaceTokenizer()
+        tokenizer.build_from_vocab('testdata/vocab.test.txt')
+        print('token2id dict: ', tokenizer.token2id_dict)
+        print('id2token dict: ', tokenizer.id2token_dict)
+        words = tf.constant(['I', 'am', 'a', 'developer'])
+        v0 = tokenizer.encode(words)
+        print(v0)
+        ids = tf.constant([1, 0, 2, 3, 4], dtype=tf.dtypes.int64)
+        v1 = tokenizer.decode(ids)
+        print(v1)
+        print('============end build from vocab=============')
 
 
 if __name__ == '__main__':

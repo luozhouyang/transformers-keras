@@ -1,20 +1,17 @@
-from transformers_keras.tokenizers.abstract_tokenizer import Tokenizer
+from transformers_keras.tokenizers.abstract_tokenizer import AbstractTokenizer
 
 
-class SpaceTokenizer(Tokenizer):
+class SpaceTokenizer(AbstractTokenizer):
     """Tokenize corpus by SPACE."""
 
     def __init__(self, config=None):
         super(SpaceTokenizer, self).__init__(config)
 
-        self._id_index = 0
-
     def _process_line(self, line):
         for w in line.split(' '):
-            if w in set(self.default_config.values()):
+            if w in set(self._get_default_config().values()):
                 continue
-            if w in self._tokens2ids_dict:
+            if w in self._token2id_dict:
                 continue
-            self._tokens2ids_dict[w] = self._id_index
-            self._ids2tokens_dict[self._id_index] = w
-            self._id_index += 1
+            self._token2id_dict[w] = len(self._token2id_dict.keys())
+            self._id2token_dict[len(self._id2token_dict.keys())] = w
