@@ -14,9 +14,10 @@ class AbstractTokenizer(abc.ABC):
             default_config.update(config)
         self.config = default_config
 
-        self._vocab_size = 1  # unk
-        self._id2token_dict = {0: self.config['unk_token']}
-        self._token2id_dict = {self.config['unk_token']: 0}
+        self._vocab_size_include_unk = 1  # unk
+        self._vocab_size_include_special_tokens = 0
+        self._id2token_dict = {0: self.unk_token}
+        self._token2id_dict = {self.unk_token: 0}
         self._id2token_table = None
         self._token2id_table = None
 
@@ -25,7 +26,7 @@ class AbstractTokenizer(abc.ABC):
 
     @property
     def vocab_size(self):
-        return self._vocab_size
+        return self._vocab_size_include_special_tokens
 
     @property
     def unk_id(self):
@@ -37,7 +38,7 @@ class AbstractTokenizer(abc.ABC):
 
     @property
     def sos_id(self):
-        return self.vocab_size + 1
+        return self._vocab_size_include_unk
 
     @property
     def sos_token(self):
@@ -45,7 +46,7 @@ class AbstractTokenizer(abc.ABC):
 
     @property
     def eos_id(self):
-        return self.vocab_size + 2
+        return self._vocab_size_include_unk + 1
 
     @property
     def eos_token(self):
@@ -53,7 +54,7 @@ class AbstractTokenizer(abc.ABC):
 
     @property
     def cls_id(self):
-        return self.vocab_size + 3
+        return self._vocab_size_include_unk + 2
 
     @property
     def cls_token(self):
@@ -61,7 +62,7 @@ class AbstractTokenizer(abc.ABC):
 
     @property
     def sep_id(self):
-        return self.vocab_size + 4
+        return self._vocab_size_include_unk + 3
 
     @property
     def sep_token(self):
@@ -69,7 +70,7 @@ class AbstractTokenizer(abc.ABC):
 
     @property
     def mask_id(self):
-        return self.vocab_size + 5
+        return self._vocab_size_include_unk + 4
 
     @property
     def mask_token(self):
@@ -125,8 +126,24 @@ class AbstractTokenizer(abc.ABC):
         self._build()
 
     def _build(self):
+        print(self._token2id_dict)
+        print(self._id2token_dict)
         assert len(self._token2id_dict.keys()) == len(self._id2token_dict.keys())
-        self._vocab_size = len(self._token2id_dict.keys())
+        self._vocab_size_include_unk = len(self._token2id_dict.keys())
+        print('build vocab size: ', self._vocab_size_include_unk)
+        # add special tokens
+        self._token2id_dict[self.sos_token] = self.sos_id
+        self._token2id_dict[self.eos_token] = self.eos_id
+        self._token2id_dict[self.cls_token] = self.cls_id
+        self._token2id_dict[self.sep_token] = self.sep_id
+        self._token2id_dict[self.mask_token] = self.mask_id
+        self._id2token_dict[self.sos_id] = self.sos_token
+        self._id2token_dict[self.eos_id] = self.eos_token
+        self._id2token_dict[self.cls_id] = self.cls_token
+        self._id2token_dict[self.sep_id] = self.sep_token
+        self._id2token_dict[self.mask_id] = self.mask_token
+
+        self._vocab_size_include_special_tokens = len(self._token2id_dict.keys())
         # init lookup tables
         self._init_lookup_tables()
 
