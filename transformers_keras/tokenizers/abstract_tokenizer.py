@@ -126,11 +126,9 @@ class AbstractTokenizer(abc.ABC):
         self._build()
 
     def _build(self):
-        print(self._token2id_dict)
-        print(self._id2token_dict)
         assert len(self._token2id_dict.keys()) == len(self._id2token_dict.keys())
         self._vocab_size_include_unk = len(self._token2id_dict.keys())
-        print('build vocab size: ', self._vocab_size_include_unk)
+
         # add special tokens
         self._token2id_dict[self.sos_token] = self.sos_id
         self._token2id_dict[self.eos_token] = self.eos_id
@@ -172,7 +170,6 @@ class AbstractTokenizer(abc.ABC):
         with open(output_file, mode='wt', encoding='utf8') as fout:
             for k, v in sorted(self._id2token_dict.items(), key=lambda it: it[0]):
                 fout.write(str(k) + '\t' + str(v) + '\n')
-        logging.info('Saved vocab to file: %s' % output_file)
 
     @staticmethod
     def _get_default_config():
