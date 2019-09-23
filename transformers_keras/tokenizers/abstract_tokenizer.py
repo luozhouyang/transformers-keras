@@ -14,15 +14,19 @@ class AbstractTokenizer(abc.ABC):
             default_config.update(config)
         self.config = default_config
 
+        self._vocab_size_include_special_tokens = None
+        self._init_()
+
+    def _process_line(self, line):
+        raise NotImplementedError()
+
+    def _init_(self):
         self._vocab_size_include_unk = 1  # unk
         self._vocab_size_include_special_tokens = 0
         self._id2token_dict = {0: self.unk_token}
         self._token2id_dict = {self.unk_token: 0}
         self._id2token_table = None
         self._token2id_table = None
-
-    def _process_line(self, line):
-        raise NotImplementedError()
 
     @property
     def vocab_size(self):
@@ -94,6 +98,7 @@ class AbstractTokenizer(abc.ABC):
 
     def build_from_corpus(self, corpus_files):
         """Build lookup table and vocab dict from corpus files."""
+        self._init_()
         for f in corpus_files:
             if not os.path.exists(f):
                 logging.warning('File %s does not exist.' % f)
@@ -106,9 +111,12 @@ class AbstractTokenizer(abc.ABC):
                     self._process_line(line)
 
         self._build()
+        logging.info('id2token dict: %s' % self._id2token_dict)
+        logging.info('token2id dict: %s' % self._token2id_dict)
 
     def build_from_vocab(self, vocab_file):
         """Build lookup table from vocab file. Each line of vocab is `id    token`"""
+        self._init_()
         with open(vocab_file, mode='rt', encoding='utf8') as fin:
             for line in fin:
                 line = line.strip('\n').strip()
@@ -123,7 +131,11 @@ class AbstractTokenizer(abc.ABC):
                 self._id2token_dict[_id] = token
                 self._token2id_dict[token] = _id
 
-        self._build()
+        self._vocab_size_include_special_tokens = len(self._token2id_dict.keys())
+        # init lookup tables
+        self._init_lookup_tables()
+        logging.info('id2token dict: %s' % self._id2token_dict)
+        logging.info('token2id dict: %s' % self._token2id_dict)
 
     def _build(self):
         assert len(self._token2id_dict.keys()) == len(self._id2token_dict.keys())
