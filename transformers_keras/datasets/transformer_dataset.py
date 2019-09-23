@@ -50,7 +50,7 @@ class TransformerDataset(Dataset):
         """Build dataset for prediction.
 
         Args:
-            predict_files: An iterable of tuple (src_file, tgt_file)
+            predict_files: An iterable of tuple (src_file)
 
         Returns:
             A tf.data.Dataset object
