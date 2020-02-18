@@ -27,7 +27,6 @@ class BertModel(tf.keras.Model):
     def __init__(self, config, **kwargs):
         super().__init__(**kwargs)
         self.bert_embedding = BertEmbedding(config, **kwargs)
-        self.token_embedding = self.bert_embedding.token_embedding
         self.bert_encoder = BertEncoder(config, **kwargs)
         self.bert_pooler = BertPooler(config, **kwargs)
 
@@ -42,7 +41,7 @@ class BertModel(tf.keras.Model):
         return {
             'last_hidden_state': last_hidden_state,
             'pooled_output': output,
-            'all_hiden_states': all_hidden_states,
+            'all_hidden_states': all_hidden_states,
             'all_attention_scores': all_attention_scores,
         }
 
@@ -77,7 +76,7 @@ class BertMLMHead(tf.keras.layers.Layer):
         hidden_states = self.dense(hidden_states)
         hidden_states = self.activation(hidden_states)
         hidden_states = self.layer_norm(hidden_states)
-        hidden_states = tf.matmul(hidden_states, self.embedding, transpose_b=True)
+        hidden_states = self.embedding(inputs=hidden_states, mode='linear')
         hidden_states = hidden_states + self.bias
         return hidden_states
 
@@ -104,7 +103,7 @@ class Bert4PreTrainingModel(tf.keras.layers.Layer):
     def __init__(self, config, **kwargs):
         super().__init__(**kwargs)
         self.bert = BertModel(config, name='Bert')
-        self.mlm = BertMLMHead(config, self.bert.token_embedding, name='MLM')
+        self.mlm = BertMLMHead(config, self.bert.bert_embedding, name='MLM')
         self.nsp = BertNSPHead(config, name='NSP')
 
     def call(self, inputs, training=False):
@@ -116,6 +115,7 @@ class Bert4PreTrainingModel(tf.keras.layers.Layer):
         return {
             'prediction_scores': prediction_scores,
             'relation_scores': relation_scores,
+            'last_hidden_state': sequence_output,
             'all_hidden_states': outputs['all_hidden_states'],
             'all_attention_scores': outputs['all_attention_scores']
         }
@@ -126,7 +126,7 @@ class Bert4MaskedLM(tf.keras.Model):
     def __init__(self, config, **kwargs):
         super().__init__(**kwargs)
         self.bert = BertModel(config, name='Bert')
-        self.mlm = BertMLMHead(config, self.bert.token_embedding, name='MLM')
+        self.mlm = BertMLMHead(config, self.bert.bert_embedding, name='MLM')
 
     def call(self, inputs, training=False):
         outputs = self.bert(inputs, traning=training)

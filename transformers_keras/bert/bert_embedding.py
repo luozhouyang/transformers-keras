@@ -26,7 +26,7 @@ class BertEmbedding(tf.keras.layers.Layer):
         self.dropout = tf.keras.layers.Dropout(config.hidden_dropout_rate)
 
     def build(self, input_shape):
-        with tf.name_scope('token_embeddings'):
+        with tf.name_scope('bert_embeddings'):
             self.token_embedding = self.add_weight(
                 'weight',
                 shape=[self.vocab_size, self.hidden_size],
@@ -34,7 +34,11 @@ class BertEmbedding(tf.keras.layers.Layer):
             )
         super().build(input_shape)
 
-    def call(self, inputs, training=False, mask=None):
+    def call(self, inputs, training=False, mode='embedding'):
+        # used for masked lm
+        if mode == 'linear':
+            return tf.matmul(inputs, self.token_embedding, transpose_b=True)
+
         input_ids, position_ids, token_type_ids = inputs
         if position_ids is None:
             position_ids = tf.range(input_ids.shape[1], dtype=tf.int32)[tf.newaxis, :]

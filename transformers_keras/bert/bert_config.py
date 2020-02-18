@@ -13,3 +13,4 @@ class BertConfig(object):
         self.hidden_dropout_rate = kwargs.pop('hidden_dropout_rate', 0.1)
         self.attention_dropout_rate = kwargs.pop('attention_dropout_rate', 0.1)
         self.max_position_embeddings = kwargs.pop('max_position_embeddings', 512)
+        self.max_sequence_length = kwargs.pop('max_sequence_length', 512)
