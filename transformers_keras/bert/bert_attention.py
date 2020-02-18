@@ -29,14 +29,14 @@ class BertAttention(tf.keras.layers.Layer):
 
     def call(self, inputs, training=False):
         hidden_states, attention_mask = inputs
-        batch_size = hidden_states.shape.as_list()[0]
+        batch_size = tf.shape(hidden_states)[0]
 
         query = self.wq(hidden_states)
         key = self.wk(hidden_states)
         value = self.wv(hidden_states)
 
         def _split_heads(x):
-            x = tf.reshape(x, (batch_size, -1, self.num_attention_heads, self.attention_head_size))
+            x = tf.reshape(x, shape=[batch_size, -1, self.num_attention_heads, self.attention_head_size])
             return tf.transpose(x, perm=[0, 2, 1, 3])
 
         query = _split_heads(query)
@@ -48,6 +48,8 @@ class BertAttention(tf.keras.layers.Layer):
         attention_score = attention_score / tf.math.sqrt(dk)
 
         if attention_mask is not None:
+            attention_mask = tf.cast(attention_mask[:, tf.newaxis, tf.newaxis, :], dtype=tf.float32)
+            attention_mask = (1.0 - attention_mask) * -10000.0
             attention_score = attention_score + attention_mask
 
         attention_score = tf.nn.softmax(attention_score)
