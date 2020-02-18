@@ -36,14 +36,8 @@ class BertModel(tf.keras.Model):
         all_hidden_states, all_attention_scores = self.bert_encoder(
             inputs=[embedding, attention_mask], training=training)
         last_hidden_state = all_hidden_states[-1]
-        output = self.bert_pooler(last_hidden_state)
-
-        return {
-            'last_hidden_state': last_hidden_state,
-            'pooled_output': output,
-            'all_hidden_states': all_hidden_states,
-            'all_attention_scores': all_attention_scores,
-        }
+        pooled_output = self.bert_pooler(last_hidden_state)
+        return last_hidden_state, pooled_output, all_hidden_states, all_attention_scores
 
 
 class BertMLMHead(tf.keras.layers.Layer):
@@ -108,17 +102,10 @@ class Bert4PreTrainingModel(tf.keras.layers.Layer):
 
     def call(self, inputs, training=False):
         outputs = self.bert(inputs, training=training)
-        sequence_output = outputs['last_hidden_state']
-        pooled_output = outputs['pooled_output']
+        sequence_output, pooled_output, all_hidden_states, all_attention_scores = outputs
         prediction_scores = self.mlm(sequence_output, training=training)
         relation_scores = self.nsp(pooled_output)
-        return {
-            'prediction_scores': prediction_scores,
-            'relation_scores': relation_scores,
-            'last_hidden_state': sequence_output,
-            'all_hidden_states': outputs['all_hidden_states'],
-            'all_attention_scores': outputs['all_attention_scores']
-        }
+        return prediction_scores, relation_scores, all_hidden_states, all_attention_scores
 
 
 class Bert4MaskedLM(tf.keras.Model):
@@ -130,13 +117,9 @@ class Bert4MaskedLM(tf.keras.Model):
 
     def call(self, inputs, training=False):
         outputs = self.bert(inputs, traning=training)
-        sequence_output = outputs['last_hidden_state']
+        sequence_output, _, all_hidden_states, all_attention_scores = outputs
         prediction_scores = self.mlm(sequence_output, training=training)
-        return {
-            'prediction_scores': prediction_scores,
-            'all_hidden_states': outputs['all_hidden_state'],
-            'all_attention_scores': outputs['all_attention_scores']
-        }
+        return prediction_scores, all_hidden_states, all_attention_scores
 
 
 class Bert4NextSetencePredication(tf.keras.Model):
@@ -148,10 +131,6 @@ class Bert4NextSetencePredication(tf.keras.Model):
 
     def call(self, inputs, training=False):
         outputs = self.bert(inputs, training=training)
-        pooled_output = outputs['pooled_output']
+        _, pooled_output, all_hidden_states, all_attention_scores = outputs['pooled_output']
         relation_scores = self.nsp(pooled_output)
-        return {
-            'relation_scores': relation_scores,
-            'all_hidden_states': outputs['all_hidden_states'],
-            'all_attention_scores': outputs['all_attention_scores']
-        }
+        return relation_scores, all_hidden_states, all_attention_scores
