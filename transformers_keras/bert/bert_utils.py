@@ -12,16 +12,9 @@ def build_bert_for_pretraining_model(config, training=True, **kwargs):
     outputs = Bert4PreTrainingModel(config)(
         inputs=[input_ids, position_ids, token_type_ids, input_mask],
         training=training)
-    prediction_scores, relation_scores, all_hidden_states, all_attention_scores = outputs
-    last_hidden_state = tf.keras.layers.Lambda(lambda x: x, name='last_hidden_state')(all_hidden_states[-1])
-    # all_hidden_states = tf.keras.layers.Lambda(lambda x: x, name='all_hidden_states')(all_hidden_states)
-    # all_attention_scores = tf.keras.layers.Lambda(
-    #     lambda x: x, name='all_attention_scores')(all_attention_scores)
+    prediction_scores, relation_scores, pooled_output, all_hidden_states, all_attention_scores = outputs
     predictions = tf.keras.layers.Lambda(lambda x: x, name='predictions')(prediction_scores)
     relations = tf.keras.layers.Lambda(lambda x: x, name='relations')(relation_scores)
-    print('predictions shape: ', predictions.shape)
-    print('relationss shape: ', relations.shape)
-    print('last hidden state shape: ', last_hidden_state.shape)
 
     model = tf.keras.Model(inputs={
         'input_ids': input_ids,
@@ -31,16 +24,16 @@ def build_bert_for_pretraining_model(config, training=True, **kwargs):
     }, outputs={
         'predictions': predictions,
         'relations': relations,
-        # 'last_hidden_state': last_hidden_state,
-        # 'all_hidden_states': all_hidden_states,
-        # 'all_attention_scores': all_attention_scores
+        'pooled_output': pooled_output,
+        'all_hidden_states': all_hidden_states,
+        'all_attention_scores': all_attention_scores
     })
 
     model.compile(
         optimizer='adam',
         loss={
             'predictions': tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-            'relations': tf.keras.losses.BinaryCrossentropy(from_logits=False)
+            'relations': tf.keras.losses.BinaryCrossentropy(from_logits=True)
         },
         metrics={
             'predictions': ['acc'],

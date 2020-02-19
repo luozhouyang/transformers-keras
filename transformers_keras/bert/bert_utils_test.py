@@ -5,7 +5,7 @@ from transformers_keras.bert.bert_config import BertConfig
 from transformers_keras.bert.bert_utils import build_bert_for_pretraining_model
 
 
-class BertUtilssTest(tf.test.TestCase):
+class BertUtilsTest(tf.test.TestCase):
 
     def testBuildPretrainingModel(self):
         config = BertConfig(vocab_size=15, max_sequence_length=8)
@@ -20,7 +20,7 @@ class BertUtilssTest(tf.test.TestCase):
 
         labels = {
             'relations': tf.constant([1], shape=(1,),  dtype=tf.int32),
-            'predictions': np.random.randint(low=0, high=14, size=(1, 8))
+            'predictions': np.random.randint(low=0, high=14, size=(1, 8,))
         }
 
         x_dataset = tf.data.Dataset.from_tensor_slices(inputs)

@@ -100,12 +100,14 @@ class Bert4PreTrainingModel(tf.keras.layers.Layer):
         self.mlm = BertMLMHead(config, self.bert.bert_embedding, name='MLM')
         self.nsp = BertNSPHead(config, name='NSP')
 
+    @tf.function
     def call(self, inputs, training=False):
         outputs = self.bert(inputs, training=training)
         sequence_output, pooled_output, all_hidden_states, all_attention_scores = outputs
         prediction_scores = self.mlm(sequence_output, training=training)
+        print('nsp pooled inputs shape: ', pooled_output.shape)
         relation_scores = self.nsp(pooled_output)
-        return prediction_scores, relation_scores, all_hidden_states, all_attention_scores
+        return prediction_scores, relation_scores, pooled_output, all_hidden_states, all_attention_scores
 
 
 class Bert4MaskedLM(tf.keras.Model):
@@ -115,11 +117,12 @@ class Bert4MaskedLM(tf.keras.Model):
         self.bert = BertModel(config, name='Bert')
         self.mlm = BertMLMHead(config, self.bert.bert_embedding, name='MLM')
 
+    @tf.function
     def call(self, inputs, training=False):
         outputs = self.bert(inputs, traning=training)
-        sequence_output, _, all_hidden_states, all_attention_scores = outputs
+        sequence_output, pooled_output, all_hidden_states, all_attention_scores = outputs
         prediction_scores = self.mlm(sequence_output, training=training)
-        return prediction_scores, all_hidden_states, all_attention_scores
+        return prediction_scores, pooled_output, all_hidden_states, all_attention_scores
 
 
 class Bert4NextSetencePredication(tf.keras.Model):
@@ -129,8 +132,9 @@ class Bert4NextSetencePredication(tf.keras.Model):
         self.bert = BertModel(config, name='Bert')
         self.nsp = BertNSPHead(config, name='NSP')
 
+    @tf.function
     def call(self, inputs, training=False):
         outputs = self.bert(inputs, training=training)
         _, pooled_output, all_hidden_states, all_attention_scores = outputs['pooled_output']
         relation_scores = self.nsp(pooled_output)
-        return relation_scores, all_hidden_states, all_attention_scores
+        return relation_scores, pooled_output, all_hidden_states, all_attention_scores
