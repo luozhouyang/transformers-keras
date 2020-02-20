@@ -11,7 +11,7 @@ class BertEmbeddingTest(tf.test.TestCase):
         embedding_layer = BertEmbedding(config)
         inputs = [
             tf.constant([[0, 2, 3, 4, 5, 1]]),
-            tf.constant([[0, 1, 2, 3, 4, 5]]),
+            # tf.constant([[0, 1, 2, 3, 4, 5]]),
             tf.constant([[0, 0, 0, 1, 1, 1]]),
         ]
         embeddings = embedding_layer(inputs, training=True)

@@ -31,8 +31,8 @@ class BertModel(tf.keras.Model):
         self.bert_pooler = BertPooler(config, **kwargs)
 
     def call(self, inputs, training=False):
-        input_ids, position_ids, token_type_ids, attention_mask = inputs
-        embedding = self.bert_embedding(inputs=[input_ids, position_ids, token_type_ids], training=training)
+        input_ids, token_type_ids, attention_mask = inputs
+        embedding = self.bert_embedding(inputs=[input_ids, token_type_ids], training=training)
         all_hidden_states, all_attention_scores = self.bert_encoder(
             inputs=[embedding, attention_mask], training=training)
         last_hidden_state = all_hidden_states[-1]

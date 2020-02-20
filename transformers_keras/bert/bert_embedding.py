@@ -39,9 +39,8 @@ class BertEmbedding(tf.keras.layers.Layer):
         if mode == 'linear':
             return tf.matmul(inputs, self.token_embedding, transpose_b=True)
 
-        input_ids, position_ids, token_type_ids = inputs
-        if position_ids is None:
-            position_ids = tf.range(input_ids.shape[1], dtype=tf.int32)[tf.newaxis, :]
+        input_ids, token_type_ids = inputs
+        position_ids = tf.range(input_ids.shape[1], dtype=tf.int32)[tf.newaxis, :]
         if token_type_ids is None:
             token_type_ids = tf.fill(input_ids.shape.as_list(), 0)
 
