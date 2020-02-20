@@ -105,7 +105,6 @@ class Bert4PreTrainingModel(tf.keras.layers.Layer):
         outputs = self.bert(inputs, training=training)
         sequence_output, pooled_output, all_hidden_states, all_attention_scores = outputs
         prediction_scores = self.mlm(sequence_output, training=training)
-        print('nsp pooled inputs shape: ', pooled_output.shape)
         relation_scores = self.nsp(pooled_output)
         return prediction_scores, relation_scores, pooled_output, all_hidden_states, all_attention_scores
 

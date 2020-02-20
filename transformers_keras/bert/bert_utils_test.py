@@ -26,9 +26,28 @@ class BertUtilsTest(tf.test.TestCase):
         x_dataset = tf.data.Dataset.from_tensor_slices(inputs)
         y_dataset = tf.data.Dataset.from_tensor_slices(labels)
         dataset = tf.data.Dataset.zip((x_dataset, y_dataset))
-        dataset = dataset.repeat(100).batch(2)
-        print(next(iter(dataset)))
-        model.fit(dataset)
+        train_dataset = dataset.repeat(100).batch(2)
+        print(next(iter(train_dataset)))
+        model.fit(train_dataset)
+
+        model.save('/tmp/keras_bert_example', include_optimizer=False, save_format='tf')
+
+    def testLoadSavedModel(self):
+        inputs = {
+            'input_ids':  tf.constant([1, 2, 3, 4, 5, 6, 7, 8], shape=(1, 8), dtype=tf.int32),
+            'input_mask': tf.constant([1, 1, 1, 1, 1, 1, 1, 0],  shape=(1, 8), dtype=tf.int32),
+            'position_ids': tf.constant([0, 1, 2, 3, 4, 5, 6, 7],  shape=(1, 8), dtype=tf.int32),
+            'token_type_ids':  tf.constant([0, 0, 0, 0, 1, 1, 1, 1], shape=(1, 8),  dtype=tf.int32)
+        }
+        x_dataset = tf.data.Dataset.from_tensor_slices(inputs)
+        loaded_model = tf.saved_model.load('/tmp/keras_bert_example')
+        for _, x in enumerate(x_dataset.repeat(10).batch(2)):
+            outputs = loaded_model(inputs=[x['input_ids'], x['position_ids'], x['token_type_ids'], x['input_mask']])
+            predictions, relations, pooled, all_hidden_states, all_attention_scores = outputs
+            print(relations)
+            print(pooled)
+            # print(all_attention_scores)
+            print('=' * 80)
 
 
 if __name__ == "__main__":
