@@ -3,7 +3,7 @@ class BertConfig(object):
 
     def __init__(self, **kwargs):
         super().__init__()
-        self.vocab_size = kwargs.pop('vocab_size', 20000)
+        self.vocab_size = kwargs.pop('vocab_size', 21128) # vocab size of pretrained model `bert-base-chinese`
         self.type_vocab_size = kwargs.pop('type_vocab_size', 2)
         self.hidden_size = kwargs.pop('hidden_size', 768)
         self.num_hidden_layers = kwargs.pop('num_hidden_layers', 12)
