@@ -18,7 +18,7 @@ class BertUtilsTest(tf.test.TestCase):
         }
 
         labels = {
-            'relations': tf.constant([1], shape=(1,),  dtype=tf.int32),
+            'relations': tf.one_hot(tf.constant([1], shape=(1,),  dtype=tf.int32), 2),
             'predictions': np.random.randint(low=0, high=14, size=(1, 8,))
         }
 

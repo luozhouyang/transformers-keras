@@ -1,5 +1,7 @@
 .idea/
 .vscode/
+log/
+logs/
 *.imp
 *.pyc
 __pycache__
