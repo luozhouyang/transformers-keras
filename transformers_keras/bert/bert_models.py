@@ -22,7 +22,7 @@ class BertPooler(tf.keras.layers.Layer):
         return outputs
 
 
-class BertModel(tf.keras.Model):
+class BertModel(tf.keras.layers.Layer):
 
     def __init__(self, config, **kwargs):
         super().__init__(**kwargs)
@@ -92,7 +92,7 @@ class BertNSPHead(tf.keras.layers.Layer):
         return relation
 
 
-class Bert4PreTrainingModel(tf.keras.layers.Layer):
+class Bert4PreTrainingModel(tf.keras.Model):
 
     def __init__(self, config, **kwargs):
         super().__init__(**kwargs)
@@ -102,8 +102,7 @@ class Bert4PreTrainingModel(tf.keras.layers.Layer):
 
     @tf.function
     def call(self, inputs, training=False):
-        outputs = self.bert(inputs, training=training)
-        sequence_output, pooled_output, all_hidden_states, all_attention_scores = outputs
+        sequence_output, pooled_output, all_hidden_states, all_attention_scores = self.bert(inputs, training=training)
         prediction_scores = self.mlm(sequence_output, training=training)
         relation_scores = self.nsp(pooled_output)
         return prediction_scores, relation_scores, pooled_output, all_hidden_states, all_attention_scores
