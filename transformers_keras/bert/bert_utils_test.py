@@ -25,9 +25,9 @@ class BertUtilsTest(tf.test.TestCase):
         x_dataset = tf.data.Dataset.from_tensor_slices(inputs)
         y_dataset = tf.data.Dataset.from_tensor_slices(labels)
         dataset = tf.data.Dataset.zip((x_dataset, y_dataset))
-        train_dataset = dataset.repeat(10).batch(2)
+        train_dataset = dataset.repeat(50).batch(2, drop_remainder=True)
         print(next(iter(train_dataset)))
-        model.fit(train_dataset)
+        model.fit(train_dataset, validation_data=train_dataset, epochs=5)
 
         # model.save('/tmp/keras_bert_example', include_optimizer=False, save_format='tf')
         tf.saved_model.save(model, '/tmp/keras_bert_example')
@@ -55,6 +55,7 @@ class BertUtilsTest(tf.test.TestCase):
                 token_type_ids=x['token_type_ids'],
                 input_mask=x['input_mask'])
             print(outputs['relations'])
+            print(outputs['predictions'])
             print('='*80)
 
 
