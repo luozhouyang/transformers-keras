@@ -1,8 +1,8 @@
 import tensorflow as tf
 
+from transformers_keras import metrics
 from transformers_keras.bert.bert_models import Bert4PreTrainingModel
 from transformers_keras.losses import MaskedSparseCategoricalCrossentropy
-from transformers_keras.metrics import MaskedSparseCategoricalAccuracy
 
 
 def build_bert_for_pretraining_model(config, training=True, **kwargs):
@@ -33,8 +33,7 @@ def build_bert_for_pretraining_model(config, training=True, **kwargs):
         },
         metrics={
             'predictions': [
-                # tf.keras.metrics.SparseCategoricalAccuracy(),
-                MaskedSparseCategoricalAccuracy(name='masked_lm_accuracy')
+                metrics.masked_sparse_categorical_accuracy,
             ],
             'relations': [
                 tf.keras.metrics.CategoricalAccuracy(),
