@@ -1,27 +1,33 @@
 import tensorflow as tf
 from tensorflow.python.keras.metrics import MeanMetricWrapper
+from tensorflow.python.ops import math_ops
 
 
-def masked_sparse_categorical_accuracy(y_true, y_pred):
-    """Accuracy for masked language model.
+class MaskedSparseCategoricalAccuracy(tf.keras.metrics.Metric):
 
-    Args:
-        y_true: Tensor, shape (batch_size, time_steps)
-        y_pred: Tensor, shape (batch_size, time_steps, vocab_size), outputs of softmax
+    def __init__(self, name='masked_sparse_categorical_accuracy', from_logits=False, mask_id=0, **kwargs):
+        super(MaskedSparseCategoricalAccuracy, self).__init__(name=name, **kwargs)
+        self.total = self.add_weight(name='total', initializer='zeros')
+        self.count = self.add_weight(name='count', initializer='zeros')
 
-    Returns:
-        acc: Scalar.
-    """
-    acc = tf.keras.metrics.sparse_categorical_accuracy(y_true, y_pred)  # shape (batch_size, time_steps)
-    # 0 -> padding token's id
-    mask = tf.logical_not(tf.equal(y_true, 0))
-    mask = tf.cast(mask, dtype=acc.dtype)  # shape (batch_size, time_steps)
-    acc *= mask
-    return acc  # do not do reduction here!
+    def update_state(self, y_true, y_pred, from_logits=False, mask_id=0):
+        """Update state of one training step.
 
+        Args:
+            y_true: Tensor, with shape (batch_size, time_steps)
+            y_pred: Tensor, with shape (batch_size, time_steps, vocab_size)
+        """
+        if from_logits:
+            y_pred = tf.nn.softmax(y_pred)
+        acc = tf.keras.metrics.sparse_categorical_accuracy(y_true, y_pred)  # shape (batch_size, time_steps)
+        # 0 -> padding token's id
+        mask = tf.logical_not(tf.equal(y_true, mask_id))
+        mask = tf.cast(mask, dtype=acc.dtype)  # shape (batch_size, time_steps)
 
-class MaskedSparseCategoricalAccuracy(MeanMetricWrapper):
+        values = tf.reduce_sum(acc*mask)
+        num_values = tf.reduce_sum(mask)
+        self.total.assign_add(values)
+        self.count.assign_add(num_values)
 
-    def __init__(self, name='masked_sparse_categorical_accuracy', dtype=None):
-        super(MaskedSparseCategoricalAccuracy, self).__init__(
-            masked_sparse_categorical_accuracy, name, dtype=dtype)
+    def result(self):
+        return math_ops.div_no_nan(self.total, self.count)
