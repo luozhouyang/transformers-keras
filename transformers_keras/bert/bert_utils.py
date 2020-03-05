@@ -1,8 +1,7 @@
 import tensorflow as tf
 
-from transformers_keras import metrics
+from transformers_keras import losses, metrics
 from transformers_keras.bert.bert_models import Bert4PreTrainingModel
-from transformers_keras.losses import MaskedSparseCategoricalCrossentropy
 
 
 def build_bert_for_pretraining_model(config, training=True, **kwargs):
@@ -27,8 +26,8 @@ def build_bert_for_pretraining_model(config, training=True, **kwargs):
     model.compile(
         optimizer=tf.keras.optimizers.Adam(learning_rate=1e-5, epsilon=1e-8, clipnorm=1.0),
         loss={
-            # 'predictions': tf.keras.losses.SparseCategoricalCrossentropy(from_logits=False),  # TODO masking
-            'predictions': MaskedSparseCategoricalCrossentropy(from_logits=False),
+            # 'predictions': MaskedSparseCategoricalCrossentropy(from_logits=False),
+            'predictions': losses.masked_sparse_categorical_crossentropy,
             'relations': tf.keras.losses.CategoricalCrossentropy(from_logits=False)
         },
         metrics={
