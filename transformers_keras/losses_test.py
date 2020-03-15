@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-from .losses import masked_sparse_categorical_crossentropy
+from .losses import *
 
 
 class LossesTest(tf.test.TestCase):
@@ -43,6 +43,12 @@ class LossesTest(tf.test.TestCase):
         # the first 4 positions are the same, so masked ce and ce should be almost equal(masked ce uses epsilon=1e-6)
         ce = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=False)(x, y0)
         self.assertAlmostEqual(ce.numpy(), loss0.numpy(), delta=6)
+
+        mscc = MaskedSparseCategoricalCrossentropy(from_logits=False, axis=-1)
+        _loss0 = mscc(x, y0)
+        _loss1 = mscc(x, y1)
+        self.assertAlmostEqual(loss0.numpy(), _loss0.numpy(), delta=6)
+        self.assertAlmostEqual(loss1.numpy(), _loss1.numpy(), delta=6)
 
 
 if __name__ == "__main__":
