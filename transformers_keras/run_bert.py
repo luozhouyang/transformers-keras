@@ -72,7 +72,7 @@ class BertDataset(object):
 
     def build_train_dataset(self, train_record_files):
         dataset = tf.data.TFRecordDataset(train_record_files)
-        dataset = dataset.map(self._parse_example_fn, num_parallels=tf.data.experimental.AUTOTUNE)
+        dataset = dataset.map(self._parse_example_fn, num_parallel_calls=tf.data.experimental.AUTOTUNE)
         dataset = dataset.shuffle(
             buffer_size=self.config.shuffle_buffer_size,
             seed=self.config.shuffle_seed,
@@ -86,13 +86,13 @@ class BertDataset(object):
         if valid_record_files is None:
             return None
         dataset = tf.data.TFRecordDataset(valid_record_files)
-        dataset = dataset.map(self._parse_example_fn, num_parallels=tf.data.experimental.AUTOTUNE)
+        dataset = dataset.map(self._parse_example_fn, num_parallel_calls=tf.data.experimental.AUTOTUNE)
         dataset = dataset.batch(self.config.valid_batch_size).prefetch(self.config.valid_batch_size)
         return dataset
 
     def build_predict_dataset(self, predict_record_files):
         dataset = tf.data.TFRecordDataset(predict_record_files)
-        dataset = dataset.map(self._parse_example_fn, num_parallels=tf.data.experimental.AUTOTUNE)
+        dataset = dataset.map(self._parse_example_fn)
         dataset = dataset.batch(self.config.predict_batch_size).prefetch(self.config.predict_batch_size)
         return dataset
 
