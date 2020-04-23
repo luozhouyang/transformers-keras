@@ -1,5 +1,7 @@
 import tensorflow as tf
 
+from .modeling_utils import choose_activation, initialize
+
 
 class BertConfig(object):
 
@@ -16,6 +18,7 @@ class BertConfig(object):
         self.attention_dropout_rate = kwargs.pop('attention_dropout_rate', 0.1)
         self.max_position_embeddings = kwargs.pop('max_position_embeddings', 512)
         self.max_sequence_length = kwargs.pop('max_sequence_length', 512)
+        self.stddev = kwargs.pop('stddev', 0.02)
 
 
 class BertEmbedding(tf.keras.layers.Layer):
@@ -25,17 +28,18 @@ class BertEmbedding(tf.keras.layers.Layer):
         self.vocab_size = config.vocab_size
         self.hidden_size = config.hidden_size
         self.type_vocab_size = config.type_vocab_size
+        self.stddev = config.stddev
 
         self.position_embedding = tf.keras.layers.Embedding(
             config.max_position_embeddings,
             config.hidden_size,
-            embeddings_initializer=tf.keras.initializers.TruncatedNormal(stddev=0.02),
+            embeddings_initializer=initialize(config.stddev),
             name='position_embedding'
         )
         self.token_type_embedding = tf.keras.layers.Embedding(
             config.type_vocab_size,
             config.hidden_size,
-            embeddings_initializer=tf.keras.initializers.TruncatedNormal(stddev=0.02),
+            embeddings_initializer=initialize(config.stddev),
             name='token_type_embedding'
         )
         self.layer_norm = tf.keras.layers.LayerNormalization(epsilon=1e-12, name='LayerNorm')
@@ -46,7 +50,7 @@ class BertEmbedding(tf.keras.layers.Layer):
             self.token_embedding = self.add_weight(
                 'weight',
                 shape=[self.vocab_size, self.hidden_size],
-                initializer=tf.keras.initializers.TruncatedNormal(stddev=0.02)
+                initializer=initialize(self.stddev)
             )
         super().build(input_shape)
 
@@ -80,18 +84,18 @@ class BertAttention(tf.keras.layers.Layer):
         assert self.hidden_size % self.num_attention_heads == 0
         self.attention_head_size = self.hidden_size // self.num_attention_heads
         self.wq = tf.keras.layers.Dense(
-            self.hidden_size, kernel_initializer=tf.keras.initializers.TruncatedNormal(stddev=0.02), name='query'
+            self.hidden_size, kernel_initializer=initialize(config.stddev), name='query'
         )
         self.wk = tf.keras.layers.Dense(
-            self.hidden_size, kernel_initializer=tf.keras.initializers.TruncatedNormal(stddev=0.02), name='key'
+            self.hidden_size, kernel_initializer=initialize(config.stddev), name='key'
         )
         self.wv = tf.keras.layers.Dense(
-            self.hidden_size, kernel_initializer=tf.keras.initializers.TruncatedNormal(stddev=0.02), name='value'
+            self.hidden_size, kernel_initializer=initialize(config.stddev), name='value'
         )
         self.attention_dropout = tf.keras.layers.Dropout(config.attention_dropout_rate)
 
         self.dense = tf.keras.layers.Dense(
-            self.hidden_size, kernel_initializer=tf.keras.initializers.TruncatedNormal(stddev=0.02), name='dense'
+            self.hidden_size, kernel_initializer=initialize(config.stddev), name='dense'
         )
         self.layer_norm = tf.keras.layers.LayerNormalization(epsilon=1e-12, name='LayerNorm')
         self.hidden_dropout = tf.keras.layers.Dropout(config.hidden_dropout_rate)
@@ -136,55 +140,14 @@ class BertAttention(tf.keras.layers.Layer):
         return _hidden_states, attention_score
 
 
-def gelu(x):
-    """ Gaussian Error Linear Unit.
-    Original Implementation of the gelu activation function in Google Bert repo when initially created.
-        For information: OpenAI GPT's gelu is slightly different (and gives slightly different results):
-        0.5 * x * (1 + torch.tanh(math.sqrt(2 / math.pi) * (x + 0.044715 * torch.pow(x, 3))))
-        Also see https://arxiv.org/abs/1606.08415
-    """
-    cdf = 0.5 * (1.0 + tf.math.erf(x / tf.math.sqrt(2.0)))
-    return x * cdf
-
-
-def gelu_new(x):
-    """Gaussian Error Linear Unit.
-    This is a smoother version of the RELU.
-    Original paper: https://arxiv.org/abs/1606.08415
-    Args:
-        x: float Tensor to perform activation.
-    Returns:
-        `x` with the GELU activation applied.
-    """
-    cdf = 0.5 * (1.0 + tf.tanh((np.sqrt(2 / np.pi) * (x + 0.044715 * tf.pow(x, 3)))))
-    return x * cdf
-
-
-def swish(x):
-    return x * tf.sigmoid(x)
-
-
-ACT2FN = {
-    "gelu": tf.keras.layers.Activation(gelu),
-    "relu": tf.keras.activations.relu,
-    "swish": tf.keras.layers.Activation(swish),
-    "gelu_new": tf.keras.layers.Activation(gelu_new),
-}
-
-
 class BertIntermediate(tf.keras.layers.Layer):
 
     def __init__(self, config, **kwargs):
         super().__init__(**kwargs)
         self.dense = tf.keras.layers.Dense(
-            config.intermediate_size, kernel_initializer=tf.keras.initializers.TruncatedNormal(stddev=0.02)
+            config.intermediate_size, kernel_initializer=initialize(config.stddev)
         )
-        if isinstance(config.hidden_activation, tf.keras.layers.Activation):
-            self.activation = config.hidden_activation
-        elif isinstance(config.hidden_activation, str):
-            self.activation = ACT2FN[config.hidden_activation]
-        else:
-            self.activation = ACT2FN['gelu']
+        self.activation = choose_activation(config.hidden_activation)
 
     def call(self, inputs):
         hidden_states = inputs
@@ -201,7 +164,7 @@ class BertEncoderLayer(tf.keras.layers.Layer):
         self.intermediate = BertIntermediate(config)
         self.dense = tf.keras.layers.Dense(
             config.hidden_size,
-            kernel_initializer=tf.keras.initializers.TruncatedNormal(stddev=0.02)
+            kernel_initializer=initialize(config.stddev)
         )
         self.dropout = tf.keras.layers.Dropout(config.hidden_dropout_rate)
         self.layer_norm = tf.keras.layers.LayerNormalization(epsilon=1e-12, name='LayerNorm')
@@ -240,7 +203,7 @@ class BertPooler(tf.keras.layers.Layer):
         super().__init__(**kwargs)
         self.dense = tf.keras.layers.Dense(
             config.hidden_size,
-            kernel_initializer=tf.keras.initializers.TruncatedNormal(stddev=0.02),
+            kernel_initializer=initialize(config.stddev),
             activation='tanh',
             name='pooler'
         )
@@ -278,15 +241,10 @@ class BertMLMHead(tf.keras.layers.Layer):
         self.embedding = embedding
         self.dense = tf.keras.layers.Dense(
             config.hidden_size,
-            kernel_initializer=tf.keras.initializers.TruncatedNormal(stddev=0.02),
+            kernel_initializer=initialize(config.stddev),
             name='dense'
         )
-        if isinstance(config.hidden_activation, tf.keras.layers.Activation):
-            self.activation = config.hidden_activation
-        elif isinstance(config.hidden_activation, str):
-            self.activation = ACT2FN[config.hidden_activation]
-        else:
-            self.activation = ACT2FN['gelu']
+        self.activation = choose_activation(config.hidden_activation)
 
         self.layer_norm = tf.keras.layers.LayerNormalization(epsilon=1e-12)
 
@@ -311,7 +269,7 @@ class BertNSPHead(tf.keras.layers.Layer):
         super().__init__(**kwargs)
         self.classifier = tf.keras.layers.Dense(
             2,
-            kernel_initializer=tf.keras.initializers.TruncatedNormal(stddev=0.02),
+            kernel_initializer=initialize(config.stddev),
             name='sequence_relationip'
         )
 
