@@ -6,6 +6,18 @@ from .run_transformer import *
 
 class TransformerTest(tf.test.TestCase):
 
+    def testTransformerDataset(self):
+        data_config = TransformerDataConfig(
+            drop_remainder=False,
+            repeat=16,
+            train_batch_size=8
+        )
+        dataset = TransformerDataset(data_config)
+        train_dataset = dataset.build_train_dataset(['testdata/transformer_train.tfrecord'])
+        for d in train_dataset.take(1):
+            print(d)
+        print('='*100)
+
     def testTransformerTraining(self):
         config = TransformerConfig(max_positions=10)
         model = build_model(config)
