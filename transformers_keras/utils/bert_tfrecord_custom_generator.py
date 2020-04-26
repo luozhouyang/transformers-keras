@@ -19,22 +19,10 @@ def create_float_feature(values):
     return feature
 
 
-def load_vocab(vocab_file):
-    """Loads a vocabulary file into a dictionary."""
-    vocab = collections.OrderedDict()
-    index = 0
-    with tf.io.gfile.GFile(vocab_file, "r") as reader:
-        while True:
-            token = reader.readline()
-            if not token:
-                break
-            token = token.strip()
-            vocab[token] = index
-            index += 1
-    return vocab
-
-
-class Generator(object):
+class CustomBertGenerator(object):
+    """Generate tfrecord files for training, it's different from original bert generation.
+        If you need to use standard bert generation, use `bert_create_pretraining_data.py`
+    """
 
     def __init__(self, vocab_file, **kwargs):
         super().__init__()
@@ -47,29 +35,100 @@ class Generator(object):
         self.do_whole_word_mask = kwargs.pop('do_whole_word_mask', True)
         self.masked_lm_prob = kwargs.pop('masked_lm_prob', 0.15)
         self.max_predictions_per_seq = kwargs.pop('max_predictions_per_seq', 20)
-        self.vocab_words = load_vocab(vocab_file)
+        self.vocab_words = list(self.tokenizer.vocab.keys())
         unk = kwargs.pop('unk_token', '[UNK]')
-        self.unk_id = self.vocab_words[unk]
+        self.unk_id = self.tokenizer.vocab[unk]
         pad = kwargs.pop('pad_token', '[PAD]')
-        self.pad_id = self.vocab_words[pad]
+        self.pad_id = self.tokenizer.vocab[pad]
+        self.record_option = kwargs.pop('record_option', None)
 
     def _parse_segment_strs(self, line):
-        """Extract segment a and b from a fileline."""
-        raise NotImplementedError()
+        line = line.strip('\n')
+        strs = line.split('@@@')
+        if len(strs) != 5:
+            return '', '', -1
+        label, jdid, cvid, stra, strb = strs[0], strs[1], strs[2], strs[3], strs[4]
+        return stra, strb, int(label)
 
     def _compose_segments(self, stra, strb):
-        """Convert stra to a tokens list, strb to another tokens list. 
-            You may do setence selection or deletion, trucating or any other operations you want.
-        """
-        raise NotImplementedError()
+        tokens_a = self.tokenizer.tokenize(stra)
+        tokens_b = self.tokenizer.tokenize(strb)
+        self._truncate_seq_pair(tokens_a, tokens_b, self.max_sequence_length - 3, self.rng)
+        return tokens_a, tokens_b
 
     def _masked_lm_process(self, instance):
-        """Process tokens for masked language model."""
-        raise NotImplementedError()
+        tokens = instance['original_tokens']
+        outputs = self._create_masked_lm_predictions(
+            tokens=tokens,
+            masked_lm_prob=self.masked_lm_prob,
+            max_predictions_per_seq=self.max_predictions_per_seq,
+            vocab_words=self.vocab_words,
+            rng=self.rng)
+
+        # len(masked_lm_masked_tokens) == len(tokens)
+        # len(masked_lm_masked_positions) == self.max_predictions_per_seq
+        # len(masked_lm_origin_tokens) == self.max_predictions_per_seq
+        masked_lm_masked_tokens, masked_lm_masked_positions, masked_lm_origin_tokens = outputs
+        instance.update({
+            'original_ids': [self.tokenizer.vocab.get(t, self.unk_id) for t in tokens],  # length == len(tokens)
+            'masked_tokens': masked_lm_masked_tokens,  # lenght == len(tokens)
+            # length == len(tokens)
+            'masked_ids': [self.tokenizer.vocab.get(t, self.unk_id) for t in masked_lm_masked_tokens],
+            'masked_lm_positions': masked_lm_masked_positions,  # length = max_predictions_per_seq
+            'masked_lm_tokens': masked_lm_origin_tokens,  # length = max_predictions_per_seq
+            'masked_lm_ids': [self.tokenizer.vocab.get(t, self.unk_id) for t in masked_lm_origin_tokens]
+        })
+        return instance
 
     def _create_example(self, instance):
-        """Create tf.Example from instance."""
-        raise NotImplementedError()
+        # instance = {
+        #     'original_tokens': [], # original tokens
+        #     'original_ids': [], # original ids
+        #     'masked_tokens': [], # tokens contains [MASK]
+        #     'masked_ids': [], # ids contains mask_id
+        #     'nsp_label': 0, # nsp label
+        #     'masked_lm_positions': [], # positions of masked tokens in sequence
+        #     'masked_lm_tokens': [], # original tokens replaced by [MASK]
+        #     'masked_lm_ids': [], # original tokens' ids replaced by [MASK]
+        # }
+        input_ids = instance['masked_ids']
+        segment_ids = instance['segment_ids']
+        assert len(input_ids) == len(segment_ids)
+
+        input_mask = [1] * len(input_ids)  # masking padding positions
+        while len(input_ids) < self.max_sequence_length:
+            input_ids.append(self.pad_id)
+            segment_ids.append(self.pad_id)
+            input_mask.append(0)
+
+        assert len(input_ids) == self.max_sequence_length
+        assert len(segment_ids) == self.max_sequence_length
+        assert len(input_mask) == self.max_sequence_length
+
+        masked_lm_positions = instance['masked_lm_positions']
+        masked_lm_ids = instance['masked_lm_ids']
+        masked_lm_weights = [1.0] * len(masked_lm_ids)
+        while len(masked_lm_positions) < self.max_predictions_per_seq:
+            masked_lm_positions.append(0)
+            masked_lm_ids.append(0)
+            masked_lm_weights.append(0.0)
+
+        assert len(masked_lm_positions) == self.max_predictions_per_seq
+        assert len(masked_lm_ids) == self.max_predictions_per_seq
+        assert len(masked_lm_weights) == self.max_predictions_per_seq
+
+        features = collections.OrderedDict()
+        features['original_ids'] = create_int_feature(instance['original_ids'])  # original ids of tokens
+        features['input_ids'] = create_int_feature(input_ids)  # contains masked tokens
+        features['input_mask'] = create_int_feature(input_mask)
+        features['segment_ids'] = create_int_feature(segment_ids)
+        features['next_sentence_labels'] = create_int_feature([instance['next_sentence_labels']])
+        features['masked_lm_positions'] = create_int_feature(masked_lm_positions)
+        features['masked_lm_ids'] = create_int_feature(masked_lm_ids)
+        features['masked_lm_weights'] = create_float_feature(masked_lm_weights)
+
+        example = tf.train.Example(features=tf.train.Features(feature=features))
+        return example
 
     def generate(self, input_files, output_files):
         """Convert pretrain corpus to tfrecord files. Each line of input_files should contains two segments string.
@@ -77,7 +136,7 @@ class Generator(object):
         """
         writers = []
         for output_file in output_files:
-            writers.append(tf.io.TFRecordWriter(output_file, option='GZIP'))
+            writers.append(tf.io.TFRecordWriter(output_file, options=self.record_option))
 
         writer_index = 0
         total = 0
@@ -231,97 +290,6 @@ class Generator(object):
         return (masked_lm_masking_tokens, masked_lm_masking_positions, masked_lm_original_tokens)
 
 
-class CustomBertPreprocessor(Generator):
-
-    def _parse_segment_strs(self, line):
-        line = line.strip('\n')
-        strs = line.split('@@@')
-        if len(strs) != 5:
-            return '', '', -1
-        label, jdid, cvid, stra, strb = strs[0], strs[1], strs[2], strs[3], strs[4]
-        return stra, strb, label
-
-    def _compose_segments(self, stra, strb):
-        tokens_a = self.tokenizer.tokenize(stra)
-        tokens_b = self.tokenizer.tokenize(strb)
-        self._truncate_seq_pair(tokens_a, tokens_b, self.max_sequence_length - 3, self.rng)
-        return tokens_a, tokens_b
-
-    def _masked_lm_process(self, instance):
-        tokens = instance['original_tokens']
-        outputs = self._create_masked_lm_predictions(
-            tokens=tokens,
-            masked_lm_prob=self.masked_lm_prob,
-            max_predictions_per_seq=self.max_predictions_per_seq,
-            vocab_words=self.vocab_words,
-            rng=self.rng)
-
-        # len(masked_lm_masked_tokens) == len(tokens)
-        # len(masked_lm_masked_positions) == self.max_predictions_per_seq
-        # len(masked_lm_origin_tokens) == self.max_predictions_per_seq
-        masked_lm_masked_tokens, masked_lm_masked_positions, masked_lm_origin_tokens = outputs
-        instance.update({
-            'original_ids': [self.vocab_words.get(t, self.unk_id) for t in tokens],  # length == len(tokens)
-            'masked_tokens': masked_lm_masked_tokens,  # lenght == len(tokens)
-            # length == len(tokens)
-            'masked_ids': [self.vocab_words.get(t, self.unk_id) for t in masked_lm_masked_tokens],
-            'masked_lm_positions': masked_lm_masked_positions,  # length = max_predictions_per_seq
-            'masked_lm_tokens': masked_lm_origin_tokens,  # length = max_predictions_per_seq
-            'masked_lm_ids': [self.vocab_words.get(t, self.unk_id) for t in masked_lm_origin_tokens]
-        })
-        return instance
-
-    def _create_example(self, instance):
-        # instance = {
-        #     'original_tokens': [], # original tokens
-        #     'original_ids': [], # original ids
-        #     'masked_tokens': [], # tokens contains [MASK]
-        #     'masked_ids': [], # ids contains mask_id
-        #     'nsp_label': 0, # nsp label
-        #     'masked_lm_positions': [], # positions of masked tokens in sequence
-        #     'masked_lm_tokens': [], # original tokens replaced by [MASK]
-        #     'masked_lm_ids': [], # original tokens' ids replaced by [MASK]
-        # }
-        input_ids = instance['masked_ids']
-        segment_ids = instance['segment_ids']
-        assert len(input_ids) == len(segment_ids)
-
-        input_mask = [1] * len(input_ids)  # masking padding positions
-        while len(input_ids) < self.max_sequence_length:
-            input_ids.append(self.pad_id)
-            segment_ids.append(self.pad_id)
-            input_mask.append(0)
-
-        assert len(input_ids) == self.max_sequence_length
-        assert len(segment_ids) == self.max_sequence_length
-        assert len(input_mask) == self.max_sequence_length
-
-        masked_lm_positions = instance['masked_lm_positions']
-        masked_lm_ids = instance['masked_lm_ids']
-        masked_lm_weights = [1.0] * len(masked_lm_ids)
-        while len(masked_lm_positions) < self.max_predictions_per_seq:
-            masked_lm_positions.append(0)
-            masked_lm_ids.append(0)
-            masked_lm_weights.append(0.0)
-
-        assert len(masked_lm_positions) == self.max_predictions_per_seq
-        assert len(masked_lm_ids) == self.max_predictions_per_seq
-        assert len(masked_lm_weights) == self.max_predictions_per_seq
-
-        features = collections.OrderedDict()
-        features['original_ids'] = create_int_feature(instance['original_ids'])  # original ids of tokens
-        features['input_ids'] = create_int_feature(input_ids)  # contains masked tokens
-        features['input_mask'] = create_int_feature(input_mask)
-        features['segment_ids'] = create_int_feature(segment_ids)
-        features['next_sentence_labels'] = create_int_feature([instance['next_sentence_labels']])
-        features['masked_lm_positions'] = create_int_feature(masked_lm_positions)
-        features['masked_lm_ids'] = create_int_feature(masked_lm_ids)
-        features['masked_lm_weights'] = create_float_feature(masked_lm_weights)
-
-        example = tf.train.Example(features=tf.train.Features(feature=features))
-        return example
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--input_file', type=str, help="""Comma splited file path""")
@@ -335,6 +303,7 @@ if __name__ == "__main__":
     parser.add_argument('--masked_lm_prob', type=float, default=0.15)
     parser.add_argument('--unk_token', type=str, default='[UNK]')
     parser.add_argument('--pad_token', type=str, default='[PAD]')
+    parser.add_argument('--record_option', type=str, default=None)
 
     args, _ = parser.parse_known_args()
 
@@ -349,7 +318,8 @@ if __name__ == "__main__":
         'do_whole_word_mask': args.do_whole_word_mask,
         'masked_lm_prob': args.masked_lm_prob,
         'unk_token': args.unk_token,
-        'pad_token': args.pad_token
+        'pad_token': args.pad_token,
+        'record_option': args.record_option
     }
-    g = CustomBertPreprocessor(args.vocab_file, **config)
+    g = CustomBertGenerator(args.vocab_file, **config)
     g.generate(input_files, output_files)
