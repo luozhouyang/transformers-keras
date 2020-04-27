@@ -93,17 +93,21 @@ class CustomBertGenerator(object):
         # }
         input_ids = instance['masked_ids']
         segment_ids = instance['segment_ids']
+        original_ids = instance['original_ids']
         assert len(input_ids) == len(segment_ids)
+        assert len(input_ids) == len(original_ids)
 
         input_mask = [1] * len(input_ids)  # masking padding positions
         while len(input_ids) < self.max_sequence_length:
             input_ids.append(self.pad_id)
             segment_ids.append(self.pad_id)
             input_mask.append(0)
+            original_ids.append(0)
 
         assert len(input_ids) == self.max_sequence_length
         assert len(segment_ids) == self.max_sequence_length
         assert len(input_mask) == self.max_sequence_length
+        assert len(original_ids) == self.max_sequence_length
 
         masked_lm_positions = instance['masked_lm_positions']
         masked_lm_ids = instance['masked_lm_ids']

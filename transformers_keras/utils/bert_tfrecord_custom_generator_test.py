@@ -1,6 +1,6 @@
 import unittest
-import tensorflow as tf
 
+import tensorflow as tf
 
 from .bert_tfrecord_custom_generator import CustomBertGenerator
 
@@ -36,13 +36,14 @@ class CustomBertGeneratorTest(unittest.TestCase):
             print(d)
 
         name_to_features = {
-            'input_ids': tf.io.FixedLenFeature([128], tf.int64),  # original tokens
-            'input_mask': tf.io.FixedLenFeature([128], tf.int64),  # original ids
-            'segment_ids': tf.io.FixedLenFeature([128], tf.int64),  # tokens contains [MASK]
-            'next_sentence_labels': tf.io.FixedLenFeature([1], tf.int64),  # nsp label
-            'masked_lm_positions': tf.io.FixedLenFeature([20], tf.int64),  # positions of masked tokens in sequence
-            'masked_lm_weights': tf.io.FixedLenFeature([20], tf.float32),  # original tokens replaced by [MASK]
-            'masked_lm_ids': tf.io.FixedLenFeature([20], tf.int64),  # original tokens' ids replaced by [MASK]
+            'original_ids': tf.io.FixedLenFeature([128], tf.int64),
+            'input_ids': tf.io.FixedLenFeature([128], tf.int64),
+            'input_mask': tf.io.FixedLenFeature([128], tf.int64),
+            'segment_ids': tf.io.FixedLenFeature([128], tf.int64),
+            'next_sentence_labels': tf.io.FixedLenFeature([1], tf.int64),
+            'masked_lm_positions': tf.io.FixedLenFeature([20], tf.int64),
+            'masked_lm_weights': tf.io.FixedLenFeature([20], tf.float32),
+            'masked_lm_ids': tf.io.FixedLenFeature([20], tf.int64),
         }
 
         def _parse_example(record):
