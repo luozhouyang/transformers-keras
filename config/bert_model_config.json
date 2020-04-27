@@ -1,3 +1,4 @@
 {
-    
+    "max_sequence_length": 128,
+    "max_predictions_per_seq": 20
 }

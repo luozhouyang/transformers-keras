@@ -1,3 +1,7 @@
+import json
+import logging
+import os
+
 import tensorflow as tf
 
 from .modeling_utils import choose_activation, initialize
@@ -19,6 +23,17 @@ class BertConfig(object):
         self.max_position_embeddings = kwargs.pop('max_position_embeddings', 512)
         self.max_sequence_length = kwargs.pop('max_sequence_length', 512)
         self.stddev = kwargs.pop('stddev', 0.02)
+
+    @classmethod
+    def from_json_file(cls, filename):
+        d = {}
+        if not os.path.exists(filename):
+            logging.warning('Config file %s does not exists.' % filename)
+            return cls(**d)
+        logging.info('Load model config from: %s.' % filename)
+        with open(filename, mode='rt', encoding='utf8') as fin:
+            d = json.load(fin)
+        return cls(**d)
 
 
 class BertEmbedding(tf.keras.layers.Layer):

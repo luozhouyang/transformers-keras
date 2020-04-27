@@ -60,6 +60,21 @@ class BertDataConfig(object):
         self.drop_remainder = kwargs.pop('drop_remainder', True)
         self.epochs = kwargs.pop('epochs', 10)
         self.model_dir = kwargs.pop('model_dir', '/tmp/bert')
+        self.record_option = kwargs.pop('record_option', 'GZIP')
+        self.save_ckpt_steps = kwargs.pop('save_ckpt_steps', 10000)
+        self.max_ckpt_nums = kwargs.pop('max_ckpt_nums', 10)
+        self.export_steps = kwargs.pop('export_steps', 100000)
+
+    @classmethod
+    def from_json_file(cls, filename):
+        d = {}
+        if not os.path.exists(filename):
+            logging.warning('Config file %s does not exists.' % filename)
+            return cls(**d)
+        logging.info('Load data config from: %s.' % filename)
+        with open(filename, mode='rt', encoding='utf8') as fin:
+            d = json.load(fin)
+        return cls(**d)
 
 
 class BertDataset(object):
@@ -71,7 +86,7 @@ class BertDataset(object):
         raise NotImplementedError()
 
     def build_train_dataset(self, train_record_files):
-        dataset = tf.data.TFRecordDataset(train_record_files)
+        dataset = tf.data.TFRecordDataset(train_record_files, compression_type=self.config.record_option)
         dataset = dataset.map(self._parse_example_fn, num_parallel_calls=tf.data.experimental.AUTOTUNE)
         dataset = dataset.shuffle(
             buffer_size=self.config.shuffle_buffer_size,
@@ -101,9 +116,10 @@ class CustomBertDataset(BertDataset):
 
     def _parse_example_fn(self, record):
         """Parse tfrecord to example. Change this parse process according to your record files format."""
-        MAX_SEQ_LEN = 512
-        MAX_PREDICTIONS_PER_SEQ = 512
+        MAX_SEQ_LEN = self.config.max_sequence_length
+        MAX_PREDICTIONS_PER_SEQ = self.config.max_predictions_per_seq
         name_to_features = {
+            'original_ids': tf.io.FixedLenFeature([MAX_SEQ_LEN], tf.int64),
             'input_ids': tf.io.FixedLenFeature([MAX_SEQ_LEN], tf.int64),
             'input_mask': tf.io.FixedLenFeature([MAX_SEQ_LEN], tf.int64),
             'segment_ids': tf.io.FixedLenFeature([MAX_SEQ_LEN], tf.int64),
@@ -129,8 +145,8 @@ class CustomBertDataset(BertDataset):
             'segment_ids': example.get('segment_ids', None),
         }
         labels = {
-            'predictions': example.get('masked_lm_ids', None),
-            'relations': tf.one_hot(example['next_sentence_lables'], 2)
+            'predictions': example['original_ids'],
+            'relations': tf.one_hot(example['next_sentence_labels'], 2)
         }
         return (features, labels)
 
@@ -150,10 +166,18 @@ def train(model, dataconfig):
         validation_steps=1000,
         epochs=dataconfig.epochs,
         callbacks=[
-            tf.keras.callbacks.EarlyStopping(monitor='loss', patience=5),
+            tf.keras.callbacks.EarlyStopping(monitor='relations_loss', patience=5),
+            tf.keras.callbacks.EarlyStopping(monitor='predictions_loss', patience=5),
             tf.keras.callbacks.TensorBoard(os.path.join(model_dir, 'tensorboard'), update_freq='batch'),
-            ModelStepCheckpoint(model, model_dir, every_steps=10000, max_keep_ckpt=10),
-            SavedModelExporter(model, os.path.join(model_dir, 'export'), every_steps=100000)
+            ModelStepCheckpoint(
+                model,
+                model_dir,
+                every_steps=dataconfig.save_ckpt_steps,
+                max_keep_ckpt=dataconfig.max_ckpt_nums),
+            SavedModelExporter(
+                model,
+                os.path.join(model_dir, 'export'),
+                every_steps=dataconfig.export_steps)
         ]
     )
 
@@ -166,18 +190,8 @@ if __name__ == "__main__":
 
     args, _ = parser.parse_known_args()
 
-    model_config, data_config = {}, {}
-    if os.path.exists(args.model_config):
-        logging.info('Load model config from: %s.' % args.model_config)
-        with open(args.model_config, mode='rt', encoding='utf8') as f:
-            model_config = json.load(f)
-    if os.path.exists(args.data_config):
-        logging.info('Load data config from: %s.' % args.data_config)
-        with open(args.data_config, mode='rt', encoding='utf8') as f:
-            data_config = json.load(f)
-
-    bert_model_config = BertConfig(**model_config)
-    bert_data_config = BertDataConfig(**data_config)
+    bert_model_config = BertConfig.from_json_file(args.model_config)
+    bert_data_config = BertDataConfig.from_json_file(args.data_config)
     model = build_model(bert_model_config)
 
     if 'train' == args.mode:
