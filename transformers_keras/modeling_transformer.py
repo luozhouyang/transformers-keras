@@ -114,7 +114,7 @@ class MultiHeadAttention(tf.keras.layers.Layer):
                 s += mask * -10000.0
             attn = tf.nn.softmax(s)
             attn = self.attention_dropout(attn, training=training)
-            context = tf.matmul(attn, value)
+            context = tf.matmul(attn, v)
             context = tf.transpose(context, perm=[0, 2, 1, 3])
             context = tf.reshape(context, shape=(batch_size, -1, self.hidden_size))
             return context, attn
