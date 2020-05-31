@@ -1,3 +1,4 @@
+import logging
 import os
 import time
 
@@ -44,7 +45,7 @@ class SavedModelExporter(tf.keras.callbacks.Callback):
             if not os.path.exists(p):
                 os.makedirs(p)
             self.model.save(p, include_optimizer=False, save_format='tf')
-            print('Export model in SavedModel format to {} at batch {}.'.format(p, batch + 1))
+            logging.info('Export model in SavedModel format to {} at batch {}.'.format(p, batch + 1))
 
     def on_epoch_end(self, epoch, logs=None):
         self.epoch = epoch
@@ -58,34 +59,4 @@ class SavedModelExporter(tf.keras.callbacks.Callback):
             if not os.path.exists(p):
                 os.makedirs(p)
             self.model.save(p, include_optimizer=False, save_format='tf')
-            print('Export model in SavedModel format to {} at epoch {}.'.format(p, epoch))
-
-
-class ModelStepCheckpoint(tf.keras.callbacks.Callback):
-    """Save model in Checkpoint format every n steps."""
-
-    def __init__(self, model, ckpt_dir, every_steps=10000, max_keep_ckpt=5):
-        super(ModelStepCheckpoint, self).__init__()
-        self.model = model
-        self.ckpt_dir = ckpt_dir
-        self.every_steps = every_steps
-        self.max_keep_ckpt = max_keep_ckpt
-        self.ckpt = tf.train.Checkpoint(model=model)
-        self.ckpt_manager = tf.train.CheckpointManager(
-            self.ckpt, self.ckpt_dir, max_to_keep=self.max_keep_ckpt
-        )
-        self.epoch = 0
-
-    def on_train_end(self, logs=None):
-        p = self.ckpt_manager.save()
-        print('Model saved in checkpoint format to {}.'.format(p))
-
-    def on_train_batch_end(self, batch, logs=None):
-        if self.every_steps is None:
-            return
-        if (batch+1) % self.every_steps == 0:
-            p = self.ckpt_manager.save()
-            print('\nModel saved in checkpoint format to {} at batch {} of epoch {}.'.format(p, batch + 1, self.epoch))
-
-    def on_epoch_end(self, epoch, logs=None):
-        self.epoch = epoch
+            logging.info('Export model in SavedModel format to {} at epoch {}.'.format(p, epoch))
