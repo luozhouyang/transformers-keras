@@ -1,2 +1,3 @@
 from .abstract_dataset_builder import AbstractDatasetBuilder
+from .bert_dataset_builder import BertTFRecordDatasetBuilder
 from .transformer_dataset_builder import *
