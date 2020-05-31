@@ -45,7 +45,7 @@ python -m transformers_keras.run_bert \
 You should process your data in tfrecord format. Modify this script `transformers_keras/utils/bert_tfrecord_custom_generator.py` as you need.
 
 ```bash
-python -m transformers_keras.run_bert \
+python -m transformers_keras.run_albert \
     --mode train \
     --model_config config/albert_model_config.json \
     --data_config config/albert_data_config.json
