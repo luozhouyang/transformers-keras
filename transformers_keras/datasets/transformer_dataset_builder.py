@@ -109,7 +109,7 @@ class TransformerTFRecordDatasetBuilder(TransformerDatasetBuilder):
     def _create_dataset_from_files(self, files, skip=0):
         dataset = tf.data.Dataset.from_tensor_slices(files)
         dataset = dataset.interleave(
-            lambda x: tf.data.TextLineDataset(x).skip(skip),
+            lambda x: tf.data.TFRecordDataset(x).skip(skip),
             cycle_length=len(files)
         )
         return dataset
@@ -162,12 +162,42 @@ class TransformerTextFileDatasetBuilder(TransformerDatasetBuilder):
         self.pad_id = self.tokenizer.pad_id
 
     def _create_dataset_from_files(self, files, skip=0):
-        dataset = tf.data.Dataset.from_tensor_slices(files)
-        dataset = dataset.interleave(
-            lambda x: tf.data.TextLineDataset(x).skip(skip),
-            cycle_length=len(files)
-        )
-        return dataset
+        """Create tf.data.Dataset instance from files.
+
+        Args:
+            files: Python list, can be:
+                1) A list of files, each line of each file contains src and tgt sequence.
+                2) A list of (src_file, tgt_file) tuples
+            skip: Python integer, skip count of the file
+
+        Returns:
+            An tf.data.Dataset instance
+        """
+
+        if not files:
+            raise ValueError('Invalid argument `files`.')
+
+        ele = files[0]
+
+        if isinstance(ele, str):
+            dataset = tf.data.Dataset.from_tensor_slices(files)
+            dataset = dataset.interleave(
+                lambda x: tf.data.TextLineDataset(x).skip(skip),
+                cycle_length=len(files)
+            )
+            return dataset
+        elif isinstance(ele, tuple):
+            src_files = [x[0] for x in files]
+            tgt_files = [x[1] for x in files]
+            src_dataset = tf.data.Dataset.from_tensor_slices(src_files)
+            tgt_dataset = tf.data.Dataset.from_tensor_slices(tgt_files)
+            src_dataset = src_dataset.flat_map(lambda x: tf.data.TextLineDataset(x).skip(skip))
+            tgt_dataset = tgt_dataset.flat_map(lambda x: tf.data.TextLineDataset(x).skip(skip))
+            dataset = tf.data.Dataset.zip((src_dataset, tgt_dataset))
+            return dataset
+
+        else:
+            raise ValueError('Invalid argument `files`')
 
     def _parse_example_fn(self, x):
 
