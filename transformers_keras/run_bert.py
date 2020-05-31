@@ -100,13 +100,13 @@ class BertDataset(object):
     def build_valid_dataset(self, valid_record_files):
         if valid_record_files is None:
             return None
-        dataset = tf.data.TFRecordDataset(valid_record_files)
+        dataset = tf.data.TFRecordDataset(valid_record_files, compression_type=self.config.record_option)
         dataset = dataset.map(self._parse_example_fn, num_parallel_calls=tf.data.experimental.AUTOTUNE)
         dataset = dataset.batch(self.config.valid_batch_size).prefetch(self.config.valid_batch_size)
         return dataset
 
     def build_predict_dataset(self, predict_record_files):
-        dataset = tf.data.TFRecordDataset(predict_record_files)
+        dataset = tf.data.TFRecordDataset(predict_record_files, compression_type=self.config.record_option)
         dataset = dataset.map(self._parse_example_fn)
         dataset = dataset.batch(self.config.predict_batch_size).prefetch(self.config.predict_batch_size)
         return dataset
