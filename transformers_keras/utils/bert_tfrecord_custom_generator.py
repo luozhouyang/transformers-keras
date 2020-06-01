@@ -6,7 +6,7 @@ import random
 
 import tensorflow as tf
 
-from transformers_keras.tokenizers import bert_tokenization
+from transformers_keras.tokenizers import BertDefaultTokenizer
 
 
 def create_int_feature(values):
@@ -28,18 +28,13 @@ class CustomBertGenerator(object):
         super().__init__()
         self.do_lower_case = kwargs.pop('do_lower_case', True)
         self.split_on_punc = kwargs.pop('split_on_punc', True)
-        self.tokenizer = bert_tokenization.FullTokenizer(
-            vocab_file=vocab_file, do_lower_case=self.do_lower_case, split_on_punc=self.split_on_punc)
+        self.tokenizer = BertDefaultTokenizer(vocab_file=vocab_file)
         self.rng = random.Random(12345)
         self.max_sequence_length = kwargs.pop('max_sequence_length', 512)
         self.do_whole_word_mask = kwargs.pop('do_whole_word_mask', True)
         self.masked_lm_prob = kwargs.pop('masked_lm_prob', 0.15)
         self.max_predictions_per_seq = kwargs.pop('max_predictions_per_seq', 20)
-        self.vocab_words = list(self.tokenizer.vocab.keys())
-        unk = kwargs.pop('unk_token', '[UNK]')
-        self.unk_id = self.tokenizer.vocab[unk]
-        pad = kwargs.pop('pad_token', '[PAD]')
-        self.pad_id = self.tokenizer.vocab[pad]
+        self.vocab_words = self.tokenizer.vocab
         self.record_option = kwargs.pop('record_option', None)
 
     def _parse_segment_strs(self, line):
@@ -70,13 +65,13 @@ class CustomBertGenerator(object):
         # len(masked_lm_origin_tokens) == self.max_predictions_per_seq
         masked_lm_masked_tokens, masked_lm_masked_positions, masked_lm_origin_tokens = outputs
         instance.update({
-            'original_ids': [self.tokenizer.vocab.get(t, self.unk_id) for t in tokens],  # length == len(tokens)
+            'original_ids': self.tokenizer.encode(tokens),  # length == len(tokens)
             'masked_tokens': masked_lm_masked_tokens,  # lenght == len(tokens)
             # length == len(tokens)
-            'masked_ids': [self.tokenizer.vocab.get(t, self.unk_id) for t in masked_lm_masked_tokens],
+            'masked_ids': self.tokenizer.encode(masked_lm_masked_tokens),
             'masked_lm_positions': masked_lm_masked_positions,  # length = max_predictions_per_seq
             'masked_lm_tokens': masked_lm_origin_tokens,  # length = max_predictions_per_seq
-            'masked_lm_ids': [self.tokenizer.vocab.get(t, self.unk_id) for t in masked_lm_origin_tokens]
+            'masked_lm_ids': self.tokenizer.encode(masked_lm_origin_tokens)
         })
         return instance
 
