@@ -1,8 +1,7 @@
 import unittest
 
-from .tokenizer import *
-from .transformer_tokenizer import TransformerTokenizer
 from .bert_tokenizer import BertTokenizer
+from .tokenizer import *
 
 
 class TokenizersTest(unittest.TestCase):
@@ -22,10 +21,6 @@ class TokenizersTest(unittest.TestCase):
         wpt = WordpieceTokenizer(vocab, unk_token='<UNK>',)
         tokens = wpt.tokenize('中国的java web工程师')
         print(tokens)
-
-    def testTransformerTokenizer(self):
-        tokenizer = TransformerTokenizer(vocab_file=None)
-        print(tokenizer.vocab)
 
     def testBertTokenizer(self):
         tokenizer = BertTokenizer(vocab_file=None)

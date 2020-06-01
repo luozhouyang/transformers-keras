@@ -1,5 +1,7 @@
 import tensorflow as tf
 
+from transformers_keras.tokenizers import TransformerAbstractTokenizer
+
 from .abstract_dataset_builder import AbstractDatasetBuilder
 
 
@@ -125,37 +127,9 @@ class TransformerTFRecordDatasetBuilder(TransformerDatasetBuilder):
         return (features, labels)
 
 
-class TransformerTokenizerAdapter(object):
-
-    def tokenize(self, seq):
-        raise NotImplementedError()
-
-    def encode(self, seq):
-        raise NotImplementedError()
-
-    def decode(self, seq):
-        raise NotImplementedError()
-
-    @property
-    def sos_id(self):
-        raise NotImplementedError()
-
-    @property
-    def eos_id(self):
-        raise NotImplementedError()
-
-    @property
-    def unk_id(self):
-        raise NotImplementedError()
-
-    @property
-    def pad_id(self):
-        raise NotImplementedError()
-
-
 class TransformerTextFileDatasetBuilder(TransformerDatasetBuilder):
 
-    def __init__(self, tokenizer: TransformerTokenizerAdapter, **kwargs):
+    def __init__(self, tokenizer: TransformerAbstractTokenizer, **kwargs):
         super().__init__(**kwargs)
         self.tokenizer = tokenizer
         self.sep = kwargs.get('sep', '@@@')
