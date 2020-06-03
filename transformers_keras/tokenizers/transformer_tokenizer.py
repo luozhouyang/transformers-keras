@@ -111,12 +111,12 @@ class TransformerDefaultTokenizer(TransformerVocabBasedTokenizer):
             max_input_chars_per_word=self.max_input_chars_per_word
         )
 
-        def tokenize(self, sequence):
-            tokens = []
-            if self.do_basic_tokenization:
-                for token in self.basic_tokenizer.tokenize(sequence, never_split=self.never_split):
-                    for t in self.wordpiece_tokenizer.tokenize(token):
-                        tokens.append(t)
-            else:
-                tokens = self.wordpiece_tokenizer.tokenize(sequence)
-            return tokens
+    def tokenize(self, sequence):
+        tokens = []
+        if self.do_basic_tokenization:
+            for token in self.basic_tokenizer.tokenize(sequence, never_split=self.never_split):
+                for t in self.wordpiece_tokenizer.tokenize(token):
+                    tokens.append(t)
+        else:
+            tokens = self.wordpiece_tokenizer.tokenize(sequence)
+        return tokens
