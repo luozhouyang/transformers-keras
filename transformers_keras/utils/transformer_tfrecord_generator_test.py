@@ -2,6 +2,8 @@ import unittest
 
 import tensorflow as tf
 
+from transformers_keras.tokenizers import TransformerDefaultTokenizer
+
 from .transformer_tfrecord_generator import TransformerTFRecordGenerator
 
 
@@ -10,21 +12,29 @@ class TransformerTFRecordGeneratorTest(unittest.TestCase):
     def testGenerateTransformerTFRecordFile(self):
         src_vocab_file = 'testdata/vocab_src.txt'
         tgt_vocab_file = 'testdata/vocab_tgt.txt'
-        config = {
-            'src_unk_token': '<unk>',
-            'src_sos_token': '<s>',
-            'src_eos_token': '</s>',
-            'src_pad_token': '<pad>',
-            'tgt_unk_token': '<unk>',
-            'tgt_sos_token': '<s>',
-            'tgt_eos_token': '</s>',
-            'tgt_pad_token': '<pad>',
-            'record_option': 'GZIP',
-            'max_src_sequence_length': 16,
-            'max_tgt_sequence_length': 16
-        }
+        src_tokenizer = TransformerDefaultTokenizer(
+            vocab_file=src_vocab_file,
+            do_basic_tokenization=True,
+            do_lower_case=True,
+            tokenize_chinese_chars=True,
+            nerver_split=None,
+            pad_token='<pad>', unk_token='<unk>', sos_token='<s>', eos_token='</s>',
+        )
+        tgt_tokenizer = TransformerDefaultTokenizer(
+            vocab_file=tgt_vocab_file,
+            do_basic_tokenization=True,
+            do_lower_case=True,
+            tokenize_chinese_chars=True,
+            nerver_split=None,
+            pad_token='<pad>', unk_token='<unk>', sos_token='<s>', eos_token='</s>',
+        )
         g = TransformerTFRecordGenerator(
-            src_vocab_file=src_vocab_file, tgt_vocab_file=tgt_vocab_file, share_vocab=False, **config)
+            src_tokenizer,
+            tgt_tokenizer,
+            src_max_len=16,
+            tgt_max_len=16,
+            record_option='GZIP',
+        )
         input_files = [
             'testdata/train.txt'
         ]

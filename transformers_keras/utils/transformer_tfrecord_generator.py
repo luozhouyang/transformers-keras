@@ -4,7 +4,7 @@ import os
 
 import tensorflow as tf
 
-from transformers_keras.tokenizers import bert_tokenization
+from transformers_keras.tokenizers import TransformerDefaultTokenizer
 
 
 def create_int_feature(values):
@@ -14,47 +14,23 @@ def create_int_feature(values):
 
 class TransformerTFRecordGenerator(object):
 
-    def __init__(self, src_vocab_file, tgt_vocab_file=None, share_vocab=False, **kwargs):
+    def __init__(self,
+                 src_tokenizer,
+                 tgt_tokenizer,
+                 src_max_len=512,
+                 tgt_max_len=512,
+                 record_option='GZIP',
+                 log_steps=1000,
+                 **kwargs):
         super().__init__()
-        self.src_tokenizer = bert_tokenization.FullTokenizer(
-            vocab_file=src_vocab_file,
-            do_lower_case=kwargs.get('do_lower_case', True),
-            split_on_punc=kwargs.get('split_on_punc', True))
-        self.src_vocab = self.src_tokenizer.vocab
-        self.src_vocab_words = list(self.src_tokenizer.vocab.keys())
-        if share_vocab:
-            self.tgt_tokenizer = self.src_tokenizer
-            self.tgt_vocab = self.src_vocab
-            self.tgt_vocab_words = self.src_vocab_words
-        else:
-            assert tgt_vocab_file is not None, "tgt_vocab_file must not be None if share_vocab=False"
-            self.tgt_tokenizer = bert_tokenization.FullTokenizer(
-                vocab_file=tgt_vocab_file,
-                do_lower_case=kwargs.get('do_lower_case', True),
-                split_on_punc=kwargs.get('split_on_punc', True)
-            )
-            self.tgt_vocab = self.tgt_tokenizer.vocab
-            self.tgt_vocab_words = list(self.tgt_vocab.keys())
+        self.src_tokenizer = src_tokenizer
+        self.tgt_tokenizer = tgt_tokenizer
 
-        self.max_src_sequence_length = kwargs.get('max_src_sequence_length', 128)
-        self.max_tgt_sequence_length = kwargs.get('max_tgt_sequence_length', 128)
+        self.src_max_len = src_max_len
+        self.tgt_max_len = tgt_max_len
 
-        self.src_sos_token = kwargs.get('src_sos_token', '<S>')
-        self.tgt_sos_token = kwargs.get('tgt_sos_token', '<S>')
-
-        self.src_eos_token = kwargs.get('src_eos_token', '<T>')
-        self.tgt_eos_token = kwargs.get('tgt_eos_token', '<T>')
-
-        self.src_pad_token = kwargs.get('src_pad_token', '[PAD]')
-        self.tgt_pad_token = kwargs.get('tgt_pad_token', '[PAD]')
-
-        self.src_unk_token = kwargs.get('src_unk_token', '[UNK]')
-        self.src_unk_id = self.src_vocab[self.src_unk_token]
-        self.tgt_unk_token = kwargs.get('tgt_unk_token', '[UNK]')
-        self.tgt_unk_id = self.tgt_vocab[self.tgt_unk_token]
-
-        self.record_option = kwargs.get('record_option', 'GZIP')
-        self.log_steps = kwargs.get('log_steps', 1000)
+        self.record_option = record_option
+        self.log_steps = log_steps
 
     def generate(self, input_files, output_files):
         writers = []
@@ -76,30 +52,27 @@ class TransformerTFRecordGenerator(object):
                     if not src or not tgt:
                         continue
 
-                    src_tokens = self.src_tokenizer.tokenize(src)
-                    if not src_tokens or len(src_tokens) > self.max_src_sequence_length - 2:
+                    src_ids = self.src_tokenizer.encode(src)
+                    src_ids = [self.src_tokenizer.sos_id] + src_ids + [self.src_tokenizer.eos_id]
+                    while len(src_ids) < self.src_max_len:
+                        src_ids.append(self.src_tokenizer.pad_id)
+
+                    if len(src_ids) > self.src_max_len:
+                        logging.warning('Length of sequence is {}, greater than {}', len(src_ids), self.src_max_len)
                         continue
-                    tgt_tokens = self.tgt_tokenizer.tokenize(tgt)
-                    if not tgt_tokens or len(tgt_tokens) > self.max_tgt_sequence_length - 2:
+
+                    tgt_ids = self.tgt_tokenizer.encode(tgt)
+                    tgt_ids = [self.tgt_tokenizer.sos_id] + tgt_ids + [self.tgt_tokenizer.eos_id]
+                    while len(tgt_ids) < self.tgt_max_len:
+                        tgt_ids.append(self.tgt_tokenizer.pad_id)
+                    if len(tgt_ids) > self.tgt_max_len:
+                        logging.warning('Length of sequence is {}, greater than {}', len(tgt_ids), self.tgt_max_len)
                         continue
-
-                    src_tokens = [self.src_sos_token] + src_tokens + [self.src_eos_token]
-                    tgt_tokens = [self.tgt_sos_token] + tgt_tokens + [self.tgt_eos_token]
-                    while len(src_tokens) < self.max_src_sequence_length:
-                        src_tokens.append(self.src_pad_token)
-                    assert len(src_tokens) == self.max_src_sequence_length
-
-                    while len(tgt_tokens) < self.max_tgt_sequence_length:
-                        tgt_tokens.append(self.tgt_pad_token)
-                    assert len(tgt_tokens) == self.max_tgt_sequence_length
-
-                    src_ids = [self.src_vocab.get(t, self.src_unk_id) for t in src_tokens]
-                    tgt_ids = [self.tgt_vocab.get(t, self.tgt_unk_id) for t in tgt_tokens]
 
                     instance = {
-                        'src_tokens': src_tokens,
+                        # 'src_tokens': src_tokens,
                         'src_ids': src_ids,
-                        'tgt_tokens': tgt_tokens,
+                        # 'tgt_tokens': tgt_tokens,
                         'tgt_ids': tgt_ids
                     }
 
