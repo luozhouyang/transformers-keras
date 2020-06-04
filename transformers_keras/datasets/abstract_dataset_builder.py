@@ -5,34 +5,52 @@ import tensorflow as tf
 
 class AbstractDatasetBuilder(abc.ABC):
 
-    def __init__(self, **kwargs):
+    def __init__(self,
+                 train_batch_size=32,
+                 train_skip_count=0,
+                 train_repeat_count=None,
+                 train_shuffle_buffer_size=1000000,
+                 train_shuffle_seed=None,
+                 train_reshuffle_each_iteration=True,
+                 train_drop_remainder=False,
+                 valid_batch_size=32,
+                 valid_skip_count=0,
+                 valid_repeat_count=None,
+                 valid_shuffle_buffer_size=100000,
+                 valid_shuffle_seed=None,
+                 valid_reshuffle_each_iteration=True,
+                 valid_drop_remainder=False,
+                 predict_batch_size=1,
+                 predict_skip_count=0,
+                 predict_repeat_count=None,
+                 predict_drop_remainer=False,
+                 num_parallel_calls=tf.data.experimental.AUTOTUNE,
+                 prefetch_size=tf.data.experimental.AUTOTUNE,
+                 **kwargs):
         super().__init__()
-        self.num_parallel_calls = kwargs.get('num_parallel_calls', tf.data.experimental.AUTOTUNE)
-        self.prefetch_size = kwargs.get('prefetch_size', tf.data.experimental.AUTOTUNE)
+        self.num_parallel_calls = num_parallel_calls
+        self.prefetch_size = prefetch_size
 
-        self.train_batch_size = kwargs.get('train_batch_size', 32)
-        self.train_skip_count = kwargs.get('train_skip_count', 0)
-        self.train_repeat_count = kwargs.get('train_repeat_count', None)
-        self.train_shuffle_buffer_size = kwargs.get('train_shuffle_buffer_size', 1000000)
-        self.train_shuffle_seed = kwargs.get('train_shuffle_seed', None)
-        self.train_reshuffle_each_iteration = kwargs.get('train_reshuffle_each_iteration', True)
-        self.train_drop_remainder = kwargs.get('train_drop_remainder', False)
+        self.train_batch_size = train_batch_size
+        self.train_skip_count = train_skip_count
+        self.train_repeat_count = train_repeat_count
+        self.train_shuffle_buffer_size = train_shuffle_buffer_size
+        self.train_shuffle_seed = train_shuffle_seed
+        self.train_reshuffle_each_iteration = train_reshuffle_each_iteration
+        self.train_drop_remainder = train_drop_remainder
 
-        self.valid_batch_size = kwargs.get('valid_batch_size', 32)
-        self.valid_skip_count = kwargs.get('valid_skip_count', 0)
-        self.valid_repeat_count = kwargs.get('valid_repeat_count', None)
-        self.valid_shuffle_buffer_size = kwargs.get('valid_shuffle_buffer_size', -1)
-        self.valid_shuffle_seed = kwargs.get('valid_shuffle_seed', None)
-        self.valid_reshuffle_each_iteration = kwargs.get('valid_reshuffle_each_iteration', True)
-        self.valid_drop_remainder = kwargs.get('valid_drop_remainder', False)
+        self.valid_batch_size = valid_batch_size
+        self.valid_skip_count = valid_skip_count
+        self.valid_repeat_count = valid_repeat_count
+        self.valid_shuffle_buffer_size = valid_shuffle_buffer_size
+        self.valid_shuffle_seed = valid_shuffle_seed
+        self.valid_reshuffle_each_iteration = valid_reshuffle_each_iteration
+        self.valid_drop_remainder = valid_drop_remainder
 
-        self.predict_batch_size = kwargs.get('predict_batch_size', 32)
-        self.predict_skip_count = kwargs.get('predict_skip_count', 0)
-        self.predict_repeat_count = kwargs.get('predict_repeat_count', None)
-        self.predict_shuffle_buffer_size = kwargs.get('predict_shuffle_buffer_size', -1)
-        self.predict_shuffle_seed = kwargs.get('predict_shuffle_seed', None)
-        self.predict_reshuffle_each_iteration = kwargs.get('predict_reshuffle_each_iteration', True)
-        self.predict_drop_remainder = kwargs.get('predict_drop_remainder', False)
+        self.predict_batch_size = predict_batch_size
+        self.predict_skip_count = predict_skip_count
+        self.predict_repeat_count = predict_repeat_count
+        self.predict_drop_remainder = predict_drop_remainer
 
     def build_train_dataset(self, train_files, **kwargs):
         raise NotImplementedError()
