@@ -5,7 +5,7 @@ import time
 import tensorflow as tf
 
 
-class TransformerLearningRate(tf.keras.optimizers.schedules.LearningRateSchdule):
+class TransformerLearningRate(tf.keras.callbacks.LearningRateScheduler):
     """Learning rate schedule for Transformer."""
 
     def __init__(self, depth, warmup_steps=4000):
