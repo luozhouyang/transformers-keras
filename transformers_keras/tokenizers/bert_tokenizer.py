@@ -1,21 +1,28 @@
 import abc
 import logging
 
-from .abstract_tokenizer import AbstractTokenizerV2
 from .tokenizer import BasicTokenizer, WordpieceTokenizer
 
 
 class BertAbstractTokenizer(abc.ABC):
 
-    def __init__(self, **kwargs):
+    def __init__(self,
+                 pad_token='[PAD]',
+                 unk_token='[UNK]',
+                 sos_token='[SOS]',
+                 eos_token='[EOS]',
+                 cls_token='[CLS]',
+                 sep_token='[SEP]',
+                 mask_token='[MASK]',
+                 **kwargs):
         super().__init__()
-        self.pad_token = kwargs.get('pad_token', '<PAD>')
-        self.unk_token = kwargs.get('unk_token', '<UNK>')
-        self.sos_token = kwargs.get('sos_token', '<S>')
-        self.eos_token = kwargs.get('eos_token', '</S>')
-        self.cls_token = kwargs.get('cls_token', '[CLS]')
-        self.sep_token = kwargs.get('sep_token', '[SEP]')
-        self.mask_token = kwargs.get('mask_token', '[MASK]')
+        self.pad_token = pad_token
+        self.unk_token = unk_token
+        self.sos_token = sos_token
+        self.eos_token = eos_token
+        self.cls_token = cls_token
+        self.sep_token = sep_token
+        self.mask_token = mask_token
 
     def tokenize(self, sequence):
         raise NotImplementedError()

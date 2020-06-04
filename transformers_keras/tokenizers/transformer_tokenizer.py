@@ -1,18 +1,25 @@
 import abc
+import logging
 import os
 
-from .abstract_tokenizer import AbstractTokenizerV2
+import jieba
+
 from .tokenizer import BasicTokenizer, WordpieceTokenizer
 
 
 class TransformerAbstractTokenizer(abc.ABC):
 
-    def __init__(self, **kwargs):
+    def __init__(self,
+                 pad_token='[PAD]',
+                 unk_token='[UNK]',
+                 sos_token='[SOS]',
+                 eos_token='[EOS]',
+                 **kwargs):
         super().__init__()
-        self.pad_token = kwargs.get('pad_token', '<PAD>')
-        self.unk_token = kwargs.get('unk_token', '<UNK>')
-        self.sos_token = kwargs.get('sos_token', '<S>')
-        self.eos_token = kwargs.get('eos_token', '</S>')
+        self.pad_token = pad_token
+        self.unk_token = unk_token
+        self.sos_token = sos_token
+        self.eos_token = eos_token
         self.pad_id = 0
         self.unk_id = 1
         self.sos_id = 2
@@ -89,12 +96,19 @@ class TransformerVocabBasedTokenizer(TransformerAbstractTokenizer):
 
 class TransformerDefaultTokenizer(TransformerVocabBasedTokenizer):
 
-    def __init__(self, vocab_file, **kwargs):
+    def __init__(self,
+                 vocab_file,
+                 do_basic_tokenization=True,
+                 do_lower_case=True,
+                 nerver_split=None,
+                 tokenize_chinese_chars=True,
+                 max_input_chars_per_word=100,
+                 **kwargs):
         super(TransformerDefaultTokenizer, self).__init__(vocab_file, **kwargs)
-        self.do_basic_tokenization = kwargs.get('do_basic_tokenization')
-        self.do_lower_case = kwargs.get('do_lower_case', True)
-        self.never_split = kwargs.get('never_split', None)
-        self.tokenize_chinese_chars = kwargs.get('tokenize_chinese_chars', True)
+        self.do_basic_tokenization = do_basic_tokenization
+        self.do_lower_case = do_lower_case
+        self.never_split = nerver_split
+        self.tokenize_chinese_chars = tokenize_chinese_chars
         if self.do_basic_tokenization:
             self.basic_tokenizer = BasicTokenizer(
                 do_lower_case=self.do_lower_case,
@@ -119,4 +133,22 @@ class TransformerDefaultTokenizer(TransformerVocabBasedTokenizer):
                     tokens.append(t)
         else:
             tokens = self.wordpiece_tokenizer.tokenize(sequence)
+        return tokens
+
+
+class TransformerJiebaTokenizer(TransformerVocabBasedTokenizer):
+
+    def __init__(self, vocab_file, jieba_userdict=None, **kwargs):
+        super().__init__(vocab_file, **kwargs)
+        if jieba_userdict:
+            jieba.load_userdict(jieba_userdict)
+            logging.info('jieba load user dict: %s finished.' % jieba_userdict)
+
+    def tokenize(self, sequence):
+        tokens = []
+        for t in jieba.cut(sequence):
+            w = t.strip()
+            if not w:
+                continue
+            tokens.append(w)
         return tokens
