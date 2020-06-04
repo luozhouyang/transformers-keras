@@ -7,111 +7,58 @@ from .abstract_dataset_builder import AbstractDatasetBuilder
 
 class TransformerDatasetBuilder(AbstractDatasetBuilder):
 
-    def __init__(self, **kwargs):
+    def __init__(self, pad_id=0, **kwargs):
         super().__init__(**kwargs)
-        self.pad_id = kwargs.get('pad_id', 0)
+        self.pad_id = pad_id
 
-    def _build_dataset(
-            self,
-            files,
-            skip=0,
-            repeat=0,
-            buffer_size=-1,
-            seed=None,
-            reshuffle=True,
-            parallels=tf.data.experimental.AUTOTUNE,
-            pad_id=0,
-            prefetch_size=tf.data.experimental.AUTOTUNE,
-            batch_size=32,
-            drop_remainder=False):
-        dataset = self._create_dataset_from_files(files, skip)
+    def _repeat(self, dataset, mode='train'):
+        repeat = 0
+        if 'train' == mode:
+            repeat = self.train_repeat_count
+        elif 'valid' == mode:
+            repeat = self.valid_repeat_count
+        elif 'predict' == mode:
+            repeat = self.predict_repeat_count
+        else:
+            raise ValueError('Invalid mode: %s, must be in [train, valid, predict]' % mode)
+        if not repeat or repeat <= 0:
+            return dataset
         dataset = dataset.repeat(repeat)
-        dataset = dataset.shuffle(
-            buffer_size=buffer_size,
-            seed=seed,
-            reshuffle_each_iteration=reshuffle)
-        dataset = dataset.map(self._parse_example_fn, num_parallel_calls=parallels)
-        dataset = dataset.filter(lambda x, y: tf.logical_and(tf.size(x) > 0, tf.size(y) > 0))
-        pad_id = tf.constant(pad_id, dtype=tf.int64)
-        dataset = dataset.padded_batch(
-            batch_size=batch_size,
-            padded_shapes=([None], [None]),
-            padding_values=(pad_id, pad_id),
-            drop_remainder=drop_remainder,
-        ).prefetch(prefetch_size)
-        # x-> encoder input, y->decoder input, z->label
-        dataset = dataset.map(lambda x, y: (x, y[:, :-1], y[:, 1:]))
         return dataset
 
-    def build_train_dataset(self, train_files):
-        dataset = self._build_dataset(
-            files=train_files,
-            skip=self.train_skip_count,
-            repeat=self.train_repeat_count,
-            buffer_size=self.train_shuffle_buffer_size,
-            seed=self.train_shuffle_seed,
-            reshuffle=self.train_reshuffle_each_iteration,
-            paralles=self.num_parallel_calls,
-            pad_id=self.pad_id,
-            prefetch_size=self.prefetch_size,
-            batch_size=self.train_batch_size,
-            drop_remainder=self.train_drop_remainder
-        )
-        dataset = dataset.map(lambda x, y, z: ((x, y), z))
-        return dataset
-
-    def build_valid_dataset(self, valid_files):
-        dataset = self._build_dataset(
-            files=valid_files,
-            skip=self.valid_skip_count,
-            repeat=self.valid_repeat_count,
-            buffer_size=self.valid_shuffle_buffer_size,
-            seed=self.valid_shuffle_seed,
-            reshuffle=self.valid_reshuffle_each_iteration,
-            parallels=self.num_parallel_calls,
-            pad_id=self.pad_id,
-            prefetch_size=self.prefetch_size,
-            batch_size=self.valid_batch_size,
-            drop_remainder=self.valid_drop_remainder
-        )
-        dataset = dataset.map(lambda x, y, z: ((x, y), z))
-        return dataset
-
-    def build_predict_dataset(self, predict_files):
-        dataset = self._build_dataset(
-            files=predict_files,
-            skip=self.predict_skip_count,
-            repeat=self.predict_repeat_count,
-            buffer_size=self.predict_shuffle_buffer_size,
-            seed=self.predict_shuffle_seed,
-            reshuffle=self.predict_reshuffle_each_iteration,
-            parallels=self.num_parallel_calls,
-            pad_id=self.pad_id,
-            prefetch_size=self.prefetch_size,
-            batch_size=self.predict_batch_size,
-            drop_remainder=self.predict_drop_remainder
-        )
-        dataset = dataset.map(lambda x, y, z: (x, y))
-        return dataset
-
-    def _create_dataset_from_files(self, files, skip=0):
-        raise NotImplementedError()
-
-    def _parse_example_fn(self, x):
-        raise NotImplementedError()
+    def _shuffle(self, dataset, mode='train'):
+        if 'predict' == mode:
+            return dataset
+        elif 'train' == mode:
+            dataset = dataset.shuffle(
+                buffer_size=self.train_shuffle_buffer_size,
+                seed=self.train_shuffle_seed,
+                reshuffle_each_iteration=self.train_reshuffle_each_iteration)
+            return dataset
+        elif 'valid' == mode:
+            dataset = dataset.shuffle(
+                buffer_size=self.valid_shuffle_buffer_size,
+                seed=self.valid_shuffle_seed,
+                reshuffle_each_iteration=self.valid_reshuffle_each_iteration)
+            return dataset
+        else:
+            raise ValueError('Invalid mode: %s, must be in [train, valid, predict]' % mode)
 
 
 class TransformerTFRecordDatasetBuilder(TransformerDatasetBuilder):
+    """Build dataset from tfrecord files."""
+    # TODO: Shift tgt sequence when generating tfrecord files
 
-    def __init__(self, **kwargs):
+    def __init__(self, src_max_len=512, tgt_max_len=512, record_option='GZIP', **kwargs):
         super().__init__(**kwargs)
-        self.src_max_len = kwargs.get('src_max_len', 16)
-        self.tgt_max_len = kwargs.get('tgt_max_len', 16)
+        self.src_max_len = src_max_len
+        self.tgt_max_len = tgt_max_len
+        self.compression_type = record_option
 
-    def _create_dataset_from_files(self, files, skip=0):
+    def _build_dataset_from_tfrecord_files(self, files, skip=0):
         dataset = tf.data.Dataset.from_tensor_slices(files)
         dataset = dataset.interleave(
-            lambda x: tf.data.TFRecordDataset(x).skip(skip),
+            lambda x: tf.data.TFRecordDataset(x, compression_type=self.compression_type).skip(skip),
             cycle_length=len(files)
         )
         return dataset
@@ -126,63 +73,123 @@ class TransformerTFRecordDatasetBuilder(TransformerDatasetBuilder):
         labels = example['tgt_ids']
         return (features, labels)
 
+    def build_train_dataset(self, train_files):
+        dataset = self._build_dataset_from_tfrecord_files(train_files, skip=self.train_skip_count)
+        dataset = self._repeat(dataset, mode='train')
+        dataset = self._shuffle(dataset, mode='train')
+        dataset = dataset.map(lambda x: self._parse_example_fn(x), num_parallel_calls=self.num_parallel_calls)
+        dataset = dataset.filter(lambda x, y: tf.logical_and(tf.size(x) > 0, tf.size(y) > 0))
+        dataset = dataset.batch(self.train_batch_size, drop_remainder=self.train_drop_remainder)
+        # should shift tgt sequence when generating tfrecord files
+        dataset = dataset.map(lambda x, y: ((x, y[:, :-1]), y[:, 1:]), num_parallel_calls=self.num_parallel_calls)
+        dataset = dataset.prefetch(self.prefetch_size)
+        return dataset
+
+    def build_valid_dataset(self, valid_files):
+        dataset = self._build_dataset_from_tfrecord_files(valid_files, skip=self.valid_skip_count)
+        dataset = self._repeat(dataset, mode='valid')
+        dataset = self._shuffle(dataset, mode='valid')
+        dataset = dataset.map(lambda x: self._parse_example_fn(x), num_parallel_calls=self.num_parallel_calls)
+        dataset = dataset.filter(lambda x, y: tf.logical_and(tf.size(x) > 0, tf.size(y) > 0))
+        dataset = dataset.batch(self.train_batch_size, drop_remainder=self.valid_drop_remainder)
+        dataset = dataset.map(lambda x, y: ((x, y[:, :-1]), y[:, 1:]), num_parallel_calls=self.num_parallel_calls)
+        dataset = dataset.prefetch(self.prefetch_size)
+        return dataset
+
+    def build_predict_dataset(self, predict_files):
+        # predictition process is different from training and evaluation
+        raise NotImplementedError()
+
 
 class TransformerTextFileDatasetBuilder(TransformerDatasetBuilder):
 
-    def __init__(self, tokenizer: TransformerAbstractTokenizer, **kwargs):
-        super().__init__(**kwargs)
-        self.tokenizer = tokenizer
+    def __init__(self,
+                 src_tokenizer: TransformerAbstractTokenizer,
+                 tgt_tokenizer: TransformerAbstractTokenizer,
+                 pad_id=0,
+                 **kwargs):
+        super().__init__(pad_id=pad_id, **kwargs)
+        self.src_tokenizer = src_tokenizer
+        self.tgt_tokenizer = tgt_tokenizer
         self.sep = kwargs.get('sep', '@@@')
-        self.pad_id = self.tokenizer.pad_id
 
-    def _create_dataset_from_files(self, files, skip=0):
-        """Create tf.data.Dataset instance from files.
+    def _build_dataset_from_text_files(self, files, mode='train'):
+        assert all(isinstance(x, tuple) for x in files), 'Invalid input files format.'
+        src_files, tgt_files = [x[0] for x in files], [x[1] for x in files]
+        src_dataset = tf.data.Dataset.from_tensor_slices(src_files)
+        tgt_dataset = tf.data.Dataset.from_tensor_slices(tgt_files)
 
-        Args:
-            files: Python list, can be:
-                1) A list of files, each line of each file contains src and tgt sequence.
-                2) A list of (src_file, tgt_file) tuples
-            skip: Python integer, skip count of the file
-
-        Returns:
-            An tf.data.Dataset instance
-        """
-
-        if not files:
-            raise ValueError('Invalid argument `files`.')
-
-        ele = files[0]
-
-        if isinstance(ele, str):
-            dataset = tf.data.Dataset.from_tensor_slices(files)
-            dataset = dataset.interleave(
-                lambda x: tf.data.TextLineDataset(x).skip(skip),
-                cycle_length=len(files)
-            )
-            return dataset
-        elif isinstance(ele, tuple):
-            src_files = [x[0] for x in files]
-            tgt_files = [x[1] for x in files]
-            src_dataset = tf.data.Dataset.from_tensor_slices(src_files)
-            tgt_dataset = tf.data.Dataset.from_tensor_slices(tgt_files)
-            src_dataset = src_dataset.flat_map(lambda x: tf.data.TextLineDataset(x).skip(skip))
-            tgt_dataset = tgt_dataset.flat_map(lambda x: tf.data.TextLineDataset(x).skip(skip))
-            dataset = tf.data.Dataset.zip((src_dataset, tgt_dataset))
-            return dataset
-
+        skip = 0
+        if 'train' == mode:
+            skip = self.train_skip_count
+        elif 'valid' == mode:
+            skip = self.valid_skip_count
+        elif 'predict' == mode:
+            skip = self.predict_skip_count
         else:
-            raise ValueError('Invalid argument `files`')
+            skip = 0
+        if not skip or skip <= 0:
+            skip = 0
 
-    def _parse_example_fn(self, x):
+        src_dataset = src_dataset.flat_map(lambda x: tf.data.TextLineDataset(x).skip(skip))
+        tgt_dataset = tgt_dataset.flat_map(lambda x: tf.data.TextLineDataset(x).skip(skip))
+        dataset = tf.data.Dataset.zip((src_dataset, tgt_dataset))
+        return dataset
 
-        def _parse(record):
-            pair = record.numpy().split(self.sep)
-            a, b = pair[0], pair[1]
-            src = [self.tokenizer.sos_id] + self.encode(a) + [self.tokenizer.eos_id]
-            tgt = [self.tokenizer.sos_id] + self.encode(b) + [self.tokenizer.eos_id]
+    def _parse_example(self, dataset):
+
+        def _parse(x, y):
+            src = x.numpy().decode('utf8')
+            tgt = y.numpy().decode('utf8')
+            src = [self.src_tokenizer.sos_id] + self.src_tokenizer.encode(src) + [self.src_tokenizer.eos_id]
+            tgt = [self.tgt_tokenizer.sos_id] + self.tgt_tokenizer.encode(tgt) + [self.tgt_tokenizer.eos_id]
             return src, tgt
 
-        src, tgt = tf.py_function(_parse, [x], [tf.int64, tf.int64])
-        src.set_shape([None])
-        tgt.set_shape([None])
-        return src, tgt
+        def _tf_parse_fn(x, y):
+            src, tgt = tf.py_function(_parse, [x, y], [tf.int64, tf.int64])
+            src.set_shape([None])
+            tgt.set_shape([None])
+            return src, tgt
+
+        dataset = dataset.map(lambda x, y: _tf_parse_fn(x, y), num_parallel_calls=self.num_parallel_calls)
+        return dataset
+
+    def build_train_dataset(self, train_files):
+        dataset = self._build_dataset_from_text_files(train_files, mode='train')
+        dataset = self._repeat(dataset, mode='train')
+        dataset = self._shuffle(dataset, mode='train')
+        dataset = self._parse_example(dataset)
+        dataset = dataset.filter(lambda x, y: tf.logical_and(tf.size(x) > 0, tf.size(y) > 0))
+
+        pad_id = tf.constant(self.pad_id, dtype=tf.int64)
+        dataset = dataset.padded_batch(
+            batch_size=self.train_batch_size,
+            padded_shapes=([None], [None]),
+            padding_values=(pad_id, pad_id),
+            drop_remainder=self.train_drop_remainder,
+        ).prefetch(self.prefetch_size)
+        # x-> encoder input, y->decoder input, z->label
+        dataset = dataset.map(lambda x, y: ((x, y[:, :-1]), y[:, 1:]))
+        return dataset
+
+    def build_valid_dataset(self, valid_files):
+        dataset = self._build_dataset_from_text_files(valid_files, mode='valid')
+        dataset = self._repeat(dataset, mode='valid')
+        dataset = self._shuffle(dataset, mode='valid')
+        dataset = self._parse_example(dataset)
+        dataset = dataset.filter(lambda x, y: tf.logical_and(tf.size(x) > 0, tf.size(y) > 0))
+
+        pad_id = tf.constant(self.pad_id, dtype=tf.int64)
+        dataset = dataset.padded_batch(
+            batch_size=self.valid_batch_size,
+            padded_shapes=([None], [None]),
+            padding_values=(pad_id, pad_id),
+            drop_remainder=self.valid_drop_remainder,
+        ).prefetch(self.prefetch_size)
+        # x-> encoder input, y->decoder input, z->label
+        dataset = dataset.map(lambda x, y: ((x, y[:, :-1]), y[:, 1:]))
+        return dataset
+
+    def build_predict_dataset(self, predict_files):
+        # predictition process is different from training and evaluation
+        raise NotImplementedError()
