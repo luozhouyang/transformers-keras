@@ -3,207 +3,158 @@ import json
 import logging
 import os
 
-import tensorflow as tf
-
-from transformers_keras.callbacks import (ModelStepCheckpoint,
-                                          SavedModelExporter)
-
-from .losses import MaskedSparseCategoricalCrossentropy
-from .metrics import MaskedSparseCategoricalAccuracy
+from .callbacks import SavedModelExporter, TransformerLearningRate
+from .datasets import TransformerTextFileDatasetBuilder, TransformerTFRecordDatasetBuilder
 from .modeling_transformer import *
+from .tokenizers import TransformerDefaultTokenizer
+
+MODEL_CONFIG = {
+    'num_encoder_layers': 2,
+    'num_decoder_layers': 2,
+    'num_attention_heads': 8,
+    'hidden_size': 512,
+    'ffn_size': 2048,
+    'dropout_rate': 0.2,
+    'max_positions': 512,
+    'source_vocab_size': 0,  # will be updated by tokenizer
+    'target_vocab_size': 0,
+}
+
+DATA_CONFIG = {
+    'model_dir': 'testdata/transformer',
+    'files_format': 'txt',  # txt or tfrecord
+    'record_option': 'GZIP',  # used for tfrecord files
+    'train_src_files': ['testdata/train.src.txt'],
+    'train_tgt_files': ['testdata/train.tgt.txt'],
+    'valid_src_files': ['testdata/train.src.txt'],
+    'valid_tgt_files': ['testdata/train.tgt.txt'],
+    'src_max_len': 16,  # used for tfrecord files
+    'tgt_max_len': 16,
+    'src_vocab_file': 'testdata/vocab_src.txt',
+    'tgt_vocab_file': 'testdata/vocab_tgt.txt',
+    'train_shuffle_buffer_size': 100,
+    'valid_shuffle_buffer_size': 100,
+    'pad_token': '<pad>',
+    'unk_token': '<unk>',
+    'sos_token': '<s>',
+    'eos_token': '</s>',
+    'train_repeat_count': 100
+}
 
 
 def build_model(config):
-    x = tf.keras.layers.Input(shape=(config.max_positions,), dtype=tf.int32, name='x')
-    y = tf.keras.layers.Input(shape=(config.max_positions,), dtype=tf.int32, name='y')
-    transformer = Transformer(config)
-    logits, enc_attns, dec_attns_0, dec_attens_1 = transformer(inputs=(x, y))
+    x = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name='x')
+    y = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name='y')
+    model = Transformer(TransformerConfig(**config))
+    logits, _, _, _ = model(inputs=(x, y))
     probs = tf.keras.layers.Lambda(lambda x: tf.nn.softmax(x), name='probs')(logits)
 
     model = tf.keras.Model(inputs=[x, y], outputs=[probs])
 
+    lr = TransformerLearningRate(MODEL_CONFIG['hidden_size'])
     model.compile(
-        optimizer='adam',  # TODO(zhouyang.luo) schedule learning rate
+        optimizer=tf.keras.optimizers.Adam(lr, beta_1=0.9, beta_2=0.98, epsilon=1e-9),
         loss={
-            'probs': tf.keras.losses.SparseCategoricalCrossentropy(from_logits=False),
+            'probs': tf.keras.losses.SparseCategoricalCrossentropy(name='loss', from_logits=False),
         },
         metrics={
             'probs': [
-                tf.keras.metrics.SparseCategoricalAccuracy(),
+                tf.keras.metrics.SparseCategoricalAccuracy(name='acc'),
             ]
         }
     )
 
+    model.summary()
     return model
 
 
-class TransformerDataConfig(object):
+def build_datasets():
+    dataset_builder = None
+    train_dataset, valid_dataset = None, None
+    if DATA_CONFIG['files_format'] == 'txt':
+        src_vocab_file = DATA_CONFIG['src_vocab_file']
+        tgt_vocab_file = DATA_CONFIG['tgt_vocab_file']
+        src_tokenizer = TransformerDefaultTokenizer(src_vocab_file)
+        tgt_tokenizer = TransformerDefaultTokenizer(
+            tgt_vocab_file) if src_vocab_file != tgt_vocab_file else src_tokenizer
+        dataset_builder = TransformerTextFileDatasetBuilder(src_tokenizer, tgt_tokenizer, **DATA_CONFIG)
 
-    def __init__(self, **kwargs):
-        super().__init__()
-        self.record_option = kwargs.get('record_option', 'GZIP')
-        self.skip_count = kwargs.get('skip_count', 0)
-        self.repeat = kwargs.get('repeat', 1)
-        self.shuffle_buffer_size = kwargs.get('shuffle_buffer_size', 1000000)
-        self.shuffle_seed = kwargs.get('shuffle_seed', None)
-        self.reshuffle_each_iteration = kwargs.get('reshuffle_each_iteration', True)
-        self.train_batch_size = kwargs.get('train_batch_size', 32)
-        self.valid_batch_size = kwargs.get('valid_batch_size', 32)
-        self.predict_batch_size = kwargs.get('predict_batch_size', 1)
-        self.drop_remainder = kwargs.get('drop_remainder', True)
+        valid_src_files = DATA_CONFIG['valid_src_files']
+        valid_tgt_files = DATA_CONFIG['valid_tgt_files']
+        logging.info('Build validation dataset from text files:')
+        logging.info('  valid src files: {}'.format(valid_src_files))
+        logging.info('  valid tgt files: {}'.format(valid_tgt_files))
+        valid_dataset = dataset_builder.build_valid_dataset([(x, y) for x, y in zip(valid_src_files, valid_tgt_files)])
 
-        self.ckpt_steps = kwargs.get('ckpt_steps', 10000)
-        self.ckpt_max_nums = kwargs.get('ckpt_max_nums', 10)
-        self.export_steps = kwargs.get('export_steps', 10000)
-        self.epochs = kwargs.get('epochs', 10)
+        train_src_files = DATA_CONFIG['train_src_files']
+        train_tgt_files = DATA_CONFIG['train_tgt_files']
+        logging.info('Build training dataset from text files:')
+        logging.info('  train src files: {}'.format(train_src_files))
+        logging.info('  train tgt files: {}'.format(train_tgt_files))
+        train_dataset = dataset_builder.build_train_dataset([(x, y) for x, y in zip(train_src_files, train_tgt_files)])
 
-        self.model_dir = kwargs.get('model_dir', '/tmp/transformer')
-        self.train_record_files = kwargs.get('train_record_files', None)
-        self.valid_record_files = kwargs.get('valid_record_files', None)
-        self.predict_record_files = kwargs.get('predict_record_files', None)
+        MODEL_CONFIG.update({
+            'source_vocab_size': src_tokenizer.vocab_size,
+            'target_vocab_size': tgt_tokenizer.vocab_size,
+        })
 
+    elif DATA_CONFIG['files_format'] == 'tfrecord':
+        dataset_builder = TransformerTFRecordDatasetBuilder(DATA_CONFIG['src_max_len'], DATA_CONFIG['tgt_max_len'])
 
-class TransformerDataset(object):
+        valid_src_files = DATA_CONFIG['valid_src_files']
+        valid_tgt_files = DATA_CONFIG['valid_tgt_files']
+        logging.info('Build validation dataset from tfrecord files:')
+        logging.info('  valid src files: {}'.format(valid_src_files))
+        logging.info('  valid tgt files: {}'.format(valid_tgt_files))
+        valid_dataset = dataset_builder.build_valid_dataset([(x, y) for x, y in zip(valid_src_files, valid_tgt_files)])
 
-    def __init__(self, config, **kwargs):
-        super().__init__()
-        self.config = config
+        train_src_files = DATA_CONFIG['train_src_files']
+        train_tgt_files = DATA_CONFIG['train_tgt_files']
+        logging.info('Build training dataset from tfrecord files:')
+        logging.info('  train src files: {}'.format(train_src_files))
+        logging.info('  train tgt files: {}'.format(train_tgt_files))
+        train_dataset = dataset_builder.build_train_dataset([(x, y) for x, y in zip(train_src_files, train_tgt_files)])
 
-    def _parse_example(self, record):
-        name_to_features = {
-            'src_ids': tf.io.FixedLenFeature([16], tf.int64),
-            'tgt_ids': tf.io.FixedLenFeature([16], tf.int64)
-        }
-
-        example = tf.io.parse_single_example(record, name_to_features)
-        features = example['src_ids']
-        labels = example['tgt_ids']
-        inputs = {
-            'x': example['src_ids'],
-            'y': example['tgt_ids']
-        }
-        return inputs
-
-    def build_train_dataset(self, train_record_files):
-        dataset = tf.data.Dataset.from_tensor_slices(train_record_files)
-        if self.config.skip_count > 0:
-            dataset = dataset.interleave(
-                lambda x: tf.data.TFRecordDataset(
-                    x, compression_type=self.config.record_option).skip(self.config.skip_count),
-                cycle_length=len(train_record_files))
-        else:
-            dataset = dataset.interleave(
-                lambda x: tf.data.TFRecordDataset(x, compression_type=self.config.record_option),
-                cycle_length=len(train_record_files))
-        dataset = dataset.repeat(self.config.repeat)
-        dataset = dataset.shuffle(
-            buffer_size=self.config.shuffle_buffer_size,
-            seed=self.config.shuffle_seed,
-            reshuffle_each_iteration=self.config.reshuffle_each_iteration
-        )
-        dataset = dataset.map(lambda x: self._parse_example(x), num_parallel_calls=tf.data.experimental.AUTOTUNE)
-        dataset = dataset.batch(
-            self.config.train_batch_size,
-            drop_remainder=self.config.drop_remainder
-        ).prefetch(self.config.train_batch_size)
-        return dataset
-
-    def build_valid_dataset(self, valid_record_files):
-        if not valid_record_files:
-            logging.warning('valid_record_files in None or empty.')
-            return None
-        dataset = tf.data.Dataset.from_tensor_slices(valid_record_files)
-        if self.config.skip_count > 0:
-            dataset = dataset.interleave(
-                lambda x: tf.data.TFRecordDataset(
-                    x, compression_type=self.config.record_option).skip(self.config.skip_count),
-                cycle_length=len(valid_record_files))
-        else:
-            dataset = dataset.interleave(
-                lambda x: tf.data.TFRecordDataset(x, compression_type=self.config.record_option),
-                cycle_length=len(valid_record_files))
-        dataset = dataset.map(lambda x: self._parse_example(x), num_parallel_calls=tf.data.experimental.AUTOTUNE)
-        dataset = dataset.batch(
-            self.config.valid_batch_size,
-            drop_remainder=False
-        ).prefetch(self.config.valid_batch_size)
-        return dataset
-
-    def build_predict_dataset(self, predict_record_files):
-        dataset = tf.data.Dataset.from_tensor_slices(predict_record_files)
-        if self.config.skip_count > 0:
-            dataset = dataset.interleave(
-                lambda x: tf.data.TFRecordDataset(
-                    x, compression_type=self.config.record_option).skip(self.config.skip_count),
-                cycle_length=len(predict_record_files))
-        else:
-            dataset = dataset.interleave(
-                lambda x: tf.data.TFRecordDataset(x, compression_type=self.config.record_option),
-                cycle_length=len(predict_record_files))
-        dataset = dataset.map(lambda x: self._parse_example(x), num_parallel_calls=tf.data.experimental.AUTOTUNE)
-        dataset = dataset.batch(
-            self.config.predict_batch_size,
-            drop_remainder=False
-        ).prefetch(self.config.predict_batch_size)
-        return dataset
+    else:
+        raise ValueError('Invalid argument `files_format`, must be one of [txt, tfrecord].')
+    return dataset_builder, train_dataset, valid_dataset
 
 
-def train(model, dataconfig):
-    dataset = TransformerDataset(dataconfig)
-    train_dataset = dataset.build_train_dataset(dataconfig.train_record_files)
-    valid_dataset = dataset.build_valid_dataset(dataconfig.valid_record_files)
-    model_dir = dataconfig.model_dir
+def train():
+    model_dir = DATA_CONFIG['model_dir']
     if not os.path.exists(model_dir):
         os.makedirs(model_dir)
-    ckpt_path = model_dir + '/' + 'transformer-{epoch:04d}.ckpt'
-    model.fit(
+
+    dataset_builder, train_dataset, valid_dataset = build_datasets()
+
+    transformer = build_model(MODEL_CONFIG)
+    logging.info('Build transformer model finished.')
+    logging.info('Transformer config is: \n{}'.format(json.dumps(MODEL_CONFIG, indent=2, ensure_ascii=False)))
+
+    transformer.fit(
         train_dataset,
         validation_data=valid_dataset,
-        validation_steps=None,
-        epochs=dataconfig.epochs,
+        epochs=DATA_CONFIG.get('epochs', 10),
         callbacks=[
             tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=5),
-            tf.keras.callbacks.TensorBoard(os.path.join(model_dir, 'tensorboard'), update_freq='batch'),
-            ModelStepCheckpoint(
-                model,
-                model_dir,
-                every_steps=dataconfig.ckpt_steps,
-                max_keep_ckpt=dataconfig.ckpt_max_nums),
+            tf.keras.callbacks.TensorBoard(os.path.join(model_dir, 'tensorboard')),
+            tf.keras.callbacks.ModelCheckpoint(
+                filepath=model_dir,
+                verbose=1,
+                save_freq=dataset_builder.train_batch_size * DATA_CONFIG.get('ckpt_steps', 10)
+            ),
             SavedModelExporter(
-                model,
                 os.path.join(model_dir, 'export'),
-                every_steps=dataconfig.export_steps),
+                every_steps=DATA_CONFIG.get('export_steps', 10)),
         ]
     )
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--mode', type=str, default='train', choices=['train', 'eval', 'predict'])
-    parser.add_argument('--model_config', type=str, help='Model config file in JSON format.')
-    parser.add_argument('--data_config', type=str, help='Data config file in JSON format.')
+    parser.add_argument('--action', type=str, default='train', choices=['train', 'eval', 'predict'])
 
     args, _ = parser.parse_known_args()
 
-    model_config, data_config = {}, {}
-    if os.path.exists(args.model_config):
-        logging.info('Load model config from: %s.' % args.model_config)
-        with open(args.model_config, mode='rt', encoding='utf8') as f:
-            model_config = json.load(f)
-    if os.path.exists(args.data_config):
-        logging.info('Load data config from: %s.' % args.data_config)
-        with open(args.data_config, mode='rt', encoding='utf8') as f:
-            data_config = json.load(f)
-
-    model_config = TransformerConfig(**model_config)
-    model = build_model(model_config)
-
-    data_config = TransformerDataConfig(**data_config)
-
-    model.summary()
-
-    if 'train' == args.mode:
-        train(model, data_config)
-
-    else:
-        raise ValueError('Invalid `mode`: %s' % args.mode)
+    if 'train' == args.action:
+        train()
