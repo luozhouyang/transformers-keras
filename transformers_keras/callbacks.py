@@ -5,7 +5,7 @@ import time
 import tensorflow as tf
 
 
-class TransformerLearningRate(tf.keras.callbacks.LearningRateScheduler):
+class TransformerLearningRate(tf.keras.optimizers.schedules.LearningRateSchedule):
     """Learning rate schedule for Transformer."""
 
     def __init__(self, depth, warmup_steps=4000):
@@ -14,21 +14,27 @@ class TransformerLearningRate(tf.keras.callbacks.LearningRateScheduler):
             depth: Python integer, the model's hidden size
             warmup_steps: Python integer, steps to warmup learning rate
         """
-        self.depth = tf.cast(depth, tf.float32)
+        self.depth = depth
         self.warmup_steps = warmup_steps
 
     def __call__(self, step):
         arg1 = tf.math.rsqrt(step)
         arg2 = step * (self.warmup_steps ** -1.5)
-        return tf.math.rsqrt(self.d_model) * tf.math.minimum(arg1, arg2)
+        return tf.math.rsqrt(tf.cast(self.depth, tf.float32)) * tf.math.minimum(arg1, arg2)
+
+    def get_config(self):
+        config = {
+            'depth': self.depth,
+            'warmup_steps': self.warmup_steps
+        }
+        return config
 
 
 class SavedModelExporter(tf.keras.callbacks.Callback):
     """Export saved model every n epochs or every n steps."""
 
-    def __init__(self, model, export_dir, every_epoch=1, every_steps=None):
+    def __init__(self, export_dir, every_epoch=1, every_steps=None):
         super(SavedModelExporter, self).__init__()
-        self.model = model
         self.export_dir = export_dir
         self.every_epoch = every_epoch
         self.every_steps = every_steps
