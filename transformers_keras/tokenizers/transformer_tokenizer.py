@@ -35,6 +35,10 @@ class TransformerAbstractTokenizer(abc.ABC):
         raise NotImplementedError()
 
     @property
+    def vocab_size(self):
+        raise NotImplementedError()
+
+    @property
     def special_tokens(self):
         return [self.pad_token, self.unk_token, self.sos_token, self.eos_token]
 
@@ -92,6 +96,10 @@ class TransformerVocabBasedTokenizer(TransformerAbstractTokenizer):
 
     def decode(self, sequence):
         return [self.id2token.get(_id, self.unk_token) for _id in sequence]
+
+    @property
+    def vocab_size(self):
+        return len(self.token2id)
 
 
 class TransformerDefaultTokenizer(TransformerVocabBasedTokenizer):
