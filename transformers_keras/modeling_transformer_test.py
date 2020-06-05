@@ -1,43 +1,81 @@
 import unittest
 
+import tensorflow as tf
+
 from transformers_keras.datasets import TransformerTextFileDatasetBuilder
 from transformers_keras.modeling_transformer import *
 from transformers_keras.tokenizers import TransformerDefaultTokenizer
+
 from .modeling_transformer import Transformer
 
 
-class ModelingTransformerTest(unittest.TestCase):
+class ModelingTransformerTest(tf.test.TestCase):
+
+    def testPositionalEncoding(self):
+        pe = PositionalEncoding(512, 512)
+        x = np.random.randint(0, 512, size=(2, 16))
+        x = tf.constant(x, shape=(2, 16), dtype=tf.int64)
+
+        encoding = pe(x)
+        self.assertEqual([1, 16, 512], encoding.shape)  # shape[0] will be broadcasted when add token embedding
+
+        y = np.random.randint(0, 512, size=(2, 16))
+        y = tf.constant(y, shape=(2, 16), dtype=tf.int64)
+        encoding2 = pe(y)
+        self.assertEqual([1, 16, 512], encoding2.shape)
+        self.assertAllEqual(encoding.numpy(), encoding2.numpy())
+
+    def testEmbedding(self):
+        te = TransformerEmbedding(100, 128, 128)
+        x = np.random.randint(0, 100, size=(2, 16))
+        x = tf.constant(x, shape=(2, 16), dtype=tf.int64)
+        embedding = te(x)
+        self.assertEqual([2, 16, 128], embedding.shape)
+
+        y = x[:, :]
+        embedding2 = te(y)
+        self.assertEqual([2, 16, 128], embedding2.shape)
+        self.assertAllEqual(embedding, embedding2)
 
     def testEncoder(self):
-        config = TransformerConfig(num_encoder_layers=2, hidden_size=512, num_attention_heads=8, ffn_size=2048)
-        sample_encoder = TransformerEncoder(config)
-        inputs = tf.constant([[i for i in range(62)] * 64], shape=(64, 62), dtype=tf.int64)
-        output, attn_weights = sample_encoder(inputs=(inputs, None))
+        encoder = TransformerEncoder(vocab_size=100, num_layers=2)
+        inputs = tf.constant([[i for i in range(10)] * 16], shape=(16, 10), dtype=tf.int64)
+        output, attn_weights = encoder(inputs=(inputs, None))
 
-        self.assertEqual(output.shape, [64, 62, config.hidden_size])  # (batch_size, input_seq_len, d_model)
+        self.assertEqual(output.shape, [16, 10, encoder.hidden_size])  # (batch_size, input_seq_len, d_model)
 
         # each layers attention weights
         for v in attn_weights:
-            self.assertEqual(v.shape, [64, config.num_attention_heads, 62, 62])
+            self.assertEqual(v.shape, [16, encoder.num_attention_heads, 10, 10])
 
     def testDecoder(self):
-        config = TransformerConfig(num_decoder_layers=2, hidden_size=512, num_attention_heads=8, ffn_size=2048)
-        sample_decoder = TransformerDecoder(config)
-        y = tf.constant(np.random.randint(0, 10, 43), shape=(1, 43), dtype=tf.int64)
-        enc_outputs = tf.random.uniform((1, 50, config.hidden_size))
+        decoder = TransformerDecoder(vocab_size=100, num_layers=2)
+        y = tf.constant(np.random.randint(0, 10, size=(2, 43)), shape=(2, 43), dtype=tf.int64)
+        enc_outputs = tf.random.uniform((2, 50, decoder.hidden_size))
         inputs = (y, enc_outputs, None, None)
-        output, self_attn_weights, context_attn_weights = sample_decoder(inputs=inputs)
+        output, self_attn_weights, context_attn_weights = decoder(inputs=inputs)
 
-        self.assertEqual(output.shape, [1, 43, config.hidden_size])
+        self.assertEqual(output.shape, [2, 43, decoder.hidden_size])
         for attn in self_attn_weights:
-            self.assertEqual(attn.shape, [1, config.num_attention_heads, 43, 43])
+            self.assertEqual(attn.shape, [2, decoder.num_attention_heads, 43, 43])
         for attn in context_attn_weights:
-            self.assertEqual(attn.shape, [1, config.num_attention_heads, 43, 50])
+            self.assertEqual(attn.shape, [2, decoder.num_attention_heads, 43, 50])
 
     def buildTransformerModel(self, config):
         x = tf.keras.layers.Input(shape=(32,), dtype=tf.int32, name='x')
         y = tf.keras.layers.Input(shape=(32,), dtype=tf.int32, name='y')
-        model = Transformer(config)
+        model = Transformer(
+            src_vocab_size=config.get('src_vocab_size', 100),
+            tgt_vocab_size=config.get('tgt_vocab_size', 100),
+            max_positions=config.get('max_positions', 512),
+            hidden_size=config.get('hidden_size', 512),
+            num_encoder_layers=config.get('num_encoder_layers', 2),
+            num_decoder_layers=config.get('num_decoder_layers', 2),
+            num_attention_heads=config.get('num_attention_heads', 8),
+            ffn_size=config.get('ffn_size', 2048),
+            dropout_rate=config.get('dropout_rate', 0.2),
+            epsilon=config.get('epsilon', 1e-6)
+        )
         logits, _, _, _ = model(inputs=(x, y))
         probs = tf.keras.layers.Lambda(lambda x: tf.nn.softmax(x), name='probs')(logits)
 
@@ -80,16 +118,12 @@ class ModelingTransformerTest(unittest.TestCase):
         }
         dataset_builder = TransformerTextFileDatasetBuilder(src_tokenizer, tgt_tokenizer, **data_config)
 
-        model_config = TransformerConfig(
+        model = Transformer(
+            src_vocab_size=src_tokenizer.vocab_size,
+            tgt_vocab_size=tgt_tokenizer.vocab_size,
             num_encoder_layers=2,
             num_decoder_layers=2,
-            hidden_siz=512,
-            ffn_size=2048,
-            max_positions=512,
-            source_vocab_size=src_tokenizer.vocab_size,
-            target_vocab_size=tgt_tokenizer.vocab_size,
         )
-        model = Transformer(model_config)
         train_dataset = dataset_builder.build_train_dataset(
             train_files=[('testdata/train.src.txt', 'testdata/train.tgt.txt')])
         train_dataset = train_dataset.map(lambda x, y: (x[0], x[1]))
@@ -115,17 +149,12 @@ class ModelingTransformerTest(unittest.TestCase):
             'valid_batch_size': 2,
         }
         dataset_builder = TransformerTextFileDatasetBuilder(src_tokenizer, tgt_tokenizer, **data_config)
-        model_config = TransformerConfig(
-            num_encoder_layers=2,
-            num_decoder_layers=2,
-            hidden_siz=512,
-            ffn_size=2048,
-            max_positions=512,
-            source_vocab_size=src_tokenizer.vocab_size,
-            target_vocab_size=tgt_tokenizer.vocab_size,
-        )
+        model_config = {
+            'src_vocab_size': src_tokenizer.vocab_size,
+            'tgt_vocab_size': tgt_tokenizer.vocab_size,
+        }
         model = self.buildTransformerModel(model_config)
-        # print(model.get_config())
+
         train_dataset = dataset_builder.build_train_dataset(
             train_files=[('testdata/train.src.txt', 'testdata/train.tgt.txt')])
         print(next(iter(train_dataset)))

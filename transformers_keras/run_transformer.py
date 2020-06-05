@@ -4,7 +4,8 @@ import logging
 import os
 
 from .callbacks import SavedModelExporter, TransformerLearningRate
-from .datasets import TransformerTextFileDatasetBuilder, TransformerTFRecordDatasetBuilder
+from .datasets import (TransformerTextFileDatasetBuilder,
+                       TransformerTFRecordDatasetBuilder)
 from .modeling_transformer import *
 from .tokenizers import TransformerDefaultTokenizer
 
@@ -16,8 +17,8 @@ MODEL_CONFIG = {
     'ffn_size': 2048,
     'dropout_rate': 0.2,
     'max_positions': 512,
-    'source_vocab_size': 0,  # will be updated by tokenizer
-    'target_vocab_size': 0,
+    'src_vocab_size': 0,  # will be updated by tokenizer
+    'tgt_vocab_size': 0,
 }
 
 DATA_CONFIG = {
@@ -45,7 +46,7 @@ DATA_CONFIG = {
 def build_model(config):
     x = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name='x')
     y = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name='y')
-    model = Transformer(TransformerConfig(**config))
+    model = Transformer(**config)
     logits, _, _, _ = model(inputs=(x, y))
     probs = tf.keras.layers.Lambda(lambda x: tf.nn.softmax(x), name='probs')(logits)
 
@@ -68,15 +69,25 @@ def build_model(config):
     return model
 
 
+def build_tokenizers():
+    src_vocab_file = DATA_CONFIG['src_vocab_file']
+    tgt_vocab_file = DATA_CONFIG['tgt_vocab_file']
+    src_tokenizer = TransformerDefaultTokenizer(src_vocab_file)
+    tgt_tokenizer = TransformerDefaultTokenizer(
+        tgt_vocab_file) if tgt_vocab_file is not None and src_vocab_file != tgt_vocab_file else src_tokenizer
+
+    MODEL_CONFIG.update({
+        'source_vocab_size': src_tokenizer.vocab_size,
+        'target_vocab_size': tgt_tokenizer.vocab_size,
+    })
+    return src_tokenizer, tgt_tokenizer
+
+
 def build_datasets():
     dataset_builder = None
     train_dataset, valid_dataset = None, None
     if DATA_CONFIG['files_format'] == 'txt':
-        src_vocab_file = DATA_CONFIG['src_vocab_file']
-        tgt_vocab_file = DATA_CONFIG['tgt_vocab_file']
-        src_tokenizer = TransformerDefaultTokenizer(src_vocab_file)
-        tgt_tokenizer = TransformerDefaultTokenizer(
-            tgt_vocab_file) if src_vocab_file != tgt_vocab_file else src_tokenizer
+        src_tokenizer, tgt_tokenizer = build_tokenizers()
         dataset_builder = TransformerTextFileDatasetBuilder(src_tokenizer, tgt_tokenizer, **DATA_CONFIG)
 
         valid_src_files = DATA_CONFIG['valid_src_files']
@@ -92,11 +103,6 @@ def build_datasets():
         logging.info('  train src files: {}'.format(train_src_files))
         logging.info('  train tgt files: {}'.format(train_tgt_files))
         train_dataset = dataset_builder.build_train_dataset([(x, y) for x, y in zip(train_src_files, train_tgt_files)])
-
-        MODEL_CONFIG.update({
-            'source_vocab_size': src_tokenizer.vocab_size,
-            'target_vocab_size': tgt_tokenizer.vocab_size,
-        })
 
     elif DATA_CONFIG['files_format'] == 'tfrecord':
         dataset_builder = TransformerTFRecordDatasetBuilder(DATA_CONFIG['src_max_len'], DATA_CONFIG['tgt_max_len'])

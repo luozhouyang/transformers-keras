@@ -1,39 +1,22 @@
 import numpy as np
+import tensorflow as tf
 
-from .layers import *
-
-
-class TransformerConfig(object):
-
-    def __init__(self, **kwargs):
-        self.num_encoder_layers = kwargs.pop('num_encoder_layers', 6)
-        self.num_decoder_layers = kwargs.pop('num_decoder_layers', 6)
-        self.num_attention_heads = kwargs.pop('num_attention_heads', 8)
-        self.hidden_size = kwargs.pop('hidden_size', 512)
-        self.ffn_size = kwargs.pop('ffn_size', 2048)
-        self.dropout_rate = kwargs.pop('dropout_rate', 0.1)
-        self.source_vocab_size = kwargs.pop('source_vocab_size', 100)
-        self.target_vocab_size = kwargs.pop('target_vocab_size', 100)
-        self.max_positions = kwargs.pop('max_positions', 512)
-        self.epsilon = kwargs.get('epsilon', 1e-6)
+from .layers import DecoderLayer, EncoderLayer
 
 
-class TransformerEmbedding(tf.keras.layers.Layer):
+class PositionalEncoding(tf.keras.layers.Layer):
 
-    def __init__(self, config, **kwargs):
-        super(TransformerEmbedding, self).__init__(**kwargs)
-        self.source_vocab_size = config.source_vocab_size
-        self.max_positions = config.max_positions
-        self.hidden_size = config.hidden_size
-        self.dropout_rate = config.dropout_rate
-        self.dropout = tf.keras.layers.Dropout(config.dropout_rate)
-        self.token_embedding = tf.keras.layers.Embedding(self.source_vocab_size, self.hidden_size)
+    def __init__(self, max_positions=512, embedding_size=512, **kwargs):
+        super().__init__(**kwargs)
+        self.max_positions = max_positions
+        self.embedding_size = embedding_size
 
     def build(self, input_shape):
+
         def _initializer(shape, dtype=tf.float32):
             pos = np.arange(self.max_positions)[:, tf.newaxis]
-            d = np.arange(self.hidden_size)[tf.newaxis, :]
-            rads = 1 / np.power(10000, (2 * (d // 2)) / np.float32(self.hidden_size))
+            d = np.arange(self.embedding_size)[tf.newaxis, :]
+            rads = 1 / np.power(10000, (2 * (d // 2)) / np.float32(self.embedding_size))
             rads = pos * rads
 
             rads[:, 0::2] = np.sin(rads[:, 0::2])
@@ -43,31 +26,53 @@ class TransformerEmbedding(tf.keras.layers.Layer):
             rads = tf.reshape(rads, shape=shape)
             return rads
 
-        with tf.name_scope('position_embedding'):
-            self.position_embedding = self.add_weight(
-                name='position_embedding',
-                shape=(self.max_positions, self.hidden_size),
-                dtype=tf.float32,
-                initializer=_initializer,
-                trainable=False
-            )
+        self.position_embedding = self.add_weight(
+            name='position_embedding',
+            shape=(self.max_positions, self.embedding_size),
+            dtype=tf.float32,
+            initializer=_initializer,
+            trainable=False)
 
-        super(TransformerEmbedding, self).build(input_shape)
+    def call(self, inputs, training=None):
+        token_ids = inputs
+        pos_embedding = self.position_embedding[tf.newaxis, :]
+        embedding = pos_embedding[:, :tf.shape(token_ids)[1], :]
+        return embedding
+
+    def get_config(self):
+        config = {
+            'max_positions': self.max_positions,
+            'embedding_size': self.embedding_size
+        }
+        base = super().get_config()
+        return dict(list(base.items()) + list(config.items()))
+
+
+class TransformerEmbedding(tf.keras.layers.Layer):
+
+    def __init__(self, vocab_size, max_positions=512, embedding_size=512, dropout_rate=0.2, **kwargs):
+        super(TransformerEmbedding, self).__init__(**kwargs)
+        self.vocab_size = vocab_size
+        self.max_positions = max_positions
+        self.embedding_size = embedding_size
+        self.dropout_rate = dropout_rate
+        self.dropout = tf.keras.layers.Dropout(self.dropout_rate)
+        self.token_embedding = tf.keras.layers.Embedding(self.vocab_size, self.embedding_size)
+        self.positional_encoding = PositionalEncoding(self.max_positions, self.embedding_size)
 
     def call(self, inputs, training=None):
         token_ids = inputs
         token_embeddings = self.token_embedding(token_ids)
-        pos_embedding = self.position_embedding[tf.newaxis, :]
-        position_embeddings = pos_embedding[:, :tf.shape(token_ids)[1], :]
+        position_embeddings = self.positional_encoding(token_ids)
         embedding = token_embeddings + position_embeddings
         embedding = self.dropout(embedding, training=training)
         return embedding
 
     def get_config(self):
         conf = {
-            'source_vocab_size': self.source_vocab_size,
+            'vocab_size': self.source_vocab_size,
             'max_positions': self.max_positions,
-            'hidden_size': self.hidden_size,
+            'embedding_size': self.embedding_size,
             'dropout_rate': self.dropout_rate
         }
         p = super(TransformerEmbedding, self).get_config()
@@ -76,18 +81,34 @@ class TransformerEmbedding(tf.keras.layers.Layer):
 
 class TransformerEncoder(tf.keras.layers.Layer):
 
-    def __init__(self, config, **kwargs):
+    def __init__(self,
+                 vocab_size,
+                 max_positions=512,
+                 hidden_size=512,
+                 num_layers=6,
+                 num_attention_heads=8,
+                 ffn_size=2048,
+                 dropout_rate=0.2,
+                 epsilon=1e-6,
+                 **kwargs):
         super(TransformerEncoder, self).__init__(**kwargs)
-        self.num_layers = config.num_encoder_layers
-        self.embedding = TransformerEmbedding(config)
+        self.vocab_size = vocab_size
+        self.max_positions = max_positions
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+        self.num_attention_heads = num_attention_heads
+        self.ffn_size = ffn_size
+        self.dropout_rate = dropout_rate
+        self.epsilon = epsilon
+        self.embedding = TransformerEmbedding(vocab_size, max_positions, hidden_size, dropout_rate)
         self.encoders = [
             EncoderLayer(
-                hidden_size=config.hidden_size,
-                num_attention_heads=config.num_attention_heads,
-                ffn_size=config.ffn_size,
-                dropout_rate=config.dropout_rate,
-                epsilon=config.epsilon,
-                name='encoder_layer_{}'.format(i)
+                hidden_size=hidden_size,
+                num_attention_heads=num_attention_heads,
+                ffn_size=ffn_size,
+                dropout_rate=dropout_rate,
+                epsilon=epsilon,
+                name='EncoderLayer{}'.format(i)
             ) for i in range(self.num_layers)
         ]
 
@@ -105,28 +126,50 @@ class TransformerEncoder(tf.keras.layers.Layer):
         return outputs, attn_weights
 
     def get_config(self):
-        conf = {
+        config = {
             'num_layers': self.num_layers,
+            'vocab_size': self.vocab_size,
+            'max_positions': self.max_positions,
+            'hidden_size': self.hidden_size,
+            'num_attention_heads': self.num_attention_heads,
+            'ffn_size': self.ffn_size,
+            'dropout_rate': self.dropout_rate,
+            'epsilon': self.epsilon
         }
         p = super().get_config()
-        return dict(list(p.items()) + list(conf.items()))
+        return dict(list(p.items()) + list(config.items()))
 
 
 class TransformerDecoder(tf.keras.layers.Layer):
 
-    def __init__(self, config, **kwargs):
-        super(TransformerDecoder, self).__init__(name='TransformerDecoder', **kwargs)
-        self.num_layers = config.num_decoder_layers
-        self.hidden_size = config.hidden_size
-        self.embedding = TransformerEmbedding(config)
+    def __init__(self,
+                 vocab_size,
+                 max_positions=512,
+                 hidden_size=512,
+                 num_layers=6,
+                 num_attention_heads=8,
+                 ffn_size=2048,
+                 dropout_rate=0.2,
+                 epsilon=1e-6,
+                 **kwargs):
+        super(TransformerDecoder, self).__init__(**kwargs)
+        self.vocab_size = vocab_size
+        self.max_positions = max_positions
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+        self.num_attention_heads = num_attention_heads
+        self.ffn_size = ffn_size
+        self.dropout_rate = dropout_rate
+        self.epsilon = epsilon
+        self.embedding = TransformerEmbedding(vocab_size, max_positions, hidden_size, dropout_rate)
         self.decoders = [
             DecoderLayer(
-                hidden_size=config.hidden_size,
-                num_attention_heads=config.num_attention_heads,
-                ffn_size=config.ffn_size,
-                dropout_rate=config.dropout_rate,
-                epsilon=config.epsilon,
-                name='decoder_layer_{}'.format(i)
+                hidden_size=hidden_size,
+                num_attention_heads=num_attention_heads,
+                ffn_size=ffn_size,
+                dropout_rate=dropout_rate,
+                epsilon=epsilon,
+                name='DecoderLayer{}'.format(i)
             ) for i in range(self.num_layers)
         ]
 
@@ -148,6 +191,13 @@ class TransformerDecoder(tf.keras.layers.Layer):
     def get_config(self):
         config = {
             'num_layers': self.num_layers,
+            'vocab_size': self.vocab_size,
+            'max_positions': self.max_positions,
+            'hidden_size': self.hidden_size,
+            'num_attention_heads': self.num_attention_heads,
+            'ffn_size': self.ffn_size,
+            'dropout_rate': self.dropout_rate,
+            'epsilon': self.epsilon
         }
         p = super(TransformerDecoder, self).get_config()
         return dict(list(p.items()) + list(config.items()))
@@ -155,11 +205,26 @@ class TransformerDecoder(tf.keras.layers.Layer):
 
 class Transformer(tf.keras.layers.Layer):
 
-    def __init__(self, config, **kwargs):
+    def __init__(self,
+                 src_vocab_size,
+                 tgt_vocab_size,
+                 max_positions=512,
+                 hidden_size=512,
+                 num_encoder_layers=6,
+                 num_decoder_layers=6,
+                 num_attention_heads=8,
+                 ffn_size=2048,
+                 dropout_rate=0.2,
+                 epsilon=1e-6,
+                 **kwargs):
         super(Transformer, self).__init__(**kwargs)
-        self.encoder = TransformerEncoder(config)
-        self.decoder = TransformerDecoder(config)
-        self.dense = tf.keras.layers.Dense(config.target_vocab_size)
+        self.encoder = TransformerEncoder(
+            src_vocab_size, max_positions, hidden_size,
+            num_layers=num_encoder_layers, dropout_rate=dropout_rate, epsilon=epsilon)
+        self.decoder = TransformerDecoder(
+            tgt_vocab_size, max_positions, hidden_size,
+            num_layers=num_encoder_layers, dropout_rate=dropout_rate, epsilon=epsilon)
+        self.dense = tf.keras.layers.Dense(tgt_vocab_size)
 
     def call(self, inputs, training=None):
         x_ids, y_ids = inputs
