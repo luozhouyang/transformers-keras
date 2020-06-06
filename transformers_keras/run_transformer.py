@@ -77,8 +77,8 @@ def build_tokenizers():
         tgt_vocab_file) if tgt_vocab_file is not None and src_vocab_file != tgt_vocab_file else src_tokenizer
 
     MODEL_CONFIG.update({
-        'source_vocab_size': src_tokenizer.vocab_size,
-        'target_vocab_size': tgt_tokenizer.vocab_size,
+        'src_vocab_size': src_tokenizer.vocab_size,
+        'tgt_vocab_size': tgt_tokenizer.vocab_size,
     })
     return src_tokenizer, tgt_tokenizer
 
