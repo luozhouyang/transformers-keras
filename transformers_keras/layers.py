@@ -64,10 +64,10 @@ class MultiHeadAttention(tf.keras.layers.Layer):
         return dict(list(base.items()) + list(config.items()))
 
 
-class PairWiseFeedForwardNetwork(tf.keras.layers.Layer):
+class PointWiseFeedForwardNetwork(tf.keras.layers.Layer):
 
     def __init__(self, hidden_size=512, ffn_size=2048, **kwargs):
-        super(PairWiseFeedForwardNetwork, self).__init__(**kwargs)
+        super(PointWiseFeedForwardNetwork, self).__init__(**kwargs)
         self.ffn_size = ffn_size
         self.hidden_size = hidden_size
         self.dense1 = tf.keras.layers.Dense(self.ffn_size, activation='relu')
@@ -82,7 +82,7 @@ class PairWiseFeedForwardNetwork(tf.keras.layers.Layer):
             'ffn_size': self.ffn_size,
             'hidden_size': self.hidden_size,
         }
-        p = super(PairWiseFeedForwardNetwork, self).get_config()
+        p = super(PointWiseFeedForwardNetwork, self).get_config()
         return dict(list(p.items()) + list(config.items()))
 
 
@@ -100,7 +100,7 @@ class EncoderLayer(tf.keras.layers.Layer):
         self.attn_dropout = tf.keras.layers.Dropout(self.dropout_rate)
         self.attn_layer_norm = tf.keras.layers.LayerNormalization(epsilon=self.epsilon)
 
-        self.ffn = PairWiseFeedForwardNetwork(self.hidden_size, self.ffn_size)
+        self.ffn = PointWiseFeedForwardNetwork(self.hidden_size, self.ffn_size)
         self.ffn_dropout = tf.keras.layers.Dropout(self.dropout_rate)
         self.ffn_layer_norm = tf.keras.layers.LayerNormalization(epsilon=self.epsilon)
 
@@ -146,7 +146,7 @@ class DecoderLayer(tf.keras.layers.Layer):
         self.context_attn_dropout = tf.keras.layers.Dropout(self.dropout_rate)
         self.context_attn_layer_norm = tf.keras.layers.LayerNormalization(epsilon=self.epsilon)
 
-        self.ffn = PairWiseFeedForwardNetwork(self.hidden_size, self.ffn_size)
+        self.ffn = PointWiseFeedForwardNetwork(self.hidden_size, self.ffn_size)
         self.ffn_dropout = tf.keras.layers.Dropout(self.dropout_rate)
         self.ffn_layer_norm = tf.keras.layers.LayerNormalization(epsilon=self.epsilon)
 
