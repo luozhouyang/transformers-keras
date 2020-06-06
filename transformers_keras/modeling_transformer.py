@@ -33,6 +33,8 @@ class PositionalEncoding(tf.keras.layers.Layer):
             initializer=_initializer,
             trainable=False)
 
+        super().build(input_shape)
+
     def call(self, inputs, training=None):
         token_ids = inputs
         pos_embedding = self.position_embedding[tf.newaxis, :]
