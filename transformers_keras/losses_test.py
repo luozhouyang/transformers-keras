@@ -1,6 +1,7 @@
 import tensorflow as tf
 
-from .losses import *
+from .losses import (MaskedSparseCategoricalCrossentropy,
+                     masked_sparse_categorical_crossentropy)
 
 
 class LossesTest(tf.test.TestCase):

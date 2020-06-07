@@ -1,12 +1,14 @@
 import unittest
 
+import numpy as np
 import tensorflow as tf
 
 from transformers_keras.datasets import TransformerTextFileDatasetBuilder
-from transformers_keras.modeling_transformer import *
 from transformers_keras.tokenizers import TransformerDefaultTokenizer
 
-from .modeling_transformer import Transformer
+from .modeling_transformer import (PositionalEncoding, Transformer,
+                                   TransformerDecoder, TransformerEmbedding,
+                                   TransformerEncoder)
 
 
 class ModelingTransformerTest(tf.test.TestCase):

@@ -39,6 +39,7 @@ def whitespace_tokenize(text):
     tokens = text.split()
     return tokens
 
+
 class BasicTokenizer(object):
     """Runs basic tokenization (punctuation splitting, lower casing, etc.)."""
 
@@ -151,7 +152,7 @@ class BasicTokenizer(object):
         # like the all of the other languages.
         if (
             (cp >= 0x4E00 and cp <= 0x9FFF)
-            or (cp >= 0x3400 and cp <= 0x4DBF)  #
+            or (cp >= 0x3400 and cp <= 0x4DBF)
             or (cp >= 0x20000 and cp <= 0x2A6DF)  #
             or (cp >= 0x2A700 and cp <= 0x2B73F)  #
             or (cp >= 0x2B740 and cp <= 0x2B81F)  #

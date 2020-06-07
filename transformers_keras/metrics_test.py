@@ -1,6 +1,7 @@
 import tensorflow as tf
 
-from .metrics import *
+from .metrics import (MaskedSparseCategoricalAccuracy,
+                      masked_sparse_categorical_accuracy)
 
 
 class MetricsTest(tf.test.TestCase):
@@ -78,7 +79,7 @@ class MetricsTest(tf.test.TestCase):
         self.assertAlmostEqual(0.75, acc2, delta=6)
         self.assertEqual(11.0, msca.total)
         self.assertEqual(12.0, msca.count)
-        self.assertAlmostEqual(11.0/12.0, _acc2, delta=6)
+        self.assertAlmostEqual(11.0 / 12.0, _acc2, delta=6)
 
         print(' acc0: ', acc0.numpy())
         print(' acc1: ', acc1.numpy())

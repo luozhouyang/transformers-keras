@@ -87,7 +87,7 @@ class TransformerTFRecordGenerator(object):
 
                     if total % self.log_steps == 0:
                         logging.info('Write %d examples.' % total)
-                    writer_index = (writer_index+1) % len(writers)
+                    writer_index = (writer_index + 1) % len(writers)
 
         logging.info('Write %d examples in total.' % total)
         for writer in writers:

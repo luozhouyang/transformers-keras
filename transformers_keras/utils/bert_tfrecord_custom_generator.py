@@ -229,8 +229,7 @@ class CustomBertGenerator(object):
             # Note that Whole Word Masking does *not* change the training code
             # at all -- we still predict each WordPiece independently, softmaxed
             # over the entire vocabulary.
-            if (self.do_whole_word_mask and len(cand_indexes) >= 1 and
-                    token.startswith("##")):
+            if (self.do_whole_word_mask and len(cand_indexes) >= 1 and token.startswith("##")):
                 cand_indexes[-1].append(i)
             else:
                 cand_indexes.append([i])

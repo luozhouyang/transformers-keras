@@ -1,6 +1,7 @@
 import tensorflow as tf
 
-from .layers import *
+from .layers import (DecoderLayer, EncoderLayer, MultiHeadAttention,
+                     ScaledDotProductAttention)
 
 
 def _create_padding_mask(x):
@@ -63,7 +64,8 @@ class LayersTest(tf.test.TestCase):
         enc_outputs = tf.random.uniform(shape=(2, 5, 512))
 
         dec_inputs = tf.random.uniform((2, 7, 512))
-        dec_outputs, attn_weights1, attn_weights2 = decoder_layer(inputs=(dec_inputs, enc_outputs, look_ahead_mask, padding_mask))
+        dec_outputs, attn_weights1, attn_weights2 = decoder_layer(
+            inputs=(dec_inputs, enc_outputs, look_ahead_mask, padding_mask))
 
         self.assertEqual([2, 7, 512], dec_outputs.shape)
         self.assertEqual([2, 8, 7, 7], attn_weights1.shape)
