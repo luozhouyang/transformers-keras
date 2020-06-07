@@ -2,6 +2,12 @@
 
 Transformer-based models implemented in tensorflow 2.x(Keras).
 
+## Installation
+
+```bash
+pip install -U transformers-keras
+```
+
 ## Models
 
 - [x] Transformer
@@ -30,6 +36,8 @@ dataset_builder = TransformerTextFileDatasetBuilder(src_tokenizer, tgt_tokenizer
 model_config = {
     'num_encoder_layers': 2,
     'num_decoder_layers': 2,
+    'src_vocab_size': src_tokenizer.vocab_size,
+    'tgt_vocab_size': tgt_tokenizer.vocab_size,
 }
 
 runner = TransformerRunner(model_config, dataset_builder, model_dir='/tmp/transformer')

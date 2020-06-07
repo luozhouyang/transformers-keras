@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="transformers_keras",
-    version="0.0.1",
+    version="0.1.0",
     description="Transformer-based models implemented in tensorflow 2.x(Keras)",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -15,13 +15,20 @@ setuptools.setup(
     packages=setuptools.find_packages(),
     include_package_data=True,
     install_requires=[
-        'tensorflow >=2.0.0rc',
-        'matplotlib',
+        "jieba",
+        "matplotlib",
     ],
+    extras_require={
+        "tf": ["tensorflow>=2.0.1"],
+        "tf-gpu": ["tensorflow-gpu>=2.0.1"],
+    },
     license="Apache Software License",
     classifiers=(
+        "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.6",
+        "Programming Language :: Python :: 3.7",
         "License :: OSI Approved :: Apache Software License",
         "Operating System :: OS Independent",
+        "Topic :: Scientific/Engineering :: Artificial Intelligence",
     )
 )

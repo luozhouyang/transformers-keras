@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
-source activate transformer
+source activate transformers-keras
 python setup.py sdist bdist_wheel
-twine upload --repository-url https://test.pypi.org/legacy/ dist/*
+python3 -m twine upload --repository-url https://test.pypi.org/legacy/ dist/*
 
 rm -rf build
 rm -rf dist

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
-source activate transformer
+source activate transformers-keras
 python setup.py sdist bdist_wheel
-twine upload dist/*
+python3 -m twine upload dist/*
 
 rm -rf build
 rm -rf dist
