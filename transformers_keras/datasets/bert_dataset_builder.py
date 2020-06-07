@@ -5,13 +5,13 @@ from .abstract_dataset_builder import AbstractDatasetBuilder
 
 class BertTFRecordDatasetBuilder(AbstractDatasetBuilder):
 
-    def __init__(self, **kwargs):
+    def __init__(self, max_sequence_length=512, max_predictions_per_seq=20, record_option=None, **kwargs):
         super().__init__(**kwargs)
-        self.record_option = kwargs.get('record_option', None)
-        self.max_sequence_length = kwargs.get('max_sequence_length', 512)
-        self.max_predictions_per_seq = kwargs.get('max_predictions_per_seq', 20)
+        self.record_option = record_option
+        self.max_sequence_length = max_sequence_length
+        self.max_predictions_per_seq = max_predictions_per_seq
 
-    def build_train_dataset(self, train_record_files):
+    def build_train_dataset(self, train_record_files, **kwargs):
         dataset = tf.data.TFRecordDataset(train_record_files, compression_type=self.record_option)
         dataset = dataset.repeat(self.train_repeat_count)
         dataset = dataset.shuffle(
@@ -25,7 +25,7 @@ class BertTFRecordDatasetBuilder(AbstractDatasetBuilder):
         dataset = dataset.map(lambda x, y, z, p, l: ((x, y, z), (p, l)))
         return dataset
 
-    def build_valid_dataset(self, valid_record_files):
+    def build_valid_dataset(self, valid_record_files, **kwargs):
         if valid_record_files is None:
             return None
         dataset = tf.data.TFRecordDataset(valid_record_files, compression_type=self.record_option)
@@ -42,7 +42,7 @@ class BertTFRecordDatasetBuilder(AbstractDatasetBuilder):
         dataset = dataset.map(lambda x, y, z, p, l: ((x, y, z), (p, l)))
         return dataset
 
-    def build_predict_dataset(self, predict_record_files):
+    def build_predict_dataset(self, predict_record_files, **kwargs):
         dataset = tf.data.TFRecordDataset(predict_record_files, compression_type=self.record_option)
         dataset = dataset.repeat(self.predict_repeat_count)
         dataset = dataset.map(self._parse_example_fn)

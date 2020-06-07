@@ -44,9 +44,19 @@ class TransformerDatasetBuilder(AbstractDatasetBuilder):
         else:
             raise ValueError('Invalid mode: %s, must be in [train, valid, predict]' % mode)
 
+    def build_train_dataset(self, train_files, **kwargs):
+        raise NotImplementedError()
+
+    def build_valid_dataset(self, valid_files, **kwargs):
+        raise NotImplementedError()
+
+    def build_predict_dataset(self, valid_files, **kwargs):
+        raise NotImplementedError()
+
 
 class TransformerTFRecordDatasetBuilder(TransformerDatasetBuilder):
     """Build dataset from tfrecord files."""
+
     # TODO: Shift tgt sequence when generating tfrecord files
 
     def __init__(self, src_max_len=512, tgt_max_len=512, record_option='GZIP', **kwargs):
@@ -73,7 +83,7 @@ class TransformerTFRecordDatasetBuilder(TransformerDatasetBuilder):
         labels = example['tgt_ids']
         return (features, labels)
 
-    def build_train_dataset(self, train_files):
+    def build_train_dataset(self, train_files, **kwargs):
         dataset = self._build_dataset_from_tfrecord_files(train_files, skip=self.train_skip_count)
         dataset = self._repeat(dataset, mode='train')
         dataset = self._shuffle(dataset, mode='train')
@@ -85,7 +95,7 @@ class TransformerTFRecordDatasetBuilder(TransformerDatasetBuilder):
         dataset = dataset.prefetch(self.prefetch_size)
         return dataset
 
-    def build_valid_dataset(self, valid_files):
+    def build_valid_dataset(self, valid_files, **kwargs):
         dataset = self._build_dataset_from_tfrecord_files(valid_files, skip=self.valid_skip_count)
         dataset = self._repeat(dataset, mode='valid')
         dataset = self._shuffle(dataset, mode='valid')
@@ -96,8 +106,8 @@ class TransformerTFRecordDatasetBuilder(TransformerDatasetBuilder):
         dataset = dataset.prefetch(self.prefetch_size)
         return dataset
 
-    def build_predict_dataset(self, predict_files):
-        # predictition process is different from training and evaluation
+    def build_predict_dataset(self, predict_files, **kwargs):
+        # prediction process is different from training and evaluation
         raise NotImplementedError()
 
 
@@ -154,7 +164,7 @@ class TransformerTextFileDatasetBuilder(TransformerDatasetBuilder):
         dataset = dataset.map(lambda x, y: _tf_parse_fn(x, y), num_parallel_calls=self.num_parallel_calls)
         return dataset
 
-    def build_train_dataset(self, train_files):
+    def build_train_dataset(self, train_files, **kwargs):
         dataset = self._build_dataset_from_text_files(train_files, mode='train')
         dataset = self._repeat(dataset, mode='train')
         dataset = self._shuffle(dataset, mode='train')
@@ -172,7 +182,7 @@ class TransformerTextFileDatasetBuilder(TransformerDatasetBuilder):
         dataset = dataset.map(lambda x, y: ((x, y[:, :-1]), y[:, 1:]))
         return dataset
 
-    def build_valid_dataset(self, valid_files):
+    def build_valid_dataset(self, valid_files, **kwargs):
         dataset = self._build_dataset_from_text_files(valid_files, mode='valid')
         dataset = self._repeat(dataset, mode='valid')
         dataset = self._shuffle(dataset, mode='valid')
@@ -190,6 +200,6 @@ class TransformerTextFileDatasetBuilder(TransformerDatasetBuilder):
         dataset = dataset.map(lambda x, y: ((x, y[:, :-1]), y[:, 1:]))
         return dataset
 
-    def build_predict_dataset(self, predict_files):
-        # predictition process is different from training and evaluation
+    def build_predict_dataset(self, predict_files, **kwargs):
+        # prediction process is different from training and evaluation
         raise NotImplementedError()

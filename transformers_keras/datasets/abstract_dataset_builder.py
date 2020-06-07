@@ -23,7 +23,7 @@ class AbstractDatasetBuilder(abc.ABC):
                  predict_batch_size=1,
                  predict_skip_count=0,
                  predict_repeat_count=None,
-                 predict_drop_remainer=False,
+                 predict_drop_remainder=False,
                  num_parallel_calls=tf.data.experimental.AUTOTUNE,
                  prefetch_size=tf.data.experimental.AUTOTUNE,
                  **kwargs):
@@ -50,7 +50,7 @@ class AbstractDatasetBuilder(abc.ABC):
         self.predict_batch_size = predict_batch_size
         self.predict_skip_count = predict_skip_count
         self.predict_repeat_count = predict_repeat_count
-        self.predict_drop_remainder = predict_drop_remainer
+        self.predict_drop_remainder = predict_drop_remainder
 
     def build_train_dataset(self, train_files, **kwargs):
         raise NotImplementedError()
