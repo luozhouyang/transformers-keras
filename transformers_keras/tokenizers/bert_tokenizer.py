@@ -91,8 +91,13 @@ class BertVocabBasedTokenizer(BertAbstractTokenizer):
         raise NotImplementedError()
 
     def encode(self, sequence):
-        tokens = self.tokenize(sequence)
-        return [self.token2id.get(t, self.unk_id) for t in tokens]
+        if isinstance(sequence, str):
+            tokens = self.tokenize(sequence)
+            return [self.token2id.get(t, self.unk_id) for t in tokens]
+        elif isinstance(sequence, list):
+            return [self.token2id.get(t, self.unk_id) for t in sequence]
+        else:
+            raise ValueError('Invalid `sequence` type. Must be one of [str, list]')
 
     def decode(self, sequence):
         return [self.id2token.get(_id, self.unk_id) for _id in sequence]
