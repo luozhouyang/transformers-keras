@@ -1,5 +1,4 @@
 import abc
-import logging
 
 from .tokenizer import BasicTokenizer, WordpieceTokenizer
 
@@ -31,6 +30,10 @@ class BertAbstractTokenizer(abc.ABC):
         raise NotImplementedError()
 
     def decode(self, sequence):
+        raise NotImplementedError()
+
+    @property
+    def vocab_size(self):
         raise NotImplementedError()
 
     @property
@@ -79,6 +82,10 @@ class BertVocabBasedTokenizer(BertAbstractTokenizer):
         for k, v in token2id.items():
             m[v] = k
         return m
+
+    @property
+    def vocab_size(self):
+        return len(self.token2id)
 
     def tokenize(self, sequence):
         raise NotImplementedError()

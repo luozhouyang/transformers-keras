@@ -27,6 +27,7 @@ class BertTokenizerTest(unittest.TestCase):
         seq = '我 住在 上海'
         self.assertEqual(['我', '住', '在', '上', '海'], tokenizer.tokenize(seq))
         self.assertEqual([7, 8, 9, 10, 11], tokenizer.encode(seq))
+        self.assertEqual(12, tokenizer.vocab_size)
 
 
 if __name__ == "__main__":
