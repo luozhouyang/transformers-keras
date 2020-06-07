@@ -1,72 +1,50 @@
-import json
-import logging
-import os
-
 import tensorflow as tf
 
+from .layers import MultiHeadAttention
 from .modeling_utils import choose_activation, initialize
-
-
-class BertConfig(object):
-
-    def __init__(self, **kwargs):
-        super().__init__()
-        self.vocab_size = kwargs.pop('vocab_size', 21128)  # vocab size of pretrained model `bert-base-chinese`
-        self.type_vocab_size = kwargs.pop('type_vocab_size', 2)
-        self.hidden_size = kwargs.pop('hidden_size', 768)
-        self.num_hidden_layers = kwargs.pop('num_hidden_layers', 12)
-        self.num_attention_heads = kwargs.pop('num_attention_heads', 12)
-        self.intermediate_size = kwargs.pop('intermediate_size', 3072)
-        self.hidden_activation = kwargs.pop('hidden_activation', 'gelu')
-        self.hidden_dropout_rate = kwargs.pop('hidden_dropout_rate', 0.1)
-        self.attention_dropout_rate = kwargs.pop('attention_dropout_rate', 0.1)
-        self.max_position_embeddings = kwargs.pop('max_position_embeddings', 512)
-        self.max_sequence_length = kwargs.pop('max_sequence_length', 512)
-        self.stddev = kwargs.pop('stddev', 0.02)
-
-    @classmethod
-    def from_json_file(cls, filename):
-        d = {}
-        if not os.path.exists(filename):
-            logging.warning('Config file %s does not exists.' % filename)
-            return cls(**d)
-        logging.info('Load model config from: %s.' % filename)
-        with open(filename, mode='rt', encoding='utf8') as fin:
-            d = json.load(fin)
-        return cls(**d)
 
 
 class BertEmbedding(tf.keras.layers.Layer):
 
-    def __init__(self, config, **kwargs):
+    def __init__(self,
+                 vocab_size,
+                 max_positions=512,
+                 hidden_size=768,
+                 type_vocab_size=2,
+                 dropout_rate=0.2,
+                 stddev=0.02,
+                 epsilon=1e-12,
+                 **kwargs):
         super().__init__(**kwargs)
-        self.vocab_size = config.vocab_size
-        self.hidden_size = config.hidden_size
-        self.type_vocab_size = config.type_vocab_size
-        self.stddev = config.stddev
+        self.vocab_size = vocab_size
+        self.max_positions = max_positions
+        self.hidden_size = hidden_size
+        self.type_vocab_size = type_vocab_size
+        self.dropout_rate = dropout_rate
+        self.stddev = stddev
+        self.epsilon = epsilon
 
         self.position_embedding = tf.keras.layers.Embedding(
-            config.max_position_embeddings,
-            config.hidden_size,
-            embeddings_initializer=initialize(config.stddev),
+            self.max_positions,
+            self.hidden_size,
+            embeddings_initializer=initialize(self.stddev),
             name='position_embedding'
         )
         self.token_type_embedding = tf.keras.layers.Embedding(
-            config.type_vocab_size,
-            config.hidden_size,
-            embeddings_initializer=initialize(config.stddev),
+            self.type_vocab_size,
+            self.hidden_size,
+            embeddings_initializer=initialize(self.stddev),
             name='token_type_embedding'
         )
-        self.layer_norm = tf.keras.layers.LayerNormalization(epsilon=1e-12, name='LayerNorm')
-        self.dropout = tf.keras.layers.Dropout(config.hidden_dropout_rate)
+        self.layer_norm = tf.keras.layers.LayerNormalization(epsilon=self.epsilon)
+        self.dropout = tf.keras.layers.Dropout(self.dropout_rate)
 
     def build(self, input_shape):
-        with tf.name_scope('bert_embeddings'):
-            self.token_embedding = self.add_weight(
-                'weight',
-                shape=[self.vocab_size, self.hidden_size],
-                initializer=initialize(self.stddev)
-            )
+        self.token_embedding = self.add_weight(
+            'weight',
+            shape=[self.vocab_size, self.hidden_size],
+            initializer=initialize(self.stddev)
+        )
         super().build(input_shape)
 
     def call(self, inputs, mode='embedding', training=None):
@@ -75,7 +53,8 @@ class BertEmbedding(tf.keras.layers.Layer):
             return tf.matmul(inputs, self.token_embedding, transpose_b=True)
 
         input_ids, token_type_ids = inputs
-        position_ids = tf.range(input_ids.shape[1], dtype=tf.int32)[tf.newaxis, :]
+        seq_len = input_ids.shape[1]
+        position_ids = tf.range(seq_len, dtype=tf.int32)[tf.newaxis, :]
         if token_type_ids is None:
             token_type_ids = tf.fill(input_ids.shape.as_list(), 0)
 
@@ -88,186 +67,285 @@ class BertEmbedding(tf.keras.layers.Layer):
         embeddings = self.dropout(embeddings, training=training)
         return embeddings
 
-
-class BertAttention(tf.keras.layers.Layer):
-    """Multi-head self-attention mechanism from transformer."""
-
-    def __init__(self, config, **kwargs):
-        super().__init__(**kwargs)
-        self.num_attention_heads = config.num_attention_heads
-        self.hidden_size = config.hidden_size
-        assert self.hidden_size % self.num_attention_heads == 0
-        self.attention_head_size = self.hidden_size // self.num_attention_heads
-        self.wq = tf.keras.layers.Dense(
-            self.hidden_size, kernel_initializer=initialize(config.stddev), name='query'
-        )
-        self.wk = tf.keras.layers.Dense(
-            self.hidden_size, kernel_initializer=initialize(config.stddev), name='key'
-        )
-        self.wv = tf.keras.layers.Dense(
-            self.hidden_size, kernel_initializer=initialize(config.stddev), name='value'
-        )
-        self.attention_dropout = tf.keras.layers.Dropout(config.attention_dropout_rate)
-
-        self.dense = tf.keras.layers.Dense(
-            self.hidden_size, kernel_initializer=initialize(config.stddev), name='dense'
-        )
-        self.layer_norm = tf.keras.layers.LayerNormalization(epsilon=1e-12, name='LayerNorm')
-        self.hidden_dropout = tf.keras.layers.Dropout(config.hidden_dropout_rate)
-
-    def call(self, inputs, training=None):
-        hidden_states, attention_mask = inputs
-        batch_size = tf.shape(hidden_states)[0]
-
-        query = self.wq(hidden_states)
-        key = self.wk(hidden_states)
-        value = self.wv(hidden_states)
-
-        def _split_heads(x):
-            x = tf.reshape(x, shape=[batch_size, -1, self.num_attention_heads, self.attention_head_size])
-            return tf.transpose(x, perm=[0, 2, 1, 3])
-
-        query = _split_heads(query)
-        key = _split_heads(key)
-        value = _split_heads(value)
-
-        attention_score = tf.matmul(query, key, transpose_b=True)
-        dk = tf.cast(hidden_states.shape[-1], tf.float32)
-        attention_score = attention_score / tf.math.sqrt(dk)
-
-        if attention_mask is not None:
-            attention_mask = tf.cast(attention_mask[:, tf.newaxis, tf.newaxis, :], dtype=tf.float32)
-            attention_mask = (1.0 - attention_mask) * -10000.0
-            attention_score = attention_score + attention_mask
-
-        attention_score = tf.nn.softmax(attention_score)
-        attention_score = self.attention_dropout(attention_score, training=training)
-
-        context = tf.matmul(attention_score, value)
-        context = tf.transpose(context, perm=[0, 2, 1, 3])
-        context = tf.reshape(context, (batch_size, -1, self.hidden_size))
-
-        # layer norm
-        _hidden_states = self.dense(context)
-        _hidden_states = self.hidden_dropout(_hidden_states, training=training)
-        _hidden_states = self.layer_norm(hidden_states + _hidden_states)
-
-        return _hidden_states, attention_score
+    def get_config(self):
+        config = {
+            'vocab_size': self.vocab_size,
+            'max_positions': self.max_positions,
+            'hidden_size': self.hidden_size,
+            'type_vocab_size': self.type_vocab_size,
+            'dropout_rate': self.dropout_rate,
+            'epsilon': self.epsilon,
+            'stddev': self.stddev
+        }
+        base = super().get_config()
+        return dict(list(base.items()) + list(config.items()))
 
 
 class BertIntermediate(tf.keras.layers.Layer):
 
-    def __init__(self, config, **kwargs):
+    def __init__(self, intermediate_size=3072, activation='gelu', stddev=0.02, **kwargs):
         super().__init__(**kwargs)
+        self.intermediate_size = intermediate_size
+        self.stddev = stddev
         self.dense = tf.keras.layers.Dense(
-            config.intermediate_size, kernel_initializer=initialize(config.stddev)
+            self.intermediate_size, kernel_initializer=initialize(self.stddev)
         )
-        self.activation = choose_activation(config.hidden_activation)
+        self.activation = choose_activation(activation)
 
-    def call(self, inputs):
+    def call(self, inputs, training=None):
         hidden_states = inputs
         hidden_states = self.dense(hidden_states)
         hidden_states = self.activation(hidden_states)
         return hidden_states
 
+    def get_config(self):
+        config = {
+            'activation': tf.keras.activations.serialize(self.activation),
+            'intermediate_size': self.intermediate_size,
+            'stddev': self.stddev
+        }
+        base = super(BertIntermediate, self).get_config()
+        return dict(list(base.items()) + list(config.items()))
+
 
 class BertEncoderLayer(tf.keras.layers.Layer):
 
-    def __init__(self, config, **kwargs):
+    def __init__(self,
+                 hidden_size=768,
+                 num_attention_heads=8,
+                 intermediate_size=3072,
+                 activation='gelu',
+                 dropout_rate=0.2,
+                 epsilon=1e-12,
+                 stddev=0.02,
+                 **kwargs):
         super().__init__(**kwargs)
-        self.attention = BertAttention(config)
-        self.intermediate = BertIntermediate(config)
-        self.dense = tf.keras.layers.Dense(
-            config.hidden_size,
-            kernel_initializer=initialize(config.stddev)
-        )
-        self.dropout = tf.keras.layers.Dropout(config.hidden_dropout_rate)
-        self.layer_norm = tf.keras.layers.LayerNormalization(epsilon=1e-12, name='LayerNorm')
+        self.hidden_size = hidden_size
+        self.num_attention_heads = num_attention_heads
+        self.intermediate_size = intermediate_size
+        self.activation = choose_activation(activation)
+        self.dropout_rate = dropout_rate
+        self.epsilon = epsilon
+        self.stddev = stddev
 
-    def call(self, inputs, training=False):
-        hidden_states, attention_mask = inputs
-        _hidden_states, attention_score = self.attention(inputs=[hidden_states, attention_mask])
-        outputs = self.intermediate(inputs=_hidden_states)
-        outputs = self.dense(outputs)
-        outputs = self.dropout(outputs, training=training)
-        outputs = self.layer_norm(_hidden_states + outputs)
-        return outputs, attention_score
+        self.attention = MultiHeadAttention(hidden_size=self.hidden_size, num_attention_heads=self.num_attention_heads)
+        self.attn_dropout = tf.keras.layers.Dropout(self.dropout_rate)
+        self.attn_layer_norm = tf.keras.layers.LayerNormalization(epsilon=self.epsilon)
+
+        self.intermediate = BertIntermediate(self.intermediate_size, self.activation, self.stddev)
+        self.inter_dense = tf.keras.layers.Dense(self.hidden_size, kernel_initializer=initialize(self.stddev))
+        self.inter_dropout = tf.keras.layers.Dropout(self.dropout_rate)
+        self.inter_layer_norm = tf.keras.layers.LayerNormalization(epsilon=self.epsilon)
+
+    def call(self, inputs, training=None):
+        hidden_states, mask = inputs
+
+        attn_output, attn_weights = self.attention(inputs=(hidden_states, hidden_states, hidden_states, mask))
+        attn_output = self.attn_dropout(attn_output, training=training)
+        attn_output = self.attn_layer_norm(hidden_states + attn_output)
+
+        outputs = self.intermediate(inputs=attn_output)
+        outputs = self.inter_dropout(self.inter_dense(outputs), training=training)
+        outputs = self.inter_layer_norm(attn_output + outputs)
+
+        return outputs, attn_weights
+
+    def get_config(self):
+        config = {
+            'hidden_size': self.hidden_size,
+            'num_attention_heads': self.num_attention_heads,
+            'intermediate_size': self.intermediate_size,
+            'activation': tf.keras.activations.serialize(self.activation),
+            'dropout_rate': self.dropout_rate,
+            'epsilon': self.epsilon,
+            'stddev': self.stddev
+        }
+        base = super().get_config()
+        return dict(list(base.items()) + list(config.items()))
 
 
 class BertEncoder(tf.keras.layers.Layer):
 
-    def __init__(self, config, **kwargs):
+    def __init__(self,
+                 num_layers=6,
+                 hidden_size=768,
+                 num_attention_heads=8,
+                 intermediate_size=3072,
+                 activation='gelu',
+                 dropout_rate=0.2,
+                 epsilon=1e-12,
+                 stddev=0.02,
+                 **kwargs):
         super().__init__(**kwargs)
-        self.encoder_layers = [BertEncoderLayer(config) for _ in range(config.num_hidden_layers)]
+        self.num_layers = num_layers
+        self.hidden_size = hidden_size
+        self.num_attention_heads = num_attention_heads
+        self.intermediate_size = intermediate_size
+        self.activation = choose_activation(activation)
+        self.dropout_rate = dropout_rate
+        self.epsilon = epsilon
+        self.stddev = stddev
 
-    def call(self, inputs):
+        self.encoder_layers = [
+            BertEncoderLayer(
+                hidden_size=hidden_size,
+                num_attention_heads=num_attention_heads,
+                intermediate_size=intermediate_size,
+                activation=activation,
+                dropout_rate=dropout_rate,
+                epsilon=epsilon,
+                stddev=stddev,
+                name='BertEncoderLayer{}'.format(i)
+            ) for i in range(self.num_layers)
+        ]
+
+    def call(self, inputs, training=None):
         hidden_states, attention_mask = inputs
         all_hidden_states = []
         all_attention_scores = []
         for _, encoder in enumerate(self.encoder_layers):
-            hidden_states, attention_score = encoder(inputs=[hidden_states, attention_mask])
+            hidden_states, attention_score = encoder(inputs=(hidden_states, attention_mask))
             all_hidden_states.append(hidden_states)
             all_attention_scores.append(attention_score)
 
-        return all_hidden_states, all_attention_scores
+        return hidden_states, all_hidden_states, all_attention_scores
+
+    def get_config(self):
+        config = {
+            'num_layers': self.num_layers,
+            'hidden_size': self.hidden_size,
+            'num_attention_heads': self.num_attention_heads,
+            'intermediate_size': self.intermediate_size,
+            'activation': tf.keras.activations.serialize(self.activation),
+            'dropout_rate': self.dropout_rate,
+            'epsilon': self.epsilon,
+            'stddev': self.stddev
+        }
+        base = super().get_config()
+        return dict(list(base.items()) + list(config.items()))
 
 
 class BertPooler(tf.keras.layers.Layer):
 
-    def __init__(self, config, **kwargs):
+    def __init__(self, hidden_size=768, stddev=0.02, **kwargs):
         super().__init__(**kwargs)
+        self.hidden_size = hidden_size
+        self.stddev = stddev
         self.dense = tf.keras.layers.Dense(
-            config.hidden_size,
-            kernel_initializer=initialize(config.stddev),
-            activation='tanh',
-            name='pooler'
-        )
+            self.hidden_size, kernel_initializer=initialize(self.stddev), activation='tanh')
 
-    def call(self, inputs):
+    def call(self, inputs, training=None):
         hidden_states = inputs
         # pool the first token: [CLS]
         outputs = self.dense(hidden_states[:, 0])
         return outputs
 
+    def get_config(self):
+        config = {
+            'hidden_size': self.hidden_size,
+            'stddev': 0.02,
+        }
+        base = super().get_config()
+        return dict(list(base.items()) + list(config.items()))
+
 
 class BertModel(tf.keras.layers.Layer):
 
-    def __init__(self, config, **kwargs):
+    def __init__(self,
+                 vocab_size,
+                 max_positions=512,
+                 hidden_size=768,
+                 type_vocab_size=2,
+                 num_layers=6,
+                 num_attention_heads=8,
+                 intermediate_size=3072,
+                 activation='gelu',
+                 dropout_rate=0.2,
+                 stddev=0.02,
+                 epsilon=1e-12,
+                 **kwargs):
         super().__init__(**kwargs)
-        self.bert_embedding = BertEmbedding(config, **kwargs)
-        self.bert_encoder = BertEncoder(config, **kwargs)
-        self.bert_pooler = BertPooler(config, **kwargs)
+        self.vocab_size = vocab_size
+        self.max_positions = max_positions
+        self.hidden_size = hidden_size
+        self.type_vocab_size = type_vocab_size
+        self.num_layers = num_layers
+        self.num_attention_heads = num_attention_heads
+        self.intermediate_size = intermediate_size
+        self.activation = choose_activation(activation)
+        self.dropout_rate = dropout_rate
+        self.stddev = stddev
+        self.epsilon = epsilon
+
+        self.bert_embedding = BertEmbedding(
+            vocab_size=self.vocab_size,
+            max_positions=self.max_positions,
+            hidden_size=self.hidden_size,
+            type_vocab_size=self.type_vocab_size,
+            dropout_rate=self.dropout_rate,
+            stddev=self.stddev,
+            epsilon=self.epsilon,
+            **kwargs)
+
+        self.bert_encoder = BertEncoder(
+            num_layers=self.num_layers,
+            hidden_size=self.hidden_size,
+            num_attention_heads=self.num_attention_heads,
+            intermediate_size=self.intermediate_size,
+            activation=self.activation,
+            dropout_rate=self.dropout_rate,
+            epsilon=self.epsilon,
+            stddev=self.stddev,
+            **kwargs)
+
+        self.bert_pooler = BertPooler(hidden_size=self.hidden_size, stddev=self.stddev, **kwargs)
 
     def call(self, inputs, training=None):
-        input_ids, token_type_ids, attention_mask = inputs
-        embedding = self.bert_embedding(inputs=[input_ids, token_type_ids], mode='embedding')
-        all_hidden_states, all_attention_scores = self.bert_encoder(inputs=[embedding, attention_mask])
-        last_hidden_state = all_hidden_states[-1]
-        pooled_output = self.bert_pooler(last_hidden_state)
-        return last_hidden_state, pooled_output, all_hidden_states, all_attention_scores
+        input_ids, token_type_ids, mask = inputs
+        mask = mask[:, tf.newaxis, tf.newaxis, :]  # (batch_size, seq_len) -> (batch_size, 1, 1, seq_len)
+        embedding = self.bert_embedding(inputs=(input_ids, token_type_ids), mode='embedding')
+        output, all_hidden_states, all_attention_scores = self.bert_encoder(inputs=(embedding, mask))
+        pooled_output = self.bert_pooler(output)
+        return output, pooled_output, all_hidden_states, all_attention_scores
+
+    def get_config(self):
+        config = {
+            'num_layers': self.num_layers,
+            'hidden_size': self.hidden_size,
+            'num_attention_heads': self.num_attention_heads,
+            'intermediate_size': self.intermediate_size,
+            'activation': tf.keras.activations.serialize(self.activation),
+            'vocab_size': self.vocab_size,
+            'max_positions': self.max_positions,
+            'type_vocab_size': self.type_vocab_size,
+            'dropout_rate': self.dropout_rate,
+            'epsilon': self.epsilon,
+            'stddev': self.stddev,
+        }
+        base = super().get_config()
+        return dict(list(base.items()) + list(config.items()))
 
 
 class BertMLMHead(tf.keras.layers.Layer):
     """Masked language model for BERT pre-training."""
 
-    def __init__(self, config, embedding, **kwargs):
+    def __init__(self, vocab_size, embedding, hidden_size=768, activation='gelu', epsilon=1e-12, stddev=0.02, **kwargs):
         super().__init__(**kwargs)
-        self.vocab_size = config.vocab_size
+        self.vocab_size = vocab_size
         self.embedding = embedding
-        self.dense = tf.keras.layers.Dense(
-            config.hidden_size,
-            kernel_initializer=initialize(config.stddev),
-            name='dense'
-        )
-        self.activation = choose_activation(config.hidden_activation)
+        self.hidden_size = hidden_size
+        self.activation = choose_activation(activation)
+        self.epsilon = epsilon
+        self.stddev = stddev
 
-        self.layer_norm = tf.keras.layers.LayerNormalization(epsilon=1e-12)
+        self.dense = tf.keras.layers.Dense(self.hidden_size, kernel_initializer=initialize(stddev))
+        self.layer_norm = tf.keras.layers.LayerNormalization(epsilon=self.epsilon)
 
     def build(self, input_shape):
         self.bias = self.add_weight(shape=(self.vocab_size,), initializer='zeros', trainable=True, name='bias')
         super().build(input_shape)
 
-    def call(self, inputs):
+    def call(self, inputs, training=None):
         hidden_states = inputs
         hidden_states = self.dense(hidden_states)
         hidden_states = self.activation(hidden_states)
@@ -276,34 +354,108 @@ class BertMLMHead(tf.keras.layers.Layer):
         hidden_states = hidden_states + self.bias
         return hidden_states
 
+    def get_config(self):
+        config = {
+            'vocab_size': self.vocab_size,
+            'hidden_size': self.hidden_size,
+            'activation': tf.keras.activations.serialize(self.activation),
+            'epsilon': self.epsilon,
+            'stddev': self.stddev
+        }
+        base = super().get_config()
+        return dict(list(base.items()) + list(config.items()))
+
 
 class BertNSPHead(tf.keras.layers.Layer):
     """Next sentence prediction for BERT pre-training."""
 
-    def __init__(self, config, **kwargs):
+    def __init__(self, stddev=0.02, **kwargs):
         super().__init__(**kwargs)
-        self.classifier = tf.keras.layers.Dense(
-            2,
-            kernel_initializer=initialize(config.stddev),
-            name='sequence_relationip'
-        )
+        self.stddev = stddev
+        self.classifier = tf.keras.layers.Dense(2, kernel_initializer=initialize(self.stddev))
 
-    def call(self, inputs):
+    def call(self, inputs, training=None):
         pooled_output = inputs
         relation = self.classifier(pooled_output)
         return relation
 
+    def get_config(self):
+        config = {
+            'stddev': self.stddev
+        }
+        base = super().get_config()
+        return dict(list(base.items()) + list(config.items()))
+
 
 class Bert4PreTraining(tf.keras.layers.Layer):
 
-    def __init__(self, config, **kwargs):
+    def __init__(self,
+                 vocab_size,
+                 max_positions=512,
+                 hidden_size=768,
+                 type_vocab_size=2,
+                 num_layers=6,
+                 num_attention_heads=8,
+                 intermediate_size=3072,
+                 activation='gelu',
+                 dropout_rate=0.2,
+                 epsilon=1e-12,
+                 stddev=0.02,
+                 **kwargs):
         super().__init__(**kwargs)
-        self.bert = BertModel(config, name='Bert')
-        self.mlm = BertMLMHead(config, self.bert.bert_embedding, name='MLM')
-        self.nsp = BertNSPHead(config, name='NSP')
+        self.vocab_size = vocab_size
+        self.max_positions = max_positions
+        self.hidden_size = hidden_size
+        self.type_vocab_size = type_vocab_size
+        self.num_layers = num_layers
+        self.num_attention_heads = num_attention_heads
+        self.intermediate_size = intermediate_size
+        self.activation = choose_activation(activation)
+        self.dropout_rate = dropout_rate
+        self.epsilon = epsilon
+        self.stddev = stddev
 
-    def call(self, inputs):
-        sequence_output, pooled_output, all_hidden_states, all_attention_scores = self.bert(inputs)
+        self.bert = BertModel(
+            vocab_size=self.vocab_size,
+            max_positions=self.max_positions,
+            hidden_size=self.hidden_size,
+            type_vocab_size=self.type_vocab_size,
+            num_layers=self.num_layers,
+            num_attention_heads=self.num_attention_heads,
+            intermediate_size=self.intermediate_size,
+            activation=self.activation,
+            dropout_rate=self.dropout_rate,
+            stddev=self.stddev,
+            epsilon=self.epsilon)
+        self.mlm = BertMLMHead(
+            vocab_size=self.vocab_size,
+            embedding=self.bert.bert_embedding,
+            hidden_size=self.hidden_size,
+            activation=self.activation,
+            epsilon=self.epsilon,
+            stddev=self.stddev)
+        self.nsp = BertNSPHead(stddev=stddev, name='NSP')
+
+    def call(self, inputs, training=None):
+        # input_ids, token_type_ids, mask = inputs
+        sequence_output, pooled_output, _, all_attention_scores = self.bert(inputs)
         prediction_scores = self.mlm(sequence_output)
         relation_scores = self.nsp(pooled_output)
-        return prediction_scores, relation_scores, all_attention_scores[-1]
+        return prediction_scores, relation_scores, all_attention_scores
+
+    def get_config(self):
+        config = {
+            'num_layers': self.num_layers,
+            'hidden_size': self.hidden_size,
+            'num_attention_heads': self.num_attention_heads,
+            'intermediate_size': self.intermediate_size,
+            'activation': tf.keras.activations.serialize(self.activation),
+            'vocab_size': self.vocab_size,
+            'max_positions': self.max_positions,
+            'type_vocab_size': self.type_vocab_size,
+            'dropout_rate': self.dropout_rate,
+            'epsilon': self.epsilon,
+            'stddev': self.stddev,
+        }
+        base = super().get_config()
+        return dict(list(base.items()) + list(config.items()))
