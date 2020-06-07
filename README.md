@@ -1,5 +1,7 @@
 # transformers-keras
 
+![Greetings](https://github.com/luozhouyang/transformers-keras/workflows/Greetings/badge.svg)
+
 Transformer-based models implemented in tensorflow 2.x(Keras).
 
 ## Installation
