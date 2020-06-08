@@ -1,7 +1,8 @@
 # transformers-keras
 
-![Greetings](https://github.com/luozhouyang/transformers-keras/workflows/Greetings/badge.svg)
 ![Python package](https://github.com/luozhouyang/transformers-keras/workflows/Python%20package/badge.svg)
+[![PyPI version](https://badge.fury.io/py/transformers-keras.svg)](https://badge.fury.io/py/transformers-keras)
+[![Python](https://img.shields.io/pypi/pyversions/transformers-keras.svg?style=plastic)](https://badge.fury.io/py/transformers-keras)
 
 Transformer-based models implemented in tensorflow 2.x(Keras).
 
