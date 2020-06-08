@@ -52,8 +52,9 @@ class PositionalEncoding(tf.keras.layers.Layer):
 
 class TransformerEmbedding(tf.keras.layers.Layer):
 
-    def __init__(self, vocab_size, max_positions=512, embedding_size=512, dropout_rate=0.2, **kwargs):
+    def __init__(self, vocab_size=1, max_positions=512, embedding_size=512, dropout_rate=0.2, **kwargs):
         super(TransformerEmbedding, self).__init__(**kwargs)
+        assert vocab_size > 0, "vocab_size must greater than 0."
         self.vocab_size = vocab_size
         self.max_positions = max_positions
         self.embedding_size = embedding_size
@@ -84,7 +85,7 @@ class TransformerEmbedding(tf.keras.layers.Layer):
 class TransformerEncoder(tf.keras.layers.Layer):
 
     def __init__(self,
-                 vocab_size,
+                 vocab_size=-1,
                  max_positions=512,
                  hidden_size=512,
                  num_layers=6,
@@ -94,6 +95,7 @@ class TransformerEncoder(tf.keras.layers.Layer):
                  epsilon=1e-6,
                  **kwargs):
         super(TransformerEncoder, self).__init__(**kwargs)
+        assert vocab_size > 0, "vocab_size must greater than 0."
         self.vocab_size = vocab_size
         self.max_positions = max_positions
         self.hidden_size = hidden_size
@@ -145,7 +147,7 @@ class TransformerEncoder(tf.keras.layers.Layer):
 class TransformerDecoder(tf.keras.layers.Layer):
 
     def __init__(self,
-                 vocab_size,
+                 vocab_size=-1,
                  max_positions=512,
                  hidden_size=512,
                  num_layers=6,
@@ -155,6 +157,7 @@ class TransformerDecoder(tf.keras.layers.Layer):
                  epsilon=1e-6,
                  **kwargs):
         super(TransformerDecoder, self).__init__(**kwargs)
+        assert vocab_size > 0, "vocab_size must greater than 0."
         self.vocab_size = vocab_size
         self.max_positions = max_positions
         self.hidden_size = hidden_size
@@ -208,8 +211,8 @@ class TransformerDecoder(tf.keras.layers.Layer):
 class Transformer(tf.keras.layers.Layer):
 
     def __init__(self,
-                 src_vocab_size,
-                 tgt_vocab_size,
+                 src_vocab_size=-1,
+                 tgt_vocab_size=-1,
                  max_positions=512,
                  hidden_size=512,
                  num_encoder_layers=6,
@@ -220,6 +223,18 @@ class Transformer(tf.keras.layers.Layer):
                  epsilon=1e-6,
                  **kwargs):
         super(Transformer, self).__init__(**kwargs)
+        assert src_vocab_size > 0, "src_vocab_size must greater than 0."
+        assert tgt_vocab_size > 0, "tgt_vocab_size must greater than 0."
+        self.src_vocab_size = src_vocab_size
+        self.tgt_vocab_size = tgt_vocab_size
+        self.max_positions = max_positions
+        self.hidden_size = hidden_size
+        self.num_encoder_layers = num_encoder_layers
+        self.num_decoder_layers = num_decoder_layers
+        self.num_attention_heads = num_attention_heads
+        self.ffn_size = ffn_size
+        self.dropout_rate = dropout_rate
+        self.epsilon = epsilon
         self.encoder = TransformerEncoder(
             src_vocab_size, max_positions, hidden_size,
             num_layers=num_encoder_layers, dropout_rate=dropout_rate, epsilon=epsilon)
@@ -259,4 +274,17 @@ class Transformer(tf.keras.layers.Layer):
         return logits, enc_attns, dec_attns_0, dec_attns_1
 
     def get_config(self):
-        return super().get_config()
+        config = {
+            "src_vocab_size": self.src_vocab_size,
+            "tgt_vocab_size": self.tgt_vocab_size,
+            "max_positions": self.max_positions,
+            "hidden_size": self.hidden_size,
+            "num_encoder_layers": self.num_encoder_layers,
+            "num_decoder_layers": self.num_decoder_layers,
+            "num_attention_heads": self.num_attention_heads,
+            "ffn_size": self.ffn_size,
+            "dropout_rate": self.dropout_rate,
+            "epsilon": self.epsilon,
+        }
+        base = super().get_config()
+        return dict(list(base.items()) + list(config.items()))

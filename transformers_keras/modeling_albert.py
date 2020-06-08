@@ -7,11 +7,11 @@ from .modeling_utils import choose_activation, initialize
 class AlbertEmbedding(BertEmbedding):
 
     def __init__(self,
-                 vocab_size, max_positions=512, embedding_size=128, type_vocab_size=2, dropout_rate=0.2,
+                 vocab_size=-1, max_positions=512, embedding_size=128, type_vocab_size=2, dropout_rate=0.2,
                  stddev=0.02, epsilon=1e-12,
                  **kwargs):
         super().__init__(
-            vocab_size,
+            vocab_size=vocab_size,
             max_positions=max_positions, hidden_size=embedding_size, type_vocab_size=type_vocab_size,
             dropout_rate=dropout_rate, stddev=stddev, epsilon=epsilon,
             **kwargs)
@@ -177,11 +177,12 @@ class AlbertEncoder(tf.keras.layers.Layer):
 class AlbertModel(tf.keras.layers.Layer):
 
     def __init__(self,
-                 vocab_size, max_positions=512, embedding_size=128, type_vocab_size=2, num_layers=12, num_groups=1,
+                 vocab_size=-1, max_positions=512, embedding_size=128, type_vocab_size=2, num_layers=12, num_groups=1,
                  num_layers_each_group=1, hidden_size=768, num_attention_heads=8, intermediate_size=3072,
                  activation='gelu', dropout_rate=0.2, epsilon=1e-12, stddev=0.02,
                  **kwargs):
         super(AlbertModel, self).__init__(**kwargs)
+        assert vocab_size > 0, "vocab_size must greater than 0."
         self.vocab_size = vocab_size
         self.max_positions = max_positions
         self.embedding_size = embedding_size
@@ -249,8 +250,9 @@ class AlbertModel(tf.keras.layers.Layer):
 
 class AlbertMLMHead(tf.keras.layers.Layer):
 
-    def __init__(self, vocab_size, embedding, activation='gelu', epsilon=1e-12, stddev=0.02, **kwargs):
+    def __init__(self, embedding, vocab_size=-1, activation='gelu', epsilon=1e-12, stddev=0.02, **kwargs):
         super(AlbertMLMHead, self).__init__(**kwargs)
+        assert vocab_size > 0, "vocab_size must greater than 0."
         self.vocab_size = vocab_size
         self.decoder = embedding  # use embedding matrix to decode
         self.activation = choose_activation(activation)
@@ -310,11 +312,11 @@ class AlbertSOPHead(tf.keras.layers.Layer):
 class Albert4PreTraining(tf.keras.layers.Layer):
 
     def __init__(self,
-                 vocab_size, max_positions=512, embedding_size=128, type_vocab_size=2, num_layers=12,
+                 vocab_size=-1, max_positions=512, embedding_size=128, type_vocab_size=2, num_layers=12,
                  num_groups=1, num_layers_each_group=1, hidden_size=768, num_attention_heads=8, intermediate_size=3072,
                  activation='gelu', dropout_rate=0.2, epsilon=1e-12, stddev=0.02, **kwargs):
         super().__init__(**kwargs)
-
+        assert vocab_size > 0, "vocab_size must greater than 0."
         self.vocab_size = vocab_size
         self.max_positions = max_positions
         self.embedding_size = embedding_size

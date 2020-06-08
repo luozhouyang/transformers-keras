@@ -7,7 +7,7 @@ from .modeling_utils import choose_activation, initialize
 class BertEmbedding(tf.keras.layers.Layer):
 
     def __init__(self,
-                 vocab_size,
+                 vocab_size=1,
                  max_positions=512,
                  hidden_size=768,
                  type_vocab_size=2,
@@ -16,6 +16,7 @@ class BertEmbedding(tf.keras.layers.Layer):
                  epsilon=1e-12,
                  **kwargs):
         super().__init__(**kwargs)
+        assert vocab_size > 0, "vocab_size must greater than 0."
         self.vocab_size = vocab_size
         self.max_positions = max_positions
         self.hidden_size = hidden_size
@@ -252,7 +253,7 @@ class BertPooler(tf.keras.layers.Layer):
 class BertModel(tf.keras.layers.Layer):
 
     def __init__(self,
-                 vocab_size,
+                 vocab_size=1,
                  max_positions=512,
                  hidden_size=768,
                  type_vocab_size=2,
@@ -265,6 +266,7 @@ class BertModel(tf.keras.layers.Layer):
                  epsilon=1e-12,
                  **kwargs):
         super().__init__(**kwargs)
+        assert vocab_size > 0, "vocab_size must greater than 0."
         self.vocab_size = vocab_size
         self.max_positions = max_positions
         self.hidden_size = hidden_size
@@ -329,8 +331,16 @@ class BertModel(tf.keras.layers.Layer):
 class BertMLMHead(tf.keras.layers.Layer):
     """Masked language model for BERT pre-training."""
 
-    def __init__(self, vocab_size, embedding, hidden_size=768, activation='gelu', epsilon=1e-12, stddev=0.02, **kwargs):
+    def __init__(self,
+                 embedding,
+                 vocab_size=-1,
+                 hidden_size=768,
+                 activation='gelu',
+                 epsilon=1e-12,
+                 stddev=0.02,
+                 **kwargs):
         super().__init__(**kwargs)
+        assert vocab_size > 0, "vocab_size must greater than 0."
         self.vocab_size = vocab_size
         self.embedding = embedding
         self.hidden_size = hidden_size
@@ -390,7 +400,7 @@ class BertNSPHead(tf.keras.layers.Layer):
 class Bert4PreTraining(tf.keras.layers.Layer):
 
     def __init__(self,
-                 vocab_size,
+                 vocab_size=-1,
                  max_positions=512,
                  hidden_size=768,
                  type_vocab_size=2,
@@ -403,6 +413,7 @@ class Bert4PreTraining(tf.keras.layers.Layer):
                  stddev=0.02,
                  **kwargs):
         super().__init__(**kwargs)
+        assert vocab_size > 0, "vocab_size must greater than 0."
         self.vocab_size = vocab_size
         self.max_positions = max_positions
         self.hidden_size = hidden_size
