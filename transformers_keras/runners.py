@@ -95,7 +95,7 @@ class TransformerRunner(AbstractRunner):
         valid_dataset = self.dataset_builder.build_valid_dataset(valid_files) if valid_files else None
         train_dataset = self.dataset_builder.build_train_dataset(train_files)
 
-        callbacks = self._build_callbacks(callbacks)
+        callbacks = self._build_callbacks(callbacks, ckpt_steps=ckpt_steps, export_steps=export_steps, **kwargs)
 
         history = self.model.fit(
             train_dataset,
