@@ -73,7 +73,7 @@ class TransformerEmbedding(tf.keras.layers.Layer):
 
     def get_config(self):
         conf = {
-            'vocab_size': self.source_vocab_size,
+            'vocab_size': self.vocab_size,
             'max_positions': self.max_positions,
             'embedding_size': self.embedding_size,
             'dropout_rate': self.dropout_rate
