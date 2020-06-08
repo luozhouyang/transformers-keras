@@ -1,8 +1,0 @@
-{
-    "train_record_files": [
-        "testdata/transformer_train.tfrecord"
-    ],
-    "valid_record_files": [
-        "testdata/transformer_train.tfrecord"
-    ]
-}

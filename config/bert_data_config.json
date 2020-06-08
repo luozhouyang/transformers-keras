@@ -1,8 +1,0 @@
-{
-    "train_record_files": [
-        "testdata/bert_custom_pretrain.tfrecord"
-    ],
-    "valid_record_files": [
-        "testdata/bert_custom_pretrain.tfrecord"
-    ]
-}
