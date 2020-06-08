@@ -13,7 +13,7 @@ class ScaledDotProductAttention(tf.keras.layers.Layer):
         score = score / tf.math.sqrt(dk)
         if mask is not None:
             score += mask * -10000.0
-        attn_weights = tf.nn.softmax(score, axis=1)
+        attn_weights = tf.nn.softmax(score, axis=-1)
         context = tf.matmul(attn_weights, value)
         return context, attn_weights
 
