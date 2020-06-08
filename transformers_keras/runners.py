@@ -123,7 +123,7 @@ class BertRunner(TransformerRunner):
         super().__init__(model_config, dataset_builder, model_dir=model_dir, **kwargs)
 
     def _build_model(self, config):
-        max_sequence_length = config.get('max_sequence_length', 512)
+        max_sequence_length = config.get('max_positions', 512)
         input_ids = tf.keras.layers.Input(
             shape=(max_sequence_length,), dtype=tf.int32, name='input_ids')
         input_mask = tf.keras.layers.Input(
@@ -132,7 +132,7 @@ class BertRunner(TransformerRunner):
             shape=(max_sequence_length,), dtype=tf.int32, name='segment_ids')
 
         inputs = (input_ids, segment_ids, input_mask)
-        outputs = Bert4PreTraining(config, name='bert')(inputs=inputs)
+        outputs = Bert4PreTraining(**config, name='bert')(inputs=inputs)
 
         predictions = tf.keras.layers.Lambda(
             lambda x: x, name='predictions')(outputs[0])
@@ -170,7 +170,7 @@ class AlbertRunner(TransformerRunner):
         super().__init__(model_config, dataset_builder, model_dir=model_dir, **kwargs)
 
     def _build_model(self, config):
-        max_sequence_length = config.get('max_sequence_length', 512)
+        max_sequence_length = config.get('max_positions', 512)
         input_ids = tf.keras.layers.Input(
             shape=(max_sequence_length,), dtype=tf.int32, name='input_ids')
         input_mask = tf.keras.layers.Input(
