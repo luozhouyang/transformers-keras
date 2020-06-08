@@ -3,6 +3,7 @@
 log/
 logs/
 
+models/
 *.imp
 *.pyc
 .DS_Store

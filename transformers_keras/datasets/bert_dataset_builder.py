@@ -90,5 +90,5 @@ class BertTFRecordDatasetBuilder(AbstractDatasetBuilder):
         input_mask = example['input_mask']
         segment_ids = example['segment_ids']
         predictions = example['original_ids']
-        relations = example['relations']
+        relations = example['next_sentence_labels']
         return (input_ids, input_mask, segment_ids, predictions, relations)

@@ -59,14 +59,17 @@ Use your own data to pretrain a BERT model.
 from transformers_keras import BertTFRecordDatasetBuilder
 from transformers_keras import BertRunner
 
-dataset_builder = BertTFRecordDatasetBuilder()
+
+dataset_builder = BertTFRecordDatasetBuilder(
+    max_sequence_length=128, record_option='GZIP', train_repeat_count=100, eos_token='T')
 
 model_config = {
+    'max_positions': 128,
     'num_layers': 6,
-    'vocab_size': 100, # Caution: use the correct vocab_size
+    'vocab_size': 21128,
 }
 
-runner = BertRunner(model_config, dataset_builder, model_dir='/tmp/bert')
+runner = BertRunner(model_config, dataset_builder, model_dir='models/bert')
 
 train_files = ['testdata/bert_custom_pretrain.tfrecord']
 runner.train(train_files, epochs=10, callbacks=None)
@@ -89,16 +92,18 @@ from transformers_keras import BertTFRecordDatasetBuilder
 from transformers_keras import AlbertRunner
 
 # ALBERT has the same data format with BERT
-dataset_builder = BertTFRecordDatasetBuilder()
+dataset_builder = BertTFRecordDatasetBuilder(
+    max_sequence_length=128, record_option='GZIP', train_repeat_count=100, eos_token='T')
 
 model_config = {
+    'max_positions': 128,
     'num_layers': 6,
     'num_groups': 1,
     'num_layers_each_group': 1,
-    'vocab_size': 100, # Caution: use the correct vocab_size
+    'vocab_size': 21128,
 }
 
-runner = AlbertRunner(model_config, dataset_builder, model_dir='/tmp/albert')
+runner = AlbertRunner(model_config, dataset_builder, model_dir='models/albert')
 
 train_files = ['testdata/bert_custom_pretrain.tfrecord']
 runner.train(train_files, epochs=10, callbacks=None)

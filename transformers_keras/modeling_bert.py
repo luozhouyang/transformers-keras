@@ -448,8 +448,9 @@ class Bert4PreTraining(tf.keras.layers.Layer):
         self.nsp = BertNSPHead(stddev=stddev, name='NSP')
 
     def call(self, inputs, training=None):
-        # input_ids, token_type_ids, mask = inputs
-        sequence_output, pooled_output, _, all_attention_scores = self.bert(inputs)
+        input_ids, token_type_ids, mask = inputs
+        mask = tf.cast(mask, dtype=tf.float32)
+        sequence_output, pooled_output, _, all_attention_scores = self.bert(inputs=(input_ids, token_type_ids, mask))
         prediction_scores = self.mlm(sequence_output)
         relation_scores = self.nsp(pooled_output)
         return prediction_scores, relation_scores, all_attention_scores
