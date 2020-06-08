@@ -63,6 +63,7 @@ dataset_builder = BertTFRecordDatasetBuilder()
 
 model_config = {
     'num_layers': 6,
+    'vocab_size': 100, # Caution: use the correct vocab_size
 }
 
 runner = BertRunner(model_config, dataset_builder, model_dir='/tmp/bert')
@@ -94,6 +95,7 @@ model_config = {
     'num_layers': 6,
     'num_groups': 1,
     'num_layers_each_group': 1,
+    'vocab_size': 100, # Caution: use the correct vocab_size
 }
 
 runner = AlbertRunner(model_config, dataset_builder, model_dir='/tmp/albert')
