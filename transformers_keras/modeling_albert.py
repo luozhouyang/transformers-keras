@@ -245,7 +245,7 @@ class AlbertModel(tf.keras.layers.Layer):
             'activation': tf.keras.activations.serialize(self.activation),
         }
         base = super(AlbertModel, self).get_config()
-        return dict(list(base.items()) + config.items())
+        return dict(list(base.items()) + list(config.items()))
 
 
 class AlbertMLMHead(tf.keras.layers.Layer):
@@ -346,7 +346,9 @@ class Albert4PreTraining(tf.keras.layers.Layer):
         self.sop = AlbertSOPHead(stddev=self.stddev, **kwargs)
 
     def call(self, inputs, training=None):
-        outputs, pooled_outputs, all_hidden_states, all_attn_weights = self.albert(inputs)
+        input_ids, segment_ids, mask = inputs
+        mask = tf.cast(mask, dtype=tf.float32)
+        outputs, pooled_outputs, all_hidden_states, all_attn_weights = self.albert(inputs=(input_ids, segment_ids, mask))
         mlm_output = self.mlm(outputs)
         sop_output = self.sop(pooled_outputs)
         return mlm_output, sop_output, all_hidden_states, all_attn_weights

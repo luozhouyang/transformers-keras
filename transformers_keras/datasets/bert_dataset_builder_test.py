@@ -2,6 +2,7 @@ import tensorflow as tf
 
 from .bert_dataset_builder import BertTFRecordDatasetBuilder
 
+
 class BertDatasetBuilderTest(tf.test.TestCase):
 
     def testBertTFRecordDatasetBuilder(self):
@@ -19,4 +20,3 @@ class BertDatasetBuilderTest(tf.test.TestCase):
 
 if __name__ == "__main__":
     tf.test.main()
-
