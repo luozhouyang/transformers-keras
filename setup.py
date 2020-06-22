@@ -16,7 +16,6 @@ setuptools.setup(
     include_package_data=True,
     install_requires=[
         "jieba",
-        "matplotlib",
     ],
     extras_require={
         "tf": ["tensorflow>=2.0.1"],
