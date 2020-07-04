@@ -82,6 +82,36 @@ Tips:
 > You can subclass `transformers_keras.tokenizers.BertTFRecordDatasetBuilder` to parse custom tfrecord examples as you need.
 
 
+### Load the pretrained model
+
+You can use an `Adapter` to load pretrained models.
+
+Here is an example.
+
+```python
+from transformers_keras.adapters import BertAdapter
+
+# download the pretrained model and extract it to some path
+PRETRAINED_BERT_MODEL = '/path/to/chinese_L-12_H-768_A-12'
+
+adapter = BertAdapter()
+model = adapter.adapte(PRETRAINED_BERT_MODEL)
+
+print('model inputs: {}'.format(model.inputs))
+print('model outputs: {}'.format(model.outputs))
+
+```
+
+will print:
+
+```bash
+model inputs: [<tf.Tensor 'input_ids:0' shape=(None, 512) dtype=int32>, <tf.Tensor 'segment_ids:0' shape=(None, 512) dtype=int32>, <tf.Tensor 'input_mask:0' shape=(None, 512) dtype=int32>]
+model outputs: [<tf.Tensor 'predictions/Identity:0' shape=(512, 21128) dtype=float32>, <tf.Tensor 'relations/Identity:0' shape=(2,) dtype=float32>]
+```
+
+Then, you can use this model to do anything you want!
+
+
 ## ALBERT
 
 You should process your data to tfrecord format. Modify this script `transformers_keras/utils/bert_tfrecord_custom_generator.py` as you need.
