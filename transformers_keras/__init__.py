@@ -23,7 +23,7 @@ from .losses import MaskedSparseCategoricalCrossentropy
 from .metrics import MaskedSparseCategoricalAccuracy
 from .modeling_albert import AlbertEmbedding, AlbertEncoder, AlbertEncoderGroup, AlbertMLMHead
 from .modeling_albert import AlbertEncoderLayer, Albert4PreTraining, AlbertModel, AlbertSOPHead
-from .modeling_bert import BertEmbedding, BertMLMHead, BertNSPHead, Bert4PreTraining, BertModel
+from .modeling_bert import BertEmbedding, BertMLMHead, BertNSPHead, Bert4PreTraining, Bert
 from .modeling_transformer import PositionalEncoding, TransformerEmbedding
 from .modeling_transformer import TransformerEncoder, TransformerDecoder, Transformer
 from .runners import AlbertRunner, BertRunner, TransformerRunner

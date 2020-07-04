@@ -1,8 +1,17 @@
 import numpy as np
 import tensorflow as tf
 
-from .modeling_bert import BertEmbedding, BertEncoder, BertEncoderLayer, BertIntermediate, BertPooler
-from .modeling_bert import BertModel, BertMLMHead, BertNSPHead, Bert4PreTraining
+from .modeling_bert import (
+    Bert,
+    Bert4PreTraining,
+    BertEmbedding,
+    BertEncoder,
+    BertEncoderLayer,
+    BertIntermediate,
+    BertMLMHead,
+    BertNSPHead,
+    BertPooler,
+)
 
 
 class ModelingBertTest(tf.test.TestCase):
@@ -62,7 +71,7 @@ class ModelingBertTest(tf.test.TestCase):
         self.assertAllEqual([2, pooler.hidden_size], outputs.shape)
 
     def testBertModel(self):
-        model = BertModel(vocab_size=100, num_layers=2)
+        model = Bert(vocab_size=100, num_layers=2)
         input_ids = tf.constant(
             [1, 2, 3, 4, 5, 6, 7, 5, 3, 2, 3, 4, 1, 2, 3, 1, 2, 3, 4, 5, 6, 6, 6, 7, 7, 8, 0, 0, 0, 0, 0, 0],
             shape=(2, 16),
