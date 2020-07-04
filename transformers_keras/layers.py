@@ -29,9 +29,9 @@ class MultiHeadAttention(tf.keras.layers.Layer):
         self.num_attention_heads = num_attention_heads
         assert self.hidden_size % self.num_attention_heads == 0
 
-        self.query_weight = tf.keras.layers.Dense(self.hidden_size)
-        self.key_weight = tf.keras.layers.Dense(self.hidden_size)
-        self.value_weight = tf.keras.layers.Dense(self.hidden_size)
+        self.query_weight = tf.keras.layers.Dense(self.hidden_size, name='query')
+        self.key_weight = tf.keras.layers.Dense(self.hidden_size, name='key')
+        self.value_weight = tf.keras.layers.Dense(self.hidden_size, name='value')
 
         self.attention = ScaledDotProductAttention()
 

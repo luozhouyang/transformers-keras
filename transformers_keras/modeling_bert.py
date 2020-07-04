@@ -89,7 +89,7 @@ class BertIntermediate(tf.keras.layers.Layer):
         self.intermediate_size = intermediate_size
         self.stddev = stddev
         self.dense = tf.keras.layers.Dense(
-            self.intermediate_size, kernel_initializer=initialize(self.stddev)
+            self.intermediate_size, kernel_initializer=initialize(self.stddev), name='dense'
         )
         self.activation = choose_activation(activation)
 
@@ -129,14 +129,18 @@ class BertEncoderLayer(tf.keras.layers.Layer):
         self.epsilon = epsilon
         self.stddev = stddev
 
-        self.attention = MultiHeadAttention(hidden_size=self.hidden_size, num_attention_heads=self.num_attention_heads)
+        self.attention = MultiHeadAttention(
+            hidden_size=self.hidden_size, num_attention_heads=self.num_attention_heads, name='mha')
         self.attn_dropout = tf.keras.layers.Dropout(self.dropout_rate)
-        self.attn_layer_norm = tf.keras.layers.LayerNormalization(epsilon=self.epsilon)
+        self.attn_layer_norm = tf.keras.layers.LayerNormalization(
+            epsilon=self.epsilon, name='attn_layer_norm')
 
-        self.intermediate = BertIntermediate(self.intermediate_size, self.activation, self.stddev)
-        self.inter_dense = tf.keras.layers.Dense(self.hidden_size, kernel_initializer=initialize(self.stddev))
+        self.intermediate = BertIntermediate(self.intermediate_size, self.activation, self.stddev, name='intermediate')
+        self.inter_dense = tf.keras.layers.Dense(
+            self.hidden_size, kernel_initializer=initialize(self.stddev), name='dense')
         self.inter_dropout = tf.keras.layers.Dropout(self.dropout_rate)
-        self.inter_layer_norm = tf.keras.layers.LayerNormalization(epsilon=self.epsilon)
+        self.inter_layer_norm = tf.keras.layers.LayerNormalization(
+            epsilon=self.epsilon, name='inter_layer_norm')
 
     def call(self, inputs, training=None):
         hidden_states, mask = inputs
@@ -196,7 +200,7 @@ class BertEncoder(tf.keras.layers.Layer):
                 dropout_rate=dropout_rate,
                 epsilon=epsilon,
                 stddev=stddev,
-                name='BertEncoderLayer{}'.format(i)
+                name='layer_{}'.format(i)
             ) for i in range(self.num_layers)
         ]
 
@@ -233,7 +237,7 @@ class BertPooler(tf.keras.layers.Layer):
         self.hidden_size = hidden_size
         self.stddev = stddev
         self.dense = tf.keras.layers.Dense(
-            self.hidden_size, kernel_initializer=initialize(self.stddev), activation='tanh')
+            self.hidden_size, kernel_initializer=initialize(self.stddev), activation='tanh', name='dense')
 
     def call(self, inputs, training=None):
         hidden_states = inputs
@@ -250,7 +254,7 @@ class BertPooler(tf.keras.layers.Layer):
         return dict(list(base.items()) + list(config.items()))
 
 
-class BertModel(tf.keras.layers.Layer):
+class Bert(tf.keras.layers.Layer):
 
     def __init__(self,
                  vocab_size=1,
@@ -265,7 +269,7 @@ class BertModel(tf.keras.layers.Layer):
                  stddev=0.02,
                  epsilon=1e-12,
                  **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(name='main', **kwargs)
         assert vocab_size > 0, "vocab_size must greater than 0."
         self.vocab_size = vocab_size
         self.max_positions = max_positions
@@ -287,6 +291,7 @@ class BertModel(tf.keras.layers.Layer):
             dropout_rate=self.dropout_rate,
             stddev=self.stddev,
             epsilon=self.epsilon,
+            name='embedding',
             **kwargs)
 
         self.bert_encoder = BertEncoder(
@@ -298,9 +303,14 @@ class BertModel(tf.keras.layers.Layer):
             dropout_rate=self.dropout_rate,
             epsilon=self.epsilon,
             stddev=self.stddev,
+            name='encoder',
             **kwargs)
 
-        self.bert_pooler = BertPooler(hidden_size=self.hidden_size, stddev=self.stddev, **kwargs)
+        self.bert_pooler = BertPooler(
+            hidden_size=self.hidden_size,
+            stddev=self.stddev,
+            name='pooler',
+            **kwargs)
 
     def call(self, inputs, training=None):
         input_ids, token_type_ids, mask = inputs
@@ -348,8 +358,8 @@ class BertMLMHead(tf.keras.layers.Layer):
         self.epsilon = epsilon
         self.stddev = stddev
 
-        self.dense = tf.keras.layers.Dense(self.hidden_size, kernel_initializer=initialize(stddev))
-        self.layer_norm = tf.keras.layers.LayerNormalization(epsilon=self.epsilon)
+        self.dense = tf.keras.layers.Dense(self.hidden_size, kernel_initializer=initialize(stddev), name='dense')
+        self.layer_norm = tf.keras.layers.LayerNormalization(epsilon=self.epsilon, name='layer_norm')
 
     def build(self, input_shape):
         self.bias = self.add_weight(shape=(self.vocab_size,), initializer='zeros', trainable=True, name='bias')
@@ -382,7 +392,7 @@ class BertNSPHead(tf.keras.layers.Layer):
     def __init__(self, stddev=0.02, **kwargs):
         super().__init__(**kwargs)
         self.stddev = stddev
-        self.classifier = tf.keras.layers.Dense(2, kernel_initializer=initialize(self.stddev))
+        self.classifier = tf.keras.layers.Dense(2, kernel_initializer=initialize(self.stddev), name='dense')
 
     def call(self, inputs, training=None):
         pooled_output = inputs
@@ -412,7 +422,7 @@ class Bert4PreTraining(tf.keras.layers.Layer):
                  epsilon=1e-12,
                  stddev=0.02,
                  **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(name='bert', **kwargs)
         assert vocab_size > 0, "vocab_size must greater than 0."
         self.vocab_size = vocab_size
         self.max_positions = max_positions
@@ -426,7 +436,7 @@ class Bert4PreTraining(tf.keras.layers.Layer):
         self.epsilon = epsilon
         self.stddev = stddev
 
-        self.bert = BertModel(
+        self.bert = Bert(
             vocab_size=self.vocab_size,
             max_positions=self.max_positions,
             hidden_size=self.hidden_size,
@@ -437,15 +447,18 @@ class Bert4PreTraining(tf.keras.layers.Layer):
             activation=self.activation,
             dropout_rate=self.dropout_rate,
             stddev=self.stddev,
-            epsilon=self.epsilon)
+            epsilon=self.epsilon,
+            **kwargs)
         self.mlm = BertMLMHead(
             vocab_size=self.vocab_size,
             embedding=self.bert.bert_embedding,
             hidden_size=self.hidden_size,
             activation=self.activation,
             epsilon=self.epsilon,
-            stddev=self.stddev)
-        self.nsp = BertNSPHead(stddev=stddev, name='NSP')
+            stddev=self.stddev,
+            name='mlm',
+            **kwargs)
+        self.nsp = BertNSPHead(stddev=stddev, name='nsp', **kwargs)
 
     def call(self, inputs, training=None):
         input_ids, token_type_ids, mask = inputs

@@ -36,4 +36,7 @@ jobs:
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --ignore=F401,F841,W503 --statistics
     - name: Test with pytest
       run: |
-        pytest --ignore transformers_keras/utils --ignore transformers_keras/runners_test.py
+        pytest \
+          --ignore transformers_keras/utils \
+          --ignore transformers_keras/runners_test.py \
+          --ignore transformers_keras/adapters
