@@ -6,17 +6,54 @@ import tensorflow as tf
 
 
 class AbstractStrategy(abc.ABC):
+    """Pretrained model load strategy."""
 
     def mapping_config(self, pretrained_config_file):
+        """Convert pretrained configs to model configs.
+
+        Args:
+            pretrained_config_file: File path of pretrained model's config
+
+        Returns:
+            A python dict, model config
+        """
         raise NotImplementedError()
 
     def build_model(self, model_config):
+        """Build and compile model accroding to model config.
+
+        Args:
+            model_config: A python dict, model's config
+
+        Returns:
+            A keras model, instance of `tf.keras.Model`, compiled.
+        """
         raise NotImplementedError()
 
     def mapping_variables(self, model_config, model, ckpt):
+        """Mapping pretrained variables to model's variables.
+
+        Args:
+            model_config: A python dict, model's config
+            model: A keras model, compiled
+            ckpt: Python str, pretrained checkpoint model.
+
+        Returns:
+            Python dict, variables' name mapping
+        """
         raise NotImplementedError()
 
     def zip_weights(self, model, ckpt, variables_mapping):
+        """Zip weights and values.
+
+        Args:
+            model: A keras model, compiled
+            ckpt: Python str, pretrained checkpoint model
+            variables_mapping: Python dict, variables' name mapping
+
+        Returns:
+            A List of tuple (model_weight, pretrained_weight)
+        """
         raise NotImplementedError()
 
 
@@ -43,8 +80,14 @@ class AbstractAdapter(abc.ABC):
 
 
 class PretrainedModelAdapter(AbstractAdapter):
+    """Base class of pretrain models' adapter."""
 
     def __init__(self, strategy: AbstractStrategy):
+        """Init.
+
+        Args:
+            strategy: An instance of `AbstractStrategy`
+        """
         super().__init__()
         self.strategy = strategy
 
