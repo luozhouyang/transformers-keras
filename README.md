@@ -182,7 +182,7 @@ Here is an example.
 from transformers_keras.adapters import AlbertAdapter
 
 # download the pretrained model and extract it to some path
-PRETRAINED_BERT_MODEL = '/path/to/chinese_L-12_H-768_A-12'
+PRETRAINED_BERT_MODEL = '/path/to/zh_albert_large'
 
 adapter = AlbertAdapter(strategy='zh-albert-large')
 model, vocab_file = adapter.adapte(PRETRAINED_BERT_MODEL)
