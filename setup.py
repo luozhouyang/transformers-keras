@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="transformers_keras",
-    version="0.1.2",
+    version="0.1.3",
     description="Transformer-based models implemented in tensorflow 2.x(Keras)",
     long_description=long_description,
     long_description_content_type="text/markdown",

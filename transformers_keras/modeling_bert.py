@@ -37,7 +37,7 @@ class BertEmbedding(tf.keras.layers.Layer):
             embeddings_initializer=initialize(self.stddev),
             name='token_type_embedding'
         )
-        self.layer_norm = tf.keras.layers.LayerNormalization(epsilon=self.epsilon)
+        self.layer_norm = tf.keras.layers.LayerNormalization(epsilon=self.epsilon, name='layer_norm')
         self.dropout = tf.keras.layers.Dropout(self.dropout_rate)
 
     def build(self, input_shape):

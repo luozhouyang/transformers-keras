@@ -35,7 +35,7 @@ class MultiHeadAttention(tf.keras.layers.Layer):
 
         self.attention = ScaledDotProductAttention()
 
-        self.dense = tf.keras.layers.Dense(self.hidden_size)
+        self.dense = tf.keras.layers.Dense(self.hidden_size, name='dense')
 
     def _split_heads(self, x, batch_size):
         x = tf.reshape(x, (batch_size, -1, self.num_attention_heads, self.hidden_size // self.num_attention_heads))

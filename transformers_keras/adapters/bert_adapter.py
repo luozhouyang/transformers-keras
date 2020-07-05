@@ -7,31 +7,22 @@ import tensorflow as tf
 from transformers_keras import build_pretraining_bert_model
 from transformers_keras.modeling_bert import Bert4PreTraining
 
-from .abstract_adapter import AbstractAdapter
+from .abstract_adapter import AbstractAdapter, AbstractStrategy, PretrainedModelAdapter
 
 
-class BertAdapter(AbstractAdapter):
+def choose_strategy(strategy):
+    if isinstance(strategy, AbstractStrategy):
+        return strategy
+    if 'chinese-bert-base' == strategy:
+        return ChineseBertBaseStrategy()
+    else:
+        raise ValueError('Invalid strategy: {}'.format(strategy))
 
-    def __init__(self):
-        super().__init__()
 
-    def _parse_files(self, pretrain_model_dir):
-        config_file, ckpt, vocab = None, None, None
-        if not os.path.exists(pretrain_model_dir):
-            logging.info('pretrain model dir: {} is not exists.'.format(pretrain_model_dir))
-            return
-        for f in os.listdir(pretrain_model_dir):
-            if str(f).endswith('config.json'):
-                config_file = os.path.join(pretrain_model_dir, f)
-            if 'vocab' in str(f):
-                vocab = os.path.join(pretrain_model_dir, f)
-            if 'ckpt' in str(f):
-                n = '.'.join(str(f).split('.')[:-1])
-                ckpt = os.path.join(pretrain_model_dir, n)
-        return config_file, ckpt, vocab
+class ChineseBertBaseStrategy(AbstractStrategy):
 
-    def _map_model_config(self, pretrain_config_file):
-        with open(pretrain_config_file, mode='rt', encoding='utf8') as fin:
+    def mapping_config(self, pretrained_config_file):
+        with open(pretrained_config_file, mode='rt', encoding='utf8') as fin:
             config = json.load(fin)
 
         model_config = {
@@ -48,13 +39,11 @@ class BertAdapter(AbstractAdapter):
         }
         return model_config
 
-    def _variable_loader(self, ckpt):
+    def build_model(self, model_config):
+        model = build_pretraining_bert_model(model_config)
+        return model
 
-        def _loader(name):
-            return tf.train.load_variable(ckpt, name)
-        return _loader
-
-    def _build_variables_mapping(self, num_layers):
+    def mapping_variables(self, model_config, model, ckpt):
         # model variable name -> pretrained bert variable name
         m = {
             'bert/main/embedding/weight:0': 'bert/embeddings/word_embeddings',
@@ -64,7 +53,7 @@ class BertAdapter(AbstractAdapter):
             'bert/main/embedding/layer_normalization/beta:0': 'bert/embeddings/LayerNorm/beta',
         }
 
-        for i in range(num_layers):
+        for i in range(model_config['num_layers']):
             # attention
             for n in ['query', 'key', 'value']:
                 k = 'bert/main/encoder/layer_{}/mha/{}/kernel:0'.format(i, n)
@@ -126,22 +115,12 @@ class BertAdapter(AbstractAdapter):
 
         return m
 
-    def adapte(self, pretrain_model_dir, **kwargs):
-        config, ckpt, vocab = self._parse_files(pretrain_model_dir)
-
-        model_config = self._map_model_config(config)
-        model = build_pretraining_bert_model(model_config)
-
-        loader = self._variable_loader(ckpt)
-
+    def zip_weights(self, model, ckpt, variables_mapping):
         weights, values, names = [], [], []
-        names_mapping = self._build_variables_mapping(model_config['num_layers'])
         for w in model.trainable_weights:
-            if w.name not in names_mapping:
-                continue
             names.append(w.name)
             weights.append(w)
-            v = loader(names_mapping[w.name])
+            v = tf.train.load_variable(ckpt, variables_mapping[w.name])
             if w.name == 'bert/nsp/dense/kernel:0':
                 v = v.T
             values.append(v)
@@ -149,6 +128,11 @@ class BertAdapter(AbstractAdapter):
         logging.info('weights will be loadded from pretrained checkpoint: \n\t{}'.format('\n\t'.join(names)))
 
         mapped_values = zip(weights, values)
-        tf.keras.backend.batch_set_value(mapped_values)
+        return mapped_values
 
-        return model
+
+class BertAdapter(PretrainedModelAdapter):
+
+    def __init__(self, strategy='chinese-bert-base'):
+        self.strategy = choose_strategy(strategy)
+        super(BertAdapter, self).__init__(strategy=self.strategy)

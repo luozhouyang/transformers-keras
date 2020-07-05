@@ -14,6 +14,7 @@ class AlbertEmbedding(BertEmbedding):
             vocab_size=vocab_size,
             max_positions=max_positions, hidden_size=embedding_size, type_vocab_size=type_vocab_size,
             dropout_rate=dropout_rate, stddev=stddev, epsilon=epsilon,
+            name='embedding',
             **kwargs)
         # embedding_size is not hidden_size in ALBERT
         self.embedding_size = embedding_size
@@ -66,7 +67,7 @@ class AlbertEncoderGroup(tf.keras.layers.Layer):
                 dropout_rate=self.dropout_rate,
                 epsilon=self.epsilon,
                 stddev=self.stddev,
-                name='AlbertEncoderLayer{}'.format(i)
+                name='layer_{}'.format(i)
             ) for i in range(self.num_layers_each_group)
         ]
 
@@ -110,7 +111,7 @@ class AlbertEncoder(tf.keras.layers.Layer):
                  epsilon=1e-12,
                  stddev=0.02,
                  **kwargs):
-        super(AlbertEncoder, self).__init__(**kwargs)
+        super(AlbertEncoder, self).__init__(name='encoder', **kwargs)
         self.num_layers = num_layers  # num of encoder layers
         self.num_groups = num_groups  # num of encoder groups
         self.num_layers_each_group = num_layers_each_group
@@ -137,7 +138,7 @@ class AlbertEncoder(tf.keras.layers.Layer):
                 dropout_rate=self.dropout_rate,
                 epsilon=self.epsilon,
                 stddev=self.stddev,
-                name='AlbertEncoderGroup{}'.format(i),
+                name='group_{}'.format(i),
                 **kwargs) for i in range(self.num_groups)
         ]
 
@@ -181,7 +182,7 @@ class AlbertModel(tf.keras.layers.Layer):
                  num_layers_each_group=1, hidden_size=768, num_attention_heads=8, intermediate_size=3072,
                  activation='gelu', dropout_rate=0.2, epsilon=1e-12, stddev=0.02,
                  **kwargs):
-        super(AlbertModel, self).__init__(**kwargs)
+        super(AlbertModel, self).__init__(name='main', **kwargs)
         assert vocab_size > 0, "vocab_size must greater than 0."
         self.vocab_size = vocab_size
         self.max_positions = max_positions
@@ -215,7 +216,7 @@ class AlbertModel(tf.keras.layers.Layer):
             self.hidden_size,
             kernel_initializer=initialize(self.stddev),
             activation='tanh',
-            name='AlbertPooler'
+            name='pooler'
         )
 
     def call(self, inputs, training=None):
@@ -258,11 +259,11 @@ class AlbertMLMHead(tf.keras.layers.Layer):
         self.activation = choose_activation(activation)
         self.stddev = stddev
         self.epsilon = epsilon
-        self.dense = tf.keras.layers.Dense(self.decoder.embedding_size, kernel_initializer=initialize(self.stddev))
-        self.layer_norm = tf.keras.layers.LayerNormalization(epsilon=self.epsilon)
+        self.dense = tf.keras.layers.Dense(
+            self.decoder.embedding_size, kernel_initializer=initialize(self.stddev), name='dense')
+        self.layer_norm = tf.keras.layers.LayerNormalization(epsilon=self.epsilon, name='layer_norm')
 
     def build(self, input_shape):
-        self.bias = self.add_weight(shape=(self.vocab_size,), initializer='zeros', trainable=True, name='bias')
         self.decoder_bias = self.add_weight(
             shape=(self.vocab_size,),
             initializer='zeros',
@@ -275,7 +276,6 @@ class AlbertMLMHead(tf.keras.layers.Layer):
         pooled_output = inputs
         output = self.layer_norm(self.activation(self.dense(pooled_output)))
         output = self.decoder(output, mode='linear') + self.decoder_bias
-        output = output + self.bias
         return output
 
     def get_config(self):
@@ -295,7 +295,8 @@ class AlbertSOPHead(tf.keras.layers.Layer):
         super(AlbertSOPHead, self).__init__(**kwargs)
         self.num_class = 2
         self.stddev = stddev
-        self.classifier = tf.keras.layers.Dense(self.num_class, kernel_initializer=initialize(self.stddev))
+        self.classifier = tf.keras.layers.Dense(
+            self.num_class, kernel_initializer=initialize(self.stddev), name='dense')
 
     def call(self, inputs, training=None):
         return self.classifier(inputs)
@@ -315,7 +316,7 @@ class Albert4PreTraining(tf.keras.layers.Layer):
                  vocab_size=-1, max_positions=512, embedding_size=128, type_vocab_size=2, num_layers=12,
                  num_groups=1, num_layers_each_group=1, hidden_size=768, num_attention_heads=8, intermediate_size=3072,
                  activation='gelu', dropout_rate=0.2, epsilon=1e-12, stddev=0.02, **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(name='albert', **kwargs)
         assert vocab_size > 0, "vocab_size must greater than 0."
         self.vocab_size = vocab_size
         self.max_positions = max_positions
@@ -342,13 +343,15 @@ class Albert4PreTraining(tf.keras.layers.Layer):
         self.mlm = AlbertMLMHead(
             vocab_size=self.vocab_size, embedding=self.albert.embedding, activation=self.activation,
             epsilon=self.epsilon, stddev=self.stddev,
+            name='mlm',
             **kwargs)
-        self.sop = AlbertSOPHead(stddev=self.stddev, **kwargs)
+        self.sop = AlbertSOPHead(stddev=self.stddev, name='sop', **kwargs)
 
     def call(self, inputs, training=None):
         input_ids, segment_ids, mask = inputs
         mask = tf.cast(mask, dtype=tf.float32)
-        outputs, pooled_outputs, all_hidden_states, all_attn_weights = self.albert(inputs=(input_ids, segment_ids, mask))
+        outputs, pooled_outputs, all_hidden_states, all_attn_weights = self.albert(
+            inputs=(input_ids, segment_ids, mask))
         mlm_output = self.mlm(outputs)
         sop_output = self.sop(pooled_outputs)
         return mlm_output, sop_output, all_hidden_states, all_attn_weights
