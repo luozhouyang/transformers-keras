@@ -37,7 +37,7 @@ from .modeling_transformer import PositionalEncoding, Transformer, TransformerDe
 from .runners import AlbertRunner, BertRunner, TransformerRunner
 
 __name__ = 'transformers_keras'
-r_version__ = '0.1.2'
+r_version__ = '0.1.3'
 
 logging.basicConfig(format="%(asctime)s %(levelname)s %(filename)15s %(lineno)4d] %(message)s", level=logging.INFO)
 
