@@ -8,10 +8,15 @@ class ScaledDotProductAttention(tf.keras.layers.Layer):
 
     def call(self, inputs, training=None):
         query, key, value, mask = inputs
+        query = tf.cast(query, dtype=self.dtype)
+        key = tf.cast(key, dtype=self.dtype)
+        value = tf.cast(value, dtype=self.dtype)
+
         score = tf.matmul(query, key, transpose_b=True)
         dk = tf.cast(tf.shape(query)[-1], tf.float32)
         score = score / tf.math.sqrt(dk)
         if mask is not None:
+            mask = tf.cast(mask, dtype=self.dtype)
             score += mask * -10000.0
         attn_weights = tf.nn.softmax(score, axis=-1)
         context = tf.matmul(attn_weights, value)
