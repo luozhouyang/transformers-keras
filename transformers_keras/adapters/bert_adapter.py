@@ -49,8 +49,8 @@ class ChineseBertBaseStrategy(AbstractStrategy):
             'bert/main/embedding/weight:0': 'bert/embeddings/word_embeddings',
             'bert/main/embedding/position_embedding/embeddings:0': 'bert/embeddings/position_embeddings',
             'bert/main/embedding/token_type_embedding/embeddings:0': 'bert/embeddings/token_type_embeddings',
-            'bert/main/embedding/layer_normalization/gamma:0': 'bert/embeddings/LayerNorm/gamma',
-            'bert/main/embedding/layer_normalization/beta:0': 'bert/embeddings/LayerNorm/beta',
+            'bert/main/embedding/layer_norm/gamma:0': 'bert/embeddings/LayerNorm/gamma',
+            'bert/main/embedding/layer_norm/beta:0': 'bert/embeddings/LayerNorm/beta',
         }
 
         for i in range(model_config['num_layers']):
