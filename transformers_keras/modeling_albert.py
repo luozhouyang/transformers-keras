@@ -1,3 +1,7 @@
+import json
+import logging
+import os
+
 import tensorflow as tf
 
 from .modeling_bert import BertEmbedding, BertEncoderLayer
@@ -175,14 +179,14 @@ class AlbertEncoder(tf.keras.layers.Layer):
         return dict(list(base.items()) + list(config.items()))
 
 
-class AlbertModel(tf.keras.layers.Layer):
+class Albert(tf.keras.layers.Layer):
 
     def __init__(self,
                  vocab_size=-1, max_positions=512, embedding_size=128, type_vocab_size=2, num_layers=12, num_groups=1,
                  num_layers_each_group=1, hidden_size=768, num_attention_heads=8, intermediate_size=3072,
                  activation='gelu', dropout_rate=0.2, epsilon=1e-12, stddev=0.02,
                  **kwargs):
-        super(AlbertModel, self).__init__(name='main', **kwargs)
+        super(Albert, self).__init__(name='main', **kwargs)
         assert vocab_size > 0, "vocab_size must greater than 0."
         self.vocab_size = vocab_size
         self.max_positions = max_positions
@@ -245,7 +249,7 @@ class AlbertModel(tf.keras.layers.Layer):
             'intermediate_size': self.intermediate_size,
             'activation': tf.keras.activations.serialize(self.activation),
         }
-        base = super(AlbertModel, self).get_config()
+        base = super(Albert, self).get_config()
         return dict(list(base.items()) + list(config.items()))
 
 
@@ -310,68 +314,247 @@ class AlbertSOPHead(tf.keras.layers.Layer):
         return dict(list(base.items()) + list(config.items()))
 
 
-class Albert4PreTraining(tf.keras.layers.Layer):
+class AlbertModel(tf.keras.Model):
 
     def __init__(self,
                  vocab_size=-1, max_positions=512, embedding_size=128, type_vocab_size=2, num_layers=12,
                  num_groups=1, num_layers_each_group=1, hidden_size=768, num_attention_heads=8, intermediate_size=3072,
                  activation='gelu', dropout_rate=0.2, epsilon=1e-12, stddev=0.02, **kwargs):
-        super().__init__(name='albert', **kwargs)
-        assert vocab_size > 0, "vocab_size must greater than 0."
-        self.vocab_size = vocab_size
+        super(AlbertModel, self).__init__(name='albert', **kwargs)
         self.max_positions = max_positions
-        self.embedding_size = embedding_size
-        self.type_vocab_size = type_vocab_size
-        self.num_layers = num_layers  # num of encoder layers
-        self.num_groups = num_groups  # num of encoder groups
-        self.num_layers_each_group = num_layers_each_group
-        self.hidden_size = hidden_size
-        self.num_attention_heads = num_attention_heads
-        self.intermediate_size = intermediate_size
-        self.activation = choose_activation(activation)
-        self.dropout_rate = dropout_rate
-        self.epsilon = epsilon
-        self.stddev = stddev
 
-        self.albert = AlbertModel(
-            vocab_size, max_positions=self.max_positions, embedding_size=self.embedding_size,
-            type_vocab_size=self.type_vocab_size, num_layers=self.num_layers, num_groups=self.num_groups,
-            num_layers_each_group=self.num_layers_each_group, hidden_size=self.hidden_size,
-            num_attention_heads=self.num_attention_heads, intermediate_size=self.intermediate_size,
-            activation=self.activation, dropout_rate=self.dropout_rate, epsilon=self.epsilon, stddev=self.stddev,
+        self.albert = Albert(
+            vocab_size, max_positions=max_positions, embedding_size=embedding_size,
+            type_vocab_size=type_vocab_size, num_layers=num_layers, num_groups=num_groups,
+            num_layers_each_group=num_layers_each_group, hidden_size=hidden_size,
+            num_attention_heads=num_attention_heads, intermediate_size=intermediate_size,
+            activation=activation, dropout_rate=dropout_rate, epsilon=epsilon, stddev=stddev,
             **kwargs)
-        self.mlm = AlbertMLMHead(
-            vocab_size=self.vocab_size, embedding=self.albert.embedding, activation=self.activation,
-            epsilon=self.epsilon, stddev=self.stddev,
-            name='mlm',
-            **kwargs)
-        self.sop = AlbertSOPHead(stddev=self.stddev, name='sop', **kwargs)
+
+    def dummy_inputs(self):
+        input_ids = tf.constant([0] * self.max_positions, dtype=tf.int64, shape=(1, self.max_positions))
+        segment_ids = tf.constant([0] * self.max_positions, dtype=tf.int64, shape=(1, self.max_positions))
+        mask = tf.constant([0] * self.max_positions, dtype=tf.int64, shape=(1, self.max_positions))
+        return (input_ids, segment_ids, mask)
+
+    @classmethod
+    def from_pretrained(cls, pretrained_model_dir, **kwargs):
+        config_file, ckpt, _ = _parse_files(pretrained_model_dir)
+        model_config = mapping_config(config_file)
+        name_mapping = mapping_variables(model_config, load_mlm=False, load_sop=False)
+        model = cls(**model_config)
+        model(model.dummy_inputs())
+        weights_values = zip_weights(model, ckpt, name_mapping)
+        tf.keras.backend.batch_set_value(weights_values)
+        return model
 
     def call(self, inputs, training=None):
-        input_ids, segment_ids, mask = inputs
-        mask = tf.cast(mask, dtype=tf.float32)
-        outputs, pooled_outputs, all_hidden_states, all_attn_weights = self.albert(
-            inputs=(input_ids, segment_ids, mask))
-        mlm_output = self.mlm(outputs)
-        sop_output = self.sop(pooled_outputs)
-        return mlm_output, sop_output, all_hidden_states, all_attn_weights
+        if len(inputs) == 1:
+            input_ids, token_type_ids, mask = inputs, None, None
+        if len(inputs) == 2:
+            input_ids, token_type_ids, mask = inputs[0], inputs[1], None
+        if len(inputs) >= 3:
+            input_ids, token_type_ids, mask = inputs[0], inputs[1], inputs[2]
 
-    def get_config(self):
-        config = {
-            'vocab_size': self.vocab_size,
-            'max_positions': self.max_positions,
-            'hidden_size': self.hidden_size,
-            'embedding_size': self.embedding_size,
-            'type_vocab_size': self.type_vocab_size,
-            'dropout_rate': self.dropout_rate,
-            'epsilon': self.epsilon,
-            'stddev': self.stddev,
-            'num_layers': self.num_layers,
-            'num_groups': self.num_groups,
-            'num_layers_each_group': self.num_layers_each_group,
-            'num_attention_heads': self.num_attention_heads,
-            'intermediate_size': self.intermediate_size,
-            'activation': tf.keras.activations.serialize(self.activation),
-        }
-        base = super().get_config()
-        return dict(list(base.items()) + list(config.items()))
+        if token_type_ids is None:
+            token_type_ids = tf.fill(input_ids, 0)
+        if mask is None:
+            mask = tf.fill(input_ids, 0)
+
+        inputs = (input_ids, token_type_ids, mask)
+        seqeuence_outputs, pooled_outputs, _, _ = self.albert(inputs)
+        return seqeuence_outputs, pooled_outputs
+
+
+class AlbertForPretrainingModel(tf.keras.Model):
+
+    def __init__(self,
+                 vocab_size=-1, max_positions=512, embedding_size=128, type_vocab_size=2, num_layers=12,
+                 num_groups=1, num_layers_each_group=1, hidden_size=768, num_attention_heads=8, intermediate_size=3072,
+                 activation='gelu', dropout_rate=0.2, epsilon=1e-12, stddev=0.02, **kwargs):
+        super(AlbertForPretrainingModel, self).__init__(name='albert', **kwargs)
+        self.max_positions = max_positions
+
+        self.albert = Albert(
+            vocab_size, max_positions=max_positions, embedding_size=embedding_size,
+            type_vocab_size=type_vocab_size, num_layers=num_layers, num_groups=num_groups,
+            num_layers_each_group=num_layers_each_group, hidden_size=hidden_size,
+            num_attention_heads=num_attention_heads, intermediate_size=intermediate_size,
+            activation=activation, dropout_rate=dropout_rate, epsilon=epsilon, stddev=stddev,
+            **kwargs)
+        self.mlm = AlbertMLMHead(
+            vocab_size=vocab_size, embedding=self.albert.embedding, activation=activation,
+            epsilon=epsilon, stddev=stddev,
+            name='mlm',
+            **kwargs)
+        self.sop = AlbertSOPHead(stddev=stddev, name='sop', **kwargs)
+
+    def dummy_inputs(self):
+        input_ids = tf.constant([0] * self.max_positions, dtype=tf.int64, shape=(1, self.max_positions))
+        segment_ids = tf.constant([0] * self.max_positions, dtype=tf.int64, shape=(1, self.max_positions))
+        mask = tf.constant([0] * self.max_positions, dtype=tf.int64, shape=(1, self.max_positions))
+        return (input_ids, segment_ids, mask)
+
+    @classmethod
+    def from_pretrained(cls, pretrained_model_dir, **kwargs):
+        config_file, ckpt, _ = _parse_files(pretrained_model_dir)
+        model_config = mapping_config(config_file)
+        name_mapping = mapping_variables(model_config, load_mlm=True, load_sop=True)
+        model = cls(**model_config)
+        model(model.dummy_inputs())
+        weights_values = zip_weights(model, ckpt, name_mapping)
+        tf.keras.backend.batch_set_value(weights_values)
+        return model
+
+    def call(self, inputs, training=None):
+        if len(inputs) == 1:
+            input_ids, token_type_ids, mask = inputs, None, None
+        if len(inputs) == 2:
+            input_ids, token_type_ids, mask = inputs[0], inputs[1], None
+        if len(inputs) >= 3:
+            input_ids, token_type_ids, mask = inputs[0], inputs[1], inputs[2]
+
+        if token_type_ids is None:
+            token_type_ids = tf.fill(input_ids, 0)
+        if mask is None:
+            mask = tf.fill(input_ids, 0)
+
+        inputs = (input_ids, token_type_ids, mask)
+        seqeuence_outputs, pooled_outputs, _, _ = self.albert(inputs)
+        predictions = self.mlm(seqeuence_outputs)
+        relations = self.sop(pooled_outputs)
+        return predictions, relations
+
+
+def _parse_files(pretrain_model_dir):
+    config_file, ckpt, vocab = None, None, None
+    if not os.path.exists(pretrain_model_dir):
+        logging.info('pretrain model dir: {} is not exists.'.format(pretrain_model_dir))
+        return
+    for f in os.listdir(pretrain_model_dir):
+        if str(f).endswith('config.json'):
+            config_file = os.path.join(pretrain_model_dir, f)
+        if 'vocab' in str(f):
+            vocab = os.path.join(pretrain_model_dir, f)
+        if 'ckpt' in str(f):
+            n = '.'.join(str(f).split('.')[:-1])
+            ckpt = os.path.join(pretrain_model_dir, n)
+    return config_file, ckpt, vocab
+
+
+def mapping_config(pretrained_config_file):
+    with open(pretrained_config_file, mode='rt', encoding='utf8') as fin:
+        config = json.load(fin)
+
+    model_config = {
+        'vocab_size': config['vocab_size'],
+        'max_positions': config['max_position_embeddings'],
+        'embedding_size': config['embedding_size'],
+        'type_vocab_size': config['type_vocab_size'],
+        'num_layers': config['num_hidden_layers'],
+        'num_groups': config['num_hidden_groups'],
+        'num_layers_each_group': config['inner_group_num'],
+        'hidden_size': config['hidden_size'],
+        'num_attention_heads': config['num_attention_heads'],
+        'intermediate_size': config['intermediate_size'],
+        'activation': config['hidden_act'],
+        'dropout_rate': config['hidden_dropout_prob'],
+        'stddev': config['initializer_range'],
+    }
+    return model_config
+
+
+def mapping_variables(model_config, load_mlm=False, load_sop=False):
+    m = {
+        'albert/main/embedding/weight:0': 'bert/embeddings/word_embeddings',
+        'albert/main/embedding/position_embedding/embeddings:0': 'bert/embeddings/position_embeddings',
+        'albert/main/embedding/token_type_embedding/embeddings:0': 'bert/embeddings/token_type_embeddings',
+        'albert/main/embedding/layer_norm/gamma:0': 'bert/embeddings/LayerNorm/gamma',
+        'albert/main/embedding/layer_norm/beta:0': 'bert/embeddings/LayerNorm/beta'
+    }
+
+    for n in ['kernel', 'bias']:
+        k = 'albert/main/encoder/embedding_mapping/{}:0'.format(n)
+        v = 'bert/encoder/embedding_hidden_mapping_in/{}'.format(n)
+        m[k] = v
+
+    for group in range(model_config['num_groups']):
+        for layer in range(model_config['num_layers_each_group']):
+            k_prefix = 'albert/main/encoder/group_{}/layer_{}/'.format(group, layer)
+            v_prefix = 'bert/encoder/transformer/group_{}/inner_group_{}/'.format(group, layer)
+
+            # attention
+            for n in ['query', 'key', 'value']:
+                for x in ['kernel', 'bias']:
+                    k = k_prefix + 'mha/{}/{}:0'.format(n, x)
+                    v = v_prefix + 'attention_1/self/{}/{}'.format(n, x)
+                    m[k] = v
+
+            # attention dense
+            for n in ['kernel', 'bias']:
+                k = k_prefix + 'mha/dense/{}:0'.format(n)
+                v = v_prefix + 'attention_1/output/dense/{}'.format(n)
+                m[k] = v
+
+            # attention layer norm
+            for n in ['gamma', 'beta']:
+                k = k_prefix + 'attn_layer_norm/{}:0'.format(n)
+                v = v_prefix + 'LayerNorm/{}'.format(n)
+                m[k] = v
+
+            # intermediate
+            for n in ['kernel', 'bias']:
+                k = k_prefix + 'intermediate/dense/{}:0'.format(n)
+                v = v_prefix + 'ffn_1/intermediate/dense/{}'.format(n)
+                m[k] = v
+                k = k_prefix + 'dense/{}:0'.format(n)
+                v = v_prefix + 'ffn_1/intermediate/output/dense/{}'.format(n)
+                m[k] = v
+
+            # layer norm
+            for n in ['gamma', 'beta']:
+                k = k_prefix + 'inter_layer_norm/{}:0'.format(n)
+                v = v_prefix + 'LayerNorm_1/{}'.format(n)
+                m[k] = v
+
+    # pooler
+    for n in ['kernel', 'bias']:
+        k = 'albert/main/pooler/{}:0'.format(n)
+        v = 'bert/pooler/dense/{}'.format(n)
+        m[k] = v
+
+    # mlm
+    if load_mlm:
+        for n in ['kernel', 'bias']:
+            k = 'albert/mlm/dense/{}:0'.format(n)
+            v = 'cls/predictions/transform/dense/{}'.format(n)
+            m[k] = v
+
+        for n in ['gamma', 'beta']:
+            k = 'albert/mlm/layer_norm/{}:0'.format(n)
+            v = 'cls/predictions/transform/LayerNorm/{}'.format(n)
+            m[k] = v
+
+        m['albert/mlm/decoder/bias:0'] = 'cls/predictions/output_bias'
+
+    if load_sop:
+        m['albert/sop/dense/kernel:0'] = 'cls/seq_relationship/output_weights'
+        m['albert/sop/dense/bias:0'] = 'cls/seq_relationship/output_bias'
+
+    return m
+
+
+def zip_weights(model, ckpt, variables_mapping):
+    weights, values, names = [], [], []
+    for w in model.trainable_weights:
+        names.append(w.name)
+        weights.append(w)
+        v = tf.train.load_variable(ckpt, variables_mapping[w.name])
+        if w.name == 'albert/sop/dense/kernel:0':
+            v = v.T
+        values.append(v)
+
+    logging.info('weights will be loadded from pretrained checkpoint: \n\t{}'.format('\n\t'.join(names)))
+
+    mapped_values = zip(weights, values)
+    return mapped_values

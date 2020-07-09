@@ -1,8 +1,17 @@
-import tensorflow as tf
 import numpy as np
+import tensorflow as tf
 
-from .modeling_albert import AlbertEmbedding, AlbertEncoderLayer, AlbertEncoderGroup, AlbertEncoder
-from .modeling_albert import AlbertMLMHead, AlbertSOPHead, AlbertModel, Albert4PreTraining
+from .modeling_albert import (
+    Albert,
+    AlbertEmbedding,
+    AlbertEncoder,
+    AlbertEncoderGroup,
+    AlbertEncoderLayer,
+    AlbertForPretrainingModel,
+    AlbertMLMHead,
+    AlbertModel,
+    AlbertSOPHead,
+)
 
 
 class ModelingAlbertTest(tf.test.TestCase):
@@ -70,7 +79,7 @@ class ModelingAlbertTest(tf.test.TestCase):
         for attention in all_attn_weights:
             self.assertAllEqual([2, 8, 16, 16], attention.shape)
 
-    def testAlbertModel(self):
+    def testAlbert(self):
         input_ids = tf.constant(
             [1, 2, 3, 4, 5, 6, 7, 5, 3, 2, 3, 4, 1, 2, 3, 1, 2, 3, 4, 5, 6, 6, 6, 7, 7, 8, 0, 0, 0, 0, 0, 0],
             shape=(2, 16),
@@ -82,8 +91,8 @@ class ModelingAlbertTest(tf.test.TestCase):
             [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1],
              [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1]], dtype=np.float32)  # input_mask
 
-        model = AlbertModel(vocab_size=100, hidden_size=768,
-                            num_layers=4, num_groups=1, num_layers_each_group=1)
+        model = Albert(vocab_size=100, hidden_size=768,
+                       num_layers=4, num_groups=1, num_layers_each_group=1)
         outputs, pooled_outputs, all_states, all_attn_weights = model(inputs=(input_ids, token_type_ids, input_mask))
         self.assertAllEqual([2, 16, 768], outputs.shape)
         self.assertAllEqual([2, 768], pooled_outputs.shape)
@@ -109,7 +118,7 @@ class ModelingAlbertTest(tf.test.TestCase):
         outputs = sop(inputs)
         self.assertAllEqual([2, 2], outputs.shape)
 
-    def testAlbert4PreTraining(self):
+    def testAlberModel(self):
         input_ids = tf.constant(
             [1, 2, 3, 4, 5, 6, 7, 5, 3, 2, 3, 4, 1, 2, 3, 1, 2, 3, 4, 5, 6, 6, 6, 7, 7, 8, 0, 0, 0, 0, 0, 0],
             shape=(2, 16),
@@ -121,18 +130,62 @@ class ModelingAlbertTest(tf.test.TestCase):
             [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1],
              [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1]], dtype=np.float32)  # input_mask
 
-        model = Albert4PreTraining(vocab_size=100, num_layers=4, num_groups=1, num_layers_each_group=1)
-        outputs, pooled_outputs, all_states, all_attn_weights = model(inputs=(input_ids, token_type_ids, input_mask))
+        model = AlbertModel(vocab_size=100, hidden_size=768,
+                            num_layers=4, num_groups=1, num_layers_each_group=1)
+        outputs, pooled_outputs = model(inputs=(input_ids, token_type_ids, input_mask))
+        self.assertAllEqual([2, 16, 768], outputs.shape)
+        self.assertAllEqual([2, 768], pooled_outputs.shape)
+
+    def testAlbertModelFromPretrained(self):
+        input_ids = tf.constant(
+            [1, 2, 3, 4, 5, 6, 7, 5, 3, 2, 3, 4, 1, 2, 3, 1, 2, 3, 4, 5, 6, 6, 6, 7, 7, 8, 0, 0, 0, 0, 0, 0],
+            shape=(2, 16),
+            dtype=np.int32)  # input_ids
+        token_type_ids = np.array(
+            [[0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1],
+             [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1]], dtype=np.int64)  # token_type_ids,
+        input_mask = tf.constant(
+            [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1],
+             [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1]], dtype=np.float32)  # input_mask
+
+        model = AlbertModel.from_pretrained('/Users/luozhouyang/pretrain-models/albert/albert_large')
+        outputs, pooled_outputs = model(inputs=(input_ids, token_type_ids, input_mask))
+        self.assertAllEqual([2, 16, 1024], outputs.shape)
+        self.assertAllEqual([2, 1024], pooled_outputs.shape)
+
+    def testAlbertForPretrainingModel(self):
+        input_ids = tf.constant(
+            [1, 2, 3, 4, 5, 6, 7, 5, 3, 2, 3, 4, 1, 2, 3, 1, 2, 3, 4, 5, 6, 6, 6, 7, 7, 8, 0, 0, 0, 0, 0, 0],
+            shape=(2, 16),
+            dtype=np.int32)  # input_ids
+        token_type_ids = np.array(
+            [[0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1],
+             [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1]], dtype=np.int64)  # token_type_ids,
+        input_mask = tf.constant(
+            [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1],
+             [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1]], dtype=np.float32)  # input_mask
+
+        model = AlbertForPretrainingModel(vocab_size=100, num_layers=4, num_groups=1, num_layers_each_group=1)
+        outputs, pooled_outputs = model(inputs=(input_ids, token_type_ids, input_mask))
         self.assertAllEqual([2, 16, 100], outputs.shape)
         self.assertAllEqual([2, 2], pooled_outputs.shape)
 
-        self.assertEqual(4, len(all_states))
-        for state in all_states:
-            self.assertAllEqual([2, 16, 768], state.shape)
+    def testAlbertForPretrainingModelFromPretrained(self):
+        input_ids = tf.constant(
+            [1, 2, 3, 4, 5, 6, 7, 5, 3, 2, 3, 4, 1, 2, 3, 1, 2, 3, 4, 5, 6, 6, 6, 7, 7, 8, 0, 0, 0, 0, 0, 0],
+            shape=(2, 16),
+            dtype=np.int32)  # input_ids
+        token_type_ids = np.array(
+            [[0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1],
+             [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1]], dtype=np.int64)  # token_type_ids,
+        input_mask = tf.constant(
+            [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1],
+             [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1]], dtype=np.float32)  # input_mask
 
-        self.assertEqual(4, len(all_attn_weights))
-        for attention in all_attn_weights:
-            self.assertAllEqual([2, 8, 16, 16], attention.shape)
+        model = AlbertForPretrainingModel.from_pretrained('/Users/luozhouyang/pretrain-models/albert/albert_large')
+        outputs, pooled_outputs = model(inputs=(input_ids, token_type_ids, input_mask))
+        self.assertAllEqual([2, 16, 21128], outputs.shape)
+        self.assertAllEqual([2, 2], pooled_outputs.shape)
 
 
 if __name__ == "__main__":
