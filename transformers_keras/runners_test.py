@@ -1,10 +1,12 @@
 import tensorflow as tf
 
-from transformers_keras import (TransformerDefaultTokenizer, TransformerRunner,
-                                TransformerTextFileDatasetBuilder)
-from transformers_keras import BertTFRecordDatasetBuilder
-from transformers_keras import BertRunner
-from transformers_keras import AlbertRunner
+from transformers_keras import (
+    AlbertRunner,
+    BertTFRecordDatasetBuilder,
+    TransformerDefaultTokenizer,
+    TransformerRunner,
+    TransformerTextFileDatasetBuilder,
+)
 
 
 class RunnersTest(tf.test.TestCase):
@@ -52,7 +54,7 @@ class RunnersTest(tf.test.TestCase):
             'num_layers': 6,
             'num_groups': 1,
             'num_layers_each_group': 1,
-            'vocab_size': 21128, 
+            'vocab_size': 21128,
         }
 
         runner = AlbertRunner(model_config, dataset_builder, model_dir='models/albert')

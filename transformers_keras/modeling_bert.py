@@ -1,3 +1,7 @@
+import json
+import logging
+import os
+
 import tensorflow as tf
 
 from .layers import MultiHeadAttention
@@ -313,7 +317,18 @@ class Bert(tf.keras.layers.Layer):
             **kwargs)
 
     def call(self, inputs, training=None):
-        input_ids, token_type_ids, mask = inputs
+        if len(inputs) == 1:
+            input_ids, token_type_ids, mask = inputs, None, None
+        if len(inputs) == 2:
+            input_ids, token_type_ids, mask = inputs[0], inputs[1], None
+        if len(inputs) >= 3:
+            input_ids, token_type_ids, mask = inputs[0], inputs[1], inputs[2]
+
+        if token_type_ids is None:
+            token_type_ids = tf.fill(input_ids, 0)
+        if mask is None:
+            mask = tf.fill(input_ids, 0)
+
         mask = mask[:, tf.newaxis, tf.newaxis, :]  # (batch_size, seq_len) -> (batch_size, 1, 1, seq_len)
         embedding = self.bert_embedding(inputs=(input_ids, token_type_ids), mode='embedding')
         output, all_hidden_states, all_attention_scores = self.bert_encoder(inputs=(embedding, mask))
@@ -407,7 +422,64 @@ class BertNSPHead(tf.keras.layers.Layer):
         return dict(list(base.items()) + list(config.items()))
 
 
-class Bert4PreTraining(tf.keras.layers.Layer):
+class BertModel(tf.keras.Model):
+
+    def __init__(self,
+                 vocab_size=1,
+                 max_positions=512,
+                 hidden_size=768,
+                 type_vocab_size=2,
+                 num_layers=6,
+                 num_attention_heads=8,
+                 intermediate_size=3072,
+                 activation='gelu',
+                 dropout_rate=0.2,
+                 stddev=0.02,
+                 epsilon=1e-12,
+                 **kwargs):
+        super(BertModel, self).__init__(name='bert', **kwargs)
+        self.max_positions = max_positions
+        self.bert = Bert(vocab_size=vocab_size, max_positions=max_positions, hidden_size=hidden_size,
+                         type_vocab_size=type_vocab_size, num_layers=num_layers,
+                         num_attention_heads=num_attention_heads, intermediate_size=intermediate_size,
+                         activation=activation, dropout_rate=dropout_rate, stddev=stddev, epsilon=epsilon, **kwargs)
+
+    def dummy_inputs(self):
+        input_ids = tf.constant([0] * self.max_positions, dtype=tf.int64, shape=(1, self.max_positions))
+        segment_ids = tf.constant([0] * self.max_positions, dtype=tf.int64, shape=(1, self.max_positions))
+        mask = tf.constant([0] * self.max_positions, dtype=tf.int64, shape=(1, self.max_positions))
+        return (input_ids, segment_ids, mask)
+
+    @classmethod
+    def from_pretrained(cls, pretrained_model_dir, **kwargs):
+        config_file, ckpt, _ = _parse_files(pretrained_model_dir)
+        model_config = mapping_config(config_file)
+        name_mapping = mapping_variables(model_config, load_mlm=False, load_nsp=False)
+        model = cls(**model_config)
+        model(model.dummy_inputs())
+        weights_values = zip_weights(model, ckpt, name_mapping)
+        tf.keras.backend.batch_set_value(weights_values)
+        return model
+
+    def call(self, inputs, training=None):
+        if len(inputs) == 1:
+            input_ids, token_type_ids, mask = inputs, None, None
+        if len(inputs) == 2:
+            input_ids, token_type_ids, mask = inputs[0], inputs[1], None
+        if len(inputs) >= 3:
+            input_ids, token_type_ids, mask = inputs[0], inputs[1], inputs[2]
+
+        if token_type_ids is None:
+            token_type_ids = tf.fill(input_ids, 0)
+        if mask is None:
+            mask = tf.fill(input_ids, 0)
+
+        inputs = (input_ids, token_type_ids, mask)
+        seqeuence_outputs, pooled_outputs, _, _ = self.bert(inputs)
+        return seqeuence_outputs, pooled_outputs
+
+
+class BertForPretrainingModel(tf.keras.Model):
 
     def __init__(self,
                  vocab_size=-1,
@@ -419,68 +491,184 @@ class Bert4PreTraining(tf.keras.layers.Layer):
                  intermediate_size=3072,
                  activation='gelu',
                  dropout_rate=0.2,
-                 epsilon=1e-12,
                  stddev=0.02,
+                 epsilon=1e-12,
                  **kwargs):
-        super().__init__(name='bert', **kwargs)
-        assert vocab_size > 0, "vocab_size must greater than 0."
-        self.vocab_size = vocab_size
+        super(BertForPretrainingModel, self).__init__(name='bert', **kwargs)
         self.max_positions = max_positions
-        self.hidden_size = hidden_size
-        self.type_vocab_size = type_vocab_size
-        self.num_layers = num_layers
-        self.num_attention_heads = num_attention_heads
-        self.intermediate_size = intermediate_size
-        self.activation = choose_activation(activation)
-        self.dropout_rate = dropout_rate
-        self.epsilon = epsilon
-        self.stddev = stddev
-
-        self.bert = Bert(
-            vocab_size=self.vocab_size,
-            max_positions=self.max_positions,
-            hidden_size=self.hidden_size,
-            type_vocab_size=self.type_vocab_size,
-            num_layers=self.num_layers,
-            num_attention_heads=self.num_attention_heads,
-            intermediate_size=self.intermediate_size,
-            activation=self.activation,
-            dropout_rate=self.dropout_rate,
-            stddev=self.stddev,
-            epsilon=self.epsilon,
-            **kwargs)
+        self.bert = Bert(vocab_size=vocab_size, max_positions=max_positions, hidden_size=hidden_size,
+                         type_vocab_size=type_vocab_size, num_layers=num_layers,
+                         num_attention_heads=num_attention_heads, intermediate_size=intermediate_size,
+                         activation=activation, dropout_rate=dropout_rate, stddev=stddev, epsilon=epsilon, **kwargs)
         self.mlm = BertMLMHead(
-            vocab_size=self.vocab_size,
+            vocab_size=vocab_size,
             embedding=self.bert.bert_embedding,
-            hidden_size=self.hidden_size,
-            activation=self.activation,
-            epsilon=self.epsilon,
-            stddev=self.stddev,
+            hidden_size=hidden_size,
+            activation=activation,
+            epsilon=epsilon,
+            stddev=stddev,
             name='mlm',
             **kwargs)
         self.nsp = BertNSPHead(stddev=stddev, name='nsp', **kwargs)
 
-    def call(self, inputs, training=None):
-        input_ids, token_type_ids, mask = inputs
-        mask = tf.cast(mask, dtype=tf.float32)
-        sequence_output, pooled_output, _, all_attention_scores = self.bert(inputs=(input_ids, token_type_ids, mask))
-        prediction_scores = self.mlm(sequence_output)
-        relation_scores = self.nsp(pooled_output)
-        return prediction_scores, relation_scores, all_attention_scores
+    def dummy_inputs(self):
+        input_ids = tf.constant([0] * self.max_positions, dtype=tf.int64, shape=(1, self.max_positions))
+        segment_ids = tf.constant([0] * self.max_positions, dtype=tf.int64, shape=(1, self.max_positions))
+        mask = tf.constant([0] * self.max_positions, dtype=tf.int64, shape=(1, self.max_positions))
+        return (input_ids, segment_ids, mask)
 
-    def get_config(self):
-        config = {
-            'num_layers': self.num_layers,
-            'hidden_size': self.hidden_size,
-            'num_attention_heads': self.num_attention_heads,
-            'intermediate_size': self.intermediate_size,
-            'activation': tf.keras.activations.serialize(self.activation),
-            'vocab_size': self.vocab_size,
-            'max_positions': self.max_positions,
-            'type_vocab_size': self.type_vocab_size,
-            'dropout_rate': self.dropout_rate,
-            'epsilon': self.epsilon,
-            'stddev': self.stddev,
-        }
-        base = super().get_config()
-        return dict(list(base.items()) + list(config.items()))
+    @classmethod
+    def from_pretrained(cls, pretrained_model_dir, **kwargs):
+        config_file, ckpt, _ = _parse_files(pretrained_model_dir)
+        model_config = mapping_config(config_file)
+        name_mapping = mapping_variables(model_config, load_mlm=True, load_nsp=True)
+        model = cls(**model_config)
+        model(model.dummy_inputs())
+        weights_values = zip_weights(model, ckpt, name_mapping)
+        tf.keras.backend.batch_set_value(weights_values)
+        return model
+
+    def call(self, inputs, training=None):
+        if len(inputs) == 1:
+            input_ids, token_type_ids, mask = inputs, None, None
+        if len(inputs) == 2:
+            input_ids, token_type_ids, mask = inputs[0], inputs[1], None
+        if len(inputs) >= 3:
+            input_ids, token_type_ids, mask = inputs[0], inputs[1], inputs[2]
+
+        if token_type_ids is None:
+            token_type_ids = tf.fill(input_ids, 0)
+        if mask is None:
+            mask = tf.fill(input_ids, 0)
+
+        inputs = (input_ids, token_type_ids, mask)
+        seqeuence_outputs, pooled_outputs, _, _ = self.bert(inputs)
+        predictions = self.mlm(seqeuence_outputs)
+        relations = self.nsp(pooled_outputs)
+        return predictions, relations
+
+
+def _parse_files(pretrain_model_dir):
+    config_file, ckpt, vocab = None, None, None
+    if not os.path.exists(pretrain_model_dir):
+        logging.info('pretrain model dir: {} is not exists.'.format(pretrain_model_dir))
+        return
+    for f in os.listdir(pretrain_model_dir):
+        if str(f).endswith('config.json'):
+            config_file = os.path.join(pretrain_model_dir, f)
+        if 'vocab' in str(f):
+            vocab = os.path.join(pretrain_model_dir, f)
+        if 'ckpt' in str(f):
+            n = '.'.join(str(f).split('.')[:-1])
+            ckpt = os.path.join(pretrain_model_dir, n)
+    return config_file, ckpt, vocab
+
+
+def mapping_config(pretrained_config_file):
+    with open(pretrained_config_file, mode='rt', encoding='utf8') as fin:
+        config = json.load(fin)
+
+    model_config = {
+        'vocab_size': config['vocab_size'],
+        'activation': config['hidden_act'],
+        'max_positions': config['max_position_embeddings'],
+        'hidden_size': config['hidden_size'],
+        'type_vocab_size': config['type_vocab_size'],
+        'intermediate_size': config['intermediate_size'],
+        'dropout_rate': config['hidden_dropout_prob'],
+        'stddev': config['initializer_range'],
+        'num_layers': config['num_hidden_layers'],
+        'num_attention_heads': config['num_attention_heads'],
+    }
+    return model_config
+
+
+def mapping_variables(model_config, load_mlm=False, load_nsp=False):
+    # model variable name -> pretrained bert variable name
+    m = {
+        'bert/main/embedding/weight:0': 'bert/embeddings/word_embeddings',
+        'bert/main/embedding/position_embedding/embeddings:0': 'bert/embeddings/position_embeddings',
+        'bert/main/embedding/token_type_embedding/embeddings:0': 'bert/embeddings/token_type_embeddings',
+        'bert/main/embedding/layer_norm/gamma:0': 'bert/embeddings/LayerNorm/gamma',
+        'bert/main/embedding/layer_norm/beta:0': 'bert/embeddings/LayerNorm/beta',
+    }
+
+    for i in range(model_config['num_layers']):
+        # attention
+        for n in ['query', 'key', 'value']:
+            k = 'bert/main/encoder/layer_{}/mha/{}/kernel:0'.format(i, n)
+            v = 'bert/encoder/layer_{}/attention/self/{}/kernel'.format(i, n)
+            m[k] = v
+            k = 'bert/main/encoder/layer_{}/mha/{}/bias:0'.format(i, n)
+            v = 'bert/encoder/layer_{}/attention/self/{}/bias'.format(i, n)
+            m[k] = v
+
+        # dense after attention
+        for n in ['kernel', 'bias']:
+            k = 'bert/main/encoder/layer_{}/mha/dense/{}:0'.format(i, n)
+            v = 'bert/encoder/layer_{}/attention/output/dense/{}'.format(i, n)
+            m[k] = v
+        # layer norm after attention
+        for n in ['gamma', 'beta']:
+            k = 'bert/main/encoder/layer_{}/attn_layer_norm/{}:0'.format(i, n)
+            v = 'bert/encoder/layer_{}/output/LayerNorm/{}'.format(i, n)
+            m[k] = v
+
+        # intermediate
+        for n in ['kernel', 'bias']:
+            k = 'bert/main/encoder/layer_{}/intermediate/dense/{}:0'.format(i, n)
+            v = 'bert/encoder/layer_{}/intermediate/dense/{}'.format(i, n)
+            m[k] = v
+
+        # output
+        for n in ['kernel', 'bias']:
+            k = 'bert/main/encoder/layer_{}/dense/{}:0'.format(i, n)
+            v = 'bert/encoder/layer_{}/output/dense/{}'.format(i, n)
+            m[k] = v
+
+        # layer norm
+        for n in ['gamma', 'beta']:
+            k = 'bert/main/encoder/layer_{}/inter_layer_norm/{}:0'.format(i, n)
+            v = 'bert/encoder/layer_{}/output/LayerNorm/{}'.format(i, n)
+            m[k] = v
+
+    # pooler
+    for n in ['kernel', 'bias']:
+        k = 'bert/main/pooler/dense/{}:0'.format(n)
+        v = 'bert/pooler/dense/{}'.format(n)
+        m[k] = v
+
+    # masked lm
+    if load_mlm:
+        m['bert/mlm/bias:0'] = 'cls/predictions/output_bias'
+        for n in ['kernel', 'bias']:
+            k = 'bert/mlm/dense/{}:0'.format(n)
+            v = 'cls/predictions/transform/dense/{}'.format(n)
+            m[k] = v
+        for n in ['gamma', 'beta']:
+            k = 'bert/mlm/layer_norm/{}:0'.format(n)
+            v = 'cls/predictions/transform/LayerNorm/{}'.format(n)
+            m[k] = v
+
+    # nsp
+    if load_nsp:
+        m['bert/nsp/dense/kernel:0'] = 'cls/seq_relationship/output_weights'
+        m['bert/nsp/dense/bias:0'] = 'cls/seq_relationship/output_bias'
+
+    return m
+
+
+def zip_weights(model, ckpt, variables_mapping):
+    weights, values, names = [], [], []
+    for w in model.trainable_weights:
+        names.append(w.name)
+        weights.append(w)
+        v = tf.train.load_variable(ckpt, variables_mapping[w.name])
+        if w.name == 'bert/nsp/dense/kernel:0':
+            v = v.T
+        values.append(v)
+
+    logging.info('weights will be loadded from pretrained checkpoint: \n\t{}'.format('\n\t'.join(names)))
+
+    mapped_values = zip(weights, values)
+    return mapped_values
