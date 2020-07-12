@@ -5,7 +5,6 @@ import tensorflow as tf
 from transformers_keras.datasets.abstract_dataset_builder import AbstractDatasetBuilder
 from transformers_keras.datasets.bert_dataset_builder import BertTFRecordDatasetBuilder
 from transformers_keras.datasets.transformer_dataset_builder import (
-    TransformerDatasetBuilder,
     TransformerTextFileDatasetBuilder,
     TransformerTFRecordDatasetBuilder,
 )
