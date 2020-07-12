@@ -18,8 +18,8 @@ setuptools.setup(
         "jieba",
     ],
     extras_require={
-        "tf": ["tensorflow>=2.0.1"],
-        "tf-gpu": ["tensorflow-gpu>=2.0.1"],
+        "tf": ["tensorflow>=2.2.0"],
+        "tf-gpu": ["tensorflow-gpu>=2.2.0"],
     },
     license="Apache Software License",
     classifiers=(
