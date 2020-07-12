@@ -1,9 +1,8 @@
 import unittest
 
 import tensorflow as tf
-
-from transformers_keras.tokenizers import TransformerDefaultTokenizer
 from naivenlp import TransformerTokenizer
+
 from .transformer_tfrecord_generator import TransformerTFRecordGenerator
 
 

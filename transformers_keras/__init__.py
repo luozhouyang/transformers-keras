@@ -8,14 +8,6 @@ from transformers_keras.datasets.transformer_dataset_builder import (
     TransformerTextFileDatasetBuilder,
     TransformerTFRecordDatasetBuilder,
 )
-from transformers_keras.tokenizers.bert_tokenizer import BertAbstractTokenizer, BertDefaultTokenizer, BertVocabBasedTokenizer
-from transformers_keras.tokenizers.tokenizer import BasicTokenizer, WordpieceTokenizer
-from transformers_keras.tokenizers.transformer_tokenizer import (
-    TransformerAbstractTokenizer,
-    TransformerDefaultTokenizer,
-    TransformerJiebaTokenizer,
-    TransformerVocabBasedTokenizer,
-)
 
 from .callbacks import SavedModelExporter, TransformerLearningRate
 from .layers import DecoderLayer, EncoderLayer, MultiHeadAttention, PointWiseFeedForwardNetwork, ScaledDotProductAttention
