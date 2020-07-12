@@ -8,7 +8,7 @@ class BertDatasetBuilderTest(tf.test.TestCase):
     def testBertTFRecordDatasetBuilder(self):
         dataset_builder = BertTFRecordDatasetBuilder(
             record_option='GZIP',
-            max_sequence_length=128,
+            max_sequence_length=512,
             train_repeat_count=100,
         )
 
