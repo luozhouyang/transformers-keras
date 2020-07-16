@@ -1,3 +1,3 @@
 tensorflow==2.2.0
 jieba
-naivenlp==0.0.7
+naivenlp==0.0.8
