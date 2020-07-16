@@ -1,3 +1,6 @@
+import logging
+import os
+
 import numpy as np
 import tensorflow as tf
 
@@ -48,3 +51,19 @@ def choose_activation(act):
 
 def initialize(stddev=0.02):
     return tf.keras.initializers.TruncatedNormal(stddev=stddev)
+
+
+def parse_pretrained_model_files(pretrain_model_dir):
+    config_file, ckpt, vocab = None, None, None
+    if not os.path.exists(pretrain_model_dir):
+        logging.info('pretrain model dir: {} is not exists.'.format(pretrain_model_dir))
+        return
+    for f in os.listdir(pretrain_model_dir):
+        if str(f).endswith('config.json'):
+            config_file = os.path.join(pretrain_model_dir, f)
+        if 'vocab' in str(f):
+            vocab = os.path.join(pretrain_model_dir, f)
+        if 'ckpt' in str(f):
+            n = '.'.join(str(f).split('.')[:-1])
+            ckpt = os.path.join(pretrain_model_dir, n)
+    return config_file, ckpt, vocab
