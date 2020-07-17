@@ -40,4 +40,4 @@ jobs:
         pytest \
           --ignore transformers_keras/utils \
           --ignore transformers_keras/runners_test.py \
-          --ignore transformers_keras/adapters
+          --ignore transformers_keras/modeling_pretrained_test.py
