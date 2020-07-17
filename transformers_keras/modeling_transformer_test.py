@@ -2,13 +2,11 @@ import unittest
 
 import numpy as np
 import tensorflow as tf
+from naivenlp import TransformerTokenizer
 
 from transformers_keras.datasets import TransformerTextFileDatasetBuilder
-from transformers_keras.tokenizers import TransformerDefaultTokenizer
 
-from .modeling_transformer import (PositionalEncoding, Transformer,
-                                   TransformerDecoder, TransformerEmbedding,
-                                   TransformerEncoder)
+from .modeling_transformer import PositionalEncoding, Transformer, TransformerDecoder, TransformerEmbedding, TransformerEncoder
 
 
 class ModelingTransformerTest(tf.test.TestCase):
@@ -99,13 +97,13 @@ class ModelingTransformerTest(tf.test.TestCase):
         return model
 
     def buildTokenizers(self):
-        src_tokenizer = TransformerDefaultTokenizer(
+        src_tokenizer = TransformerTokenizer(
             vocab_file='testdata/vocab_src.txt',
-            pad_token='<pad>', unk_token='<unk>', sos_token='<s>', eos_token='</s>'
+            pad_token='<pad>', unk_token='<unk>', bos_token='<s>', eos_token='</s>'
         )
-        tgt_tokenizer = TransformerDefaultTokenizer(
+        tgt_tokenizer = TransformerTokenizer(
             vocab_file='testdata/vocab_tgt.txt',
-            pad_token='<pad>', unk_token='<unk>', sos_token='<s>', eos_token='</s>'
+            pad_token='<pad>', unk_token='<unk>', bos_token='<s>', eos_token='</s>'
         )
         return src_tokenizer, tgt_tokenizer
 
@@ -135,13 +133,13 @@ class ModelingTransformerTest(tf.test.TestCase):
             outputs, _, _, _ = model(v)
 
     def testTraining(self):
-        src_tokenizer = TransformerDefaultTokenizer(
+        src_tokenizer = TransformerTokenizer(
             vocab_file='testdata/vocab_src.txt',
-            pad_token='<pad>', unk_token='<unk>', sos_token='<s>', eos_token='</s>'
+            pad_token='<pad>', unk_token='<unk>', bos_token='<s>', eos_token='</s>'
         )
-        tgt_tokenizer = TransformerDefaultTokenizer(
+        tgt_tokenizer = TransformerTokenizer(
             vocab_file='testdata/vocab_tgt.txt',
-            pad_token='<pad>', unk_token='<unk>', sos_token='<s>', eos_token='</s>'
+            pad_token='<pad>', unk_token='<unk>', bos_token='<s>', eos_token='</s>'
         )
         data_config = {
             'train_shuffle_buffer_size': 100,

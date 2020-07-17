@@ -4,8 +4,6 @@ import os
 
 import tensorflow as tf
 
-from transformers_keras.tokenizers import TransformerDefaultTokenizer
-
 
 def create_int_feature(values):
     feature = tf.train.Feature(int64_list=tf.train.Int64List(value=list(values)))
@@ -52,8 +50,7 @@ class TransformerTFRecordGenerator(object):
                     if not src or not tgt:
                         continue
 
-                    src_ids = self.src_tokenizer.encode(src)
-                    src_ids = [self.src_tokenizer.sos_id] + src_ids + [self.src_tokenizer.eos_id]
+                    src_ids = self.src_tokenizer.encode(src, add_bos=True, add_eos=True)
                     while len(src_ids) < self.src_max_len:
                         src_ids.append(self.src_tokenizer.pad_id)
 
@@ -61,8 +58,7 @@ class TransformerTFRecordGenerator(object):
                         logging.warning('Length of sequence is {}, greater than {}', len(src_ids), self.src_max_len)
                         continue
 
-                    tgt_ids = self.tgt_tokenizer.encode(tgt)
-                    tgt_ids = [self.tgt_tokenizer.sos_id] + tgt_ids + [self.tgt_tokenizer.eos_id]
+                    tgt_ids = self.tgt_tokenizer.encode(tgt, add_bos=True, add_eos=True)
                     while len(tgt_ids) < self.tgt_max_len:
                         tgt_ids.append(self.tgt_tokenizer.pad_id)
                     if len(tgt_ids) > self.tgt_max_len:

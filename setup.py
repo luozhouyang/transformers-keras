@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="transformers_keras",
-    version="0.1.3",
+    version="0.1.4",
     description="Transformer-based models implemented in tensorflow 2.x(Keras)",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -18,8 +18,8 @@ setuptools.setup(
         "jieba",
     ],
     extras_require={
-        "tf": ["tensorflow>=2.0.1"],
-        "tf-gpu": ["tensorflow-gpu>=2.0.1"],
+        "tf": ["tensorflow>=2.2.0"],
+        "tf-gpu": ["tensorflow-gpu>=2.2.0"],
     },
     license="Apache Software License",
     classifiers=(

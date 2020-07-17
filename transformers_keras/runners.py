@@ -3,13 +3,11 @@ import os
 
 import tensorflow as tf
 
-from .callbacks import TransformerLearningRate, SavedModelExporter
+from .callbacks import SavedModelExporter, TransformerLearningRate
 from .datasets import AbstractDatasetBuilder
 from .losses import MaskedSparseCategoricalCrossentropy
 from .metrics import MaskedSparseCategoricalAccuracy
-from .modeling_bert import Bert4PreTraining
 from .modeling_transformer import Transformer
-from .modeling_albert import Albert4PreTraining
 
 
 class AbstractRunner(object):
@@ -111,99 +109,3 @@ class TransformerRunner(AbstractRunner):
 
     def predict(self, input_files, **kwargs):
         pass
-
-
-class BertRunner(TransformerRunner):
-
-    def __init__(self,
-                 model_config,
-                 dataset_builder: AbstractDatasetBuilder,
-                 model_dir='/tmp/bert',
-                 **kwargs):
-        super().__init__(model_config, dataset_builder, model_dir=model_dir, **kwargs)
-
-    def _build_model(self, config):
-        max_sequence_length = config.get('max_positions', 512)
-        input_ids = tf.keras.layers.Input(
-            shape=(max_sequence_length,), dtype=tf.int32, name='input_ids')
-        input_mask = tf.keras.layers.Input(
-            shape=(max_sequence_length,), dtype=tf.int32, name='input_mask')
-        segment_ids = tf.keras.layers.Input(
-            shape=(max_sequence_length,), dtype=tf.int32, name='segment_ids')
-
-        inputs = (input_ids, segment_ids, input_mask)
-        outputs = Bert4PreTraining(**config, name='bert')(inputs=inputs)
-
-        predictions = tf.keras.layers.Lambda(
-            lambda x: x, name='predictions')(outputs[0])
-        relations = tf.keras.layers.Lambda(
-            lambda x: tf.nn.softmax(x), name='relations')(outputs[1])
-        # attentions = tf.keras.layers.Lambda(
-        #   lambda x: x, name='attentions')(outputs[2])
-
-        model = tf.keras.Model(
-            inputs=[input_ids, segment_ids, input_mask], outputs=[predictions, relations])
-        model.compile(
-            optimizer=tf.keras.optimizers.Adam(learning_rate=3e-5, epsilon=1e-12, clipnorm=1.0),
-            loss={
-                'predictions': MaskedSparseCategoricalCrossentropy(
-                    mask_id=0, from_logits=True, name='pred_loss'),
-                'relations': tf.keras.losses.CategoricalCrossentropy(
-                    from_logits=True, name='rel_loss'),
-            },
-            metrics={
-                'predictions': [
-                    MaskedSparseCategoricalAccuracy(
-                        mask_id=0, from_logits=False, name='pred_acc'),
-                ],
-                'relations': [
-                    tf.keras.metrics.CategoricalAccuracy(name='rel_acc'),
-                ]
-            })
-        model.summary()
-        return model
-
-
-class AlbertRunner(TransformerRunner):
-
-    def __init__(self, model_config, dataset_builder, model_dir='/tmp/albert', **kwargs):
-        super().__init__(model_config, dataset_builder, model_dir=model_dir, **kwargs)
-
-    def _build_model(self, config):
-        max_sequence_length = config.get('max_positions', 512)
-        input_ids = tf.keras.layers.Input(
-            shape=(max_sequence_length,), dtype=tf.int32, name='input_ids')
-        input_mask = tf.keras.layers.Input(
-            shape=(max_sequence_length,), dtype=tf.int32, name='input_mask')
-        segment_ids = tf.keras.layers.Input(
-            shape=(max_sequence_length,), dtype=tf.int32, name='segment_ids')
-
-        inputs = (input_ids, segment_ids, input_mask)
-        albert = Albert4PreTraining(**config)
-        predictions, relations, all_states, all_attn_weights = albert(inputs=inputs)
-
-        predictions = tf.keras.layers.Lambda(lambda x: x, name='predictions')(predictions)
-        relations = tf.keras.layers.Lambda(lambda x: x, name='relations')(relations)
-
-        model = tf.keras.Model(
-            inputs=[input_ids, segment_ids, input_mask], outputs=[predictions, relations])
-
-        model.compile(
-            optimizer=tf.keras.optimizers.Adam(learning_rate=3e-5, epsilon=1e-12, clipnorm=1.0),
-            loss={
-                'predictions': MaskedSparseCategoricalCrossentropy(
-                    mask_id=0, from_logits=True, name='pred_loss'),
-                'relations': tf.keras.losses.CategoricalCrossentropy(
-                    from_logits=True, name='rel_loss'),
-            },
-            metrics={
-                'predictions': [
-                    MaskedSparseCategoricalAccuracy(
-                        mask_id=0, from_logits=False, name='pred_acc'),
-                ],
-                'relations': [
-                    tf.keras.metrics.CategoricalAccuracy(name='rel_acc'),
-                ]
-            })
-        model.summary()
-        return model

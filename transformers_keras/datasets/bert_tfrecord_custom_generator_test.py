@@ -10,13 +10,19 @@ class CustomBertGeneratorTest(unittest.TestCase):
     def testGenerateTFRecordFiles(self):
         config = {
             'do_lower_case': True,
-            'split_on_punc': True,
-            'max_sequence_length': 128,
-            'max_predictions_per_seq': 20,
+            'do_basic_tokenization': True,
+            'tokenize_chinese_chars': True,
             'do_whole_word_mask': True,
+            'max_sequence_length': 512,
+            'max_predictions_per_seq': 20,
             'masked_lm_prob': 0.15,
             'unk_token': '[UNK]',
             'pad_token': '[PAD]',
+            'bos_token': '<S>',
+            'eos_token': '<T>',
+            'cls_token': '[CLS]',
+            'sep_token': '[SEP]',
+            'mask_token': '[MASK]',
             'record_option': 'GZIP'
         }
         vocab_file = 'testdata/bert_vocab.txt'
@@ -36,10 +42,10 @@ class CustomBertGeneratorTest(unittest.TestCase):
             print(d)
 
         name_to_features = {
-            'original_ids': tf.io.FixedLenFeature([128], tf.int64),
-            'input_ids': tf.io.FixedLenFeature([128], tf.int64),
-            'input_mask': tf.io.FixedLenFeature([128], tf.int64),
-            'segment_ids': tf.io.FixedLenFeature([128], tf.int64),
+            'original_ids': tf.io.FixedLenFeature([512], tf.int64),
+            'input_ids': tf.io.FixedLenFeature([512], tf.int64),
+            'input_mask': tf.io.FixedLenFeature([512], tf.int64),
+            'segment_ids': tf.io.FixedLenFeature([512], tf.int64),
             'next_sentence_labels': tf.io.FixedLenFeature([1], tf.int64),
             'masked_lm_positions': tf.io.FixedLenFeature([20], tf.int64),
             'masked_lm_weights': tf.io.FixedLenFeature([20], tf.float32),

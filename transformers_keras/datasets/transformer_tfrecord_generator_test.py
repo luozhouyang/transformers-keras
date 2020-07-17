@@ -1,8 +1,7 @@
 import unittest
 
 import tensorflow as tf
-
-from transformers_keras.tokenizers import TransformerDefaultTokenizer
+from naivenlp import TransformerTokenizer
 
 from .transformer_tfrecord_generator import TransformerTFRecordGenerator
 
@@ -12,22 +11,32 @@ class TransformerTFRecordGeneratorTest(unittest.TestCase):
     def testGenerateTransformerTFRecordFile(self):
         src_vocab_file = 'testdata/vocab_src.txt'
         tgt_vocab_file = 'testdata/vocab_tgt.txt'
-        src_tokenizer = TransformerDefaultTokenizer(
+        src_tokenizer = TransformerTokenizer(
             vocab_file=src_vocab_file,
-            do_basic_tokenization=True,
             do_lower_case=True,
+            do_basic_tokenization=True,
             tokenize_chinese_chars=True,
-            nerver_split=None,
-            pad_token='<pad>', unk_token='<unk>', sos_token='<s>', eos_token='</s>',
+            never_split=None,
+            pad_token='<pad>', unk_token='<unk>', bos_token='<s>', eos_token='</s>',
         )
-        tgt_tokenizer = TransformerDefaultTokenizer(
+        self.assertEqual(0, src_tokenizer.pad_id)
+        self.assertEqual(1, src_tokenizer.unk_id)
+        self.assertEqual(2, src_tokenizer.bos_id)
+        self.assertEqual(3, src_tokenizer.eos_id)
+
+        tgt_tokenizer = TransformerTokenizer(
             vocab_file=tgt_vocab_file,
             do_basic_tokenization=True,
             do_lower_case=True,
             tokenize_chinese_chars=True,
             nerver_split=None,
-            pad_token='<pad>', unk_token='<unk>', sos_token='<s>', eos_token='</s>',
+            pad_token='<pad>', unk_token='<unk>', bos_token='<s>', eos_token='</s>',
         )
+        self.assertEqual(0, tgt_tokenizer.pad_id)
+        self.assertEqual(1, tgt_tokenizer.unk_id)
+        self.assertEqual(2, tgt_tokenizer.bos_id)
+        self.assertEqual(3, tgt_tokenizer.eos_id)
+
         g = TransformerTFRecordGenerator(
             src_tokenizer,
             tgt_tokenizer,

@@ -3,12 +3,13 @@ import tensorflow as tf
 
 from .modeling_bert import (
     Bert,
-    Bert4PreTraining,
     BertEmbedding,
     BertEncoder,
     BertEncoderLayer,
+    BertForPretrainingModel,
     BertIntermediate,
     BertMLMHead,
+    BertModel,
     BertNSPHead,
     BertPooler,
 )
@@ -70,7 +71,7 @@ class ModelingBertTest(tf.test.TestCase):
         outputs = pooler(inputs)
         self.assertAllEqual([2, pooler.hidden_size], outputs.shape)
 
-    def testBertModel(self):
+    def testBert(self):
         model = Bert(vocab_size=100, num_layers=2)
         input_ids = tf.constant(
             [1, 2, 3, 4, 5, 6, 7, 5, 3, 2, 3, 4, 1, 2, 3, 1, 2, 3, 4, 5, 6, 6, 6, 7, 7, 8, 0, 0, 0, 0, 0, 0],
@@ -110,8 +111,8 @@ class ModelingBertTest(tf.test.TestCase):
         outputs = nsp(inputs)
         self.assertAllEqual([2, 2], outputs.shape)
 
-    def testBert4PreTraining(self):
-        bert = Bert4PreTraining(vocab_size=100, num_layers=2)
+    def testBertModel(self):
+        model = BertModel(vocab_size=100, num_layers=2)
         input_ids = tf.constant(
             [1, 2, 3, 4, 5, 6, 7, 5, 3, 2, 3, 4, 1, 2, 3, 1, 2, 3, 4, 5, 6, 6, 6, 7, 7, 8, 0, 0, 0, 0, 0, 0],
             shape=(2, 16),
@@ -123,14 +124,27 @@ class ModelingBertTest(tf.test.TestCase):
             [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1],
              [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1]], dtype=np.float32)  # input_mask
 
-        predictions, relations, attn_weights = bert(
+        outputs, pooled_outputs = model(inputs=(input_ids, token_type_ids, input_mask))
+        self.assertAllEqual([2, 16, 768], outputs.shape)
+        self.assertAllEqual([2, 768], pooled_outputs.shape)
+
+    def testBertFroPreTrainingModel(self):
+        bert = BertForPretrainingModel(vocab_size=100, num_layers=2)
+        input_ids = tf.constant(
+            [1, 2, 3, 4, 5, 6, 7, 5, 3, 2, 3, 4, 1, 2, 3, 1, 2, 3, 4, 5, 6, 6, 6, 7, 7, 8, 0, 0, 0, 0, 0, 0],
+            shape=(2, 16),
+            dtype=np.int32)  # input_ids
+        token_type_ids = np.array(
+            [[0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1],
+             [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1]], dtype=np.int64)  # token_type_ids,
+        input_mask = tf.constant(
+            [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1],
+             [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1]], dtype=np.float32)  # input_mask
+
+        predictions, relations = bert(
             inputs=(input_ids, token_type_ids, input_mask))
         self.assertAllEqual([2, 16, 100], predictions.shape)
         self.assertAllEqual([2, 2], relations.shape)
-
-        self.assertEqual(2, len(attn_weights))
-        for attention in attn_weights:
-            self.assertAllEqual([2, 8, 16, 16], attention.shape)
 
 
 if __name__ == "__main__":

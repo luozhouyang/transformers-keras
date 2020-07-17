@@ -11,44 +11,59 @@ class BertTFRecordDatasetBuilder(AbstractDatasetBuilder):
         self.max_sequence_length = max_sequence_length
         self.max_predictions_per_seq = max_predictions_per_seq
 
-    def build_train_dataset(self, train_record_files, **kwargs):
-        dataset = tf.data.TFRecordDataset(train_record_files, compression_type=self.record_option)
-        dataset = dataset.repeat(self.train_repeat_count)
+    def build_train_dataset(
+            self,
+            record_files,
+            batch_size=32,
+            repeat_count=1,
+            buffer_size=1000000,
+            seed=None,
+            reshuffle=True,
+            num_parallel_calls=tf.data.experimental.AUTOTUNE,
+            dropout_remainder=False,
+            **kwargs):
+        dataset = tf.data.TFRecordDataset(record_files, compression_type=self.record_option)
+        dataset = dataset.repeat(repeat_count)
         dataset = dataset.shuffle(
-            buffer_size=self.train_shuffle_buffer_size,
-            seed=self.train_shuffle_seed,
-            reshuffle_each_iteration=self.train_reshuffle_each_iteration)
-        dataset = dataset.map(self._parse_example_fn, num_parallel_calls=self.num_parallel_calls)
+            buffer_size=buffer_size,
+            seed=seed,
+            reshuffle_each_iteration=reshuffle)
+        dataset = dataset.map(self._parse_example_fn, num_parallel_calls=num_parallel_calls)
         dataset = dataset.batch(
-            self.train_batch_size, drop_remainder=self.train_drop_remainder
-        ).prefetch(self.prefetch_size)
+            batch_size, drop_remainder=dropout_remainder
+        ).prefetch(batch_size)
         dataset = dataset.map(lambda x, y, z, p, l: ((x, y, z), (p, l)))
         return dataset
 
-    def build_valid_dataset(self, valid_record_files, **kwargs):
-        if valid_record_files is None:
-            return None
-        dataset = tf.data.TFRecordDataset(valid_record_files, compression_type=self.record_option)
-        dataset = dataset.repeat(self.valid_repeat_count)
-        dataset = dataset.shuffle(
-            buffer_size=self.valid_shuffle_buffer_size,
-            seed=self.valid_shuffle_seed,
-            reshuffle_each_iteration=self.valid_reshuffle_each_iteration
-        )
-        dataset = dataset.map(self._parse_example_fn, num_parallel_calls=self.num_parallel_calls)
-        dataset = dataset.batch(
-            self.valid_batch_size, drop_remainder=self.valid_drop_remainder
-        ).prefetch(self.prefetch_size)
-        dataset = dataset.map(lambda x, y, z, p, l: ((x, y, z), (p, l)))
-        return dataset
+    def build_valid_dataset(
+            self,
+            record_files,
+            batch_size=32,
+            repeat_count=1,
+            buffer_size=1000000,
+            seed=None,
+            reshuffle=True,
+            num_parallel_calls=tf.data.experimental.AUTOTUNE,
+            dropout_remainder=False,
+            **kwargs):
+        return self.build_train_dataset(
+            record_files=record_files,
+            batch_size=batch_size,
+            repeat_count=repeat_count,
+            buffer_size=buffer_size,
+            seed=seed,
+            reshuffle=reshuffle,
+            num_parallel_calls=num_parallel_calls,
+            dropout_remainder=dropout_remainder,
+            **kwargs)
 
-    def build_predict_dataset(self, predict_record_files, **kwargs):
-        dataset = tf.data.TFRecordDataset(predict_record_files, compression_type=self.record_option)
-        dataset = dataset.repeat(self.predict_repeat_count)
+    def build_predict_dataset(self, record_files, batch_size=1, repeat_count=1, dropout_remainder=False, **kwargs):
+        dataset = tf.data.TFRecordDataset(record_files, compression_type=self.record_option)
+        dataset = dataset.repeat(repeat_count)
         dataset = dataset.map(self._parse_example_fn)
         dataset = dataset.batch(
-            self.predict_batch_size, drop_remainder=self.predict_drop_remainder
-        ).prefetch(self.prefetch_size)
+            batch_size, drop_remainder=dropout_remainder
+        ).prefetch(batch_size)
         dataset = dataset.map(lambda x, y, z, p, l: ((x, y, z), None))
         return dataset
 

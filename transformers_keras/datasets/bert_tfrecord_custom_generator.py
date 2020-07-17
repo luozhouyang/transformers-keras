@@ -5,8 +5,7 @@ import os
 import random
 
 import tensorflow as tf
-
-from transformers_keras.tokenizers import BertDefaultTokenizer
+from naivenlp import BertTokenizer
 
 
 def create_int_feature(values):
@@ -24,25 +23,57 @@ class CustomBertGenerator(object):
         If you need to use standard bert generation, use `bert_create_pretraining_data.py`
     """
 
-    def __init__(self, vocab_file, **kwargs):
+    def __init__(self,
+                 vocab_file,
+                 do_lower_case=True,
+                 do_basic_tokenization=True,
+                 tokenize_chinese_chars=True,
+                 do_whole_word_mask=True,
+                 max_sequence_length=512,
+                 masked_lm_prob=0.15,
+                 max_predictions_per_seq=20,
+                 record_option='GZIP',
+                 unk_token='[UNK]',
+                 pad_token='[PAD]',
+                 bos_token='<S>',
+                 eos_token='<T>',
+                 cls_token='[CLS]',
+                 sep_token='[SEP]',
+                 mask_token='[MASK]',
+                 **kwargs):
         super().__init__()
-        self.do_lower_case = kwargs.pop('do_lower_case', True)
-        self.split_on_punc = kwargs.pop('split_on_punc', True)
-        self.tokenizer = BertDefaultTokenizer(vocab_file=vocab_file)
+
+        self.tokenizer = BertTokenizer(
+            vocab_file=vocab_file,
+            pad_token=pad_token,
+            unk_token=unk_token,
+            bos_token=bos_token,
+            eos_token=eos_token,
+            cls_token=cls_token,
+            sep_token=sep_token,
+            mask_token=mask_token,
+            do_lower_case=do_lower_case,
+            do_basic_tokenization=do_basic_tokenization,
+            tokenize_chinese_chars=tokenize_chinese_chars,
+            never_split=None,
+            max_input_chars_per_word=100,
+            **kwargs)
         self.rng = random.Random(12345)
-        self.max_sequence_length = kwargs.pop('max_sequence_length', 512)
-        self.do_whole_word_mask = kwargs.pop('do_whole_word_mask', True)
-        self.masked_lm_prob = kwargs.pop('masked_lm_prob', 0.15)
-        self.max_predictions_per_seq = kwargs.pop('max_predictions_per_seq', 20)
-        self.vocab_words = self.tokenizer.vocab
-        self.record_option = kwargs.pop('record_option', None)
+        self.do_lower_case = do_lower_case
+
+        self.max_sequence_length = max_sequence_length
+        self.do_whole_word_mask = do_whole_word_mask
+        self.masked_lm_prob = masked_lm_prob
+        self.max_predictions_per_seq = max_predictions_per_seq
+        self.record_option = record_option
+        self.vocab_words = list(self.tokenizer.vocab)
 
     def _parse_segment_strs(self, line):
         line = line.strip('\n')
         strs = line.split('@@@')
         if len(strs) != 5:
             return '', '', -1
-        label, jdid, cvid, stra, strb = strs[0], strs[1], strs[2], strs[3], strs[4]
+        label, _, _, stra, strb = strs[0], strs[1], strs[2], strs[3], strs[4]
         return stra, strb, int(label)
 
     def _compose_segments(self, stra, strb):
@@ -65,13 +96,13 @@ class CustomBertGenerator(object):
         # len(masked_lm_origin_tokens) == self.max_predictions_per_seq
         masked_lm_masked_tokens, masked_lm_masked_positions, masked_lm_origin_tokens = outputs
         instance.update({
-            'original_ids': self.tokenizer.encode(tokens),  # length == len(tokens)
+            'original_ids': self.tokenizer.tokens2ids(tokens),  # length == len(tokens)
             'masked_tokens': masked_lm_masked_tokens,  # lenght == len(tokens)
             # length == len(tokens)
-            'masked_ids': self.tokenizer.encode(masked_lm_masked_tokens),
+            'masked_ids': self.tokenizer.tokens2ids(masked_lm_masked_tokens),
             'masked_lm_positions': masked_lm_masked_positions,  # length = max_predictions_per_seq
             'masked_lm_tokens': masked_lm_origin_tokens,  # length = max_predictions_per_seq
-            'masked_lm_ids': self.tokenizer.encode(masked_lm_origin_tokens)
+            'masked_lm_ids': self.tokenizer.tokens2ids(masked_lm_origin_tokens)
         })
         return instance
 
@@ -92,11 +123,11 @@ class CustomBertGenerator(object):
         assert len(input_ids) == len(segment_ids)
         assert len(input_ids) == len(original_ids)
 
-        input_mask = [1] * len(input_ids)  # masking padding positions
+        input_mask = [0] * len(input_ids)  # masking padding positions
         while len(input_ids) < self.max_sequence_length:
-            input_ids.append(self.pad_id)
-            segment_ids.append(self.pad_id)
-            input_mask.append(0)
+            input_ids.append(self.tokenizer.pad_id)
+            segment_ids.append(self.tokenizer.pad_id)
+            input_mask.append(1)
             original_ids.append(0)
 
         assert len(input_ids) == self.max_sequence_length
