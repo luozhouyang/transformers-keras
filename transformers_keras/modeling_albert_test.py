@@ -136,23 +136,6 @@ class ModelingAlbertTest(tf.test.TestCase):
         self.assertAllEqual([2, 16, 768], outputs.shape)
         self.assertAllEqual([2, 768], pooled_outputs.shape)
 
-    def testAlbertModelFromPretrained(self):
-        input_ids = tf.constant(
-            [1, 2, 3, 4, 5, 6, 7, 5, 3, 2, 3, 4, 1, 2, 3, 1, 2, 3, 4, 5, 6, 6, 6, 7, 7, 8, 0, 0, 0, 0, 0, 0],
-            shape=(2, 16),
-            dtype=np.int32)  # input_ids
-        token_type_ids = np.array(
-            [[0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1],
-             [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1]], dtype=np.int64)  # token_type_ids,
-        input_mask = tf.constant(
-            [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1],
-             [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1]], dtype=np.float32)  # input_mask
-
-        model = AlbertModel.from_pretrained('/Users/luozhouyang/pretrain-models/albert/albert_large')
-        outputs, pooled_outputs = model(inputs=(input_ids, token_type_ids, input_mask))
-        self.assertAllEqual([2, 16, 1024], outputs.shape)
-        self.assertAllEqual([2, 1024], pooled_outputs.shape)
-
     def testAlbertForPretrainingModel(self):
         input_ids = tf.constant(
             [1, 2, 3, 4, 5, 6, 7, 5, 3, 2, 3, 4, 1, 2, 3, 1, 2, 3, 4, 5, 6, 6, 6, 7, 7, 8, 0, 0, 0, 0, 0, 0],
@@ -168,23 +151,6 @@ class ModelingAlbertTest(tf.test.TestCase):
         model = AlbertForPretrainingModel(vocab_size=100, num_layers=4, num_groups=1, num_layers_each_group=1)
         outputs, pooled_outputs = model(inputs=(input_ids, token_type_ids, input_mask))
         self.assertAllEqual([2, 16, 100], outputs.shape)
-        self.assertAllEqual([2, 2], pooled_outputs.shape)
-
-    def testAlbertForPretrainingModelFromPretrained(self):
-        input_ids = tf.constant(
-            [1, 2, 3, 4, 5, 6, 7, 5, 3, 2, 3, 4, 1, 2, 3, 1, 2, 3, 4, 5, 6, 6, 6, 7, 7, 8, 0, 0, 0, 0, 0, 0],
-            shape=(2, 16),
-            dtype=np.int32)  # input_ids
-        token_type_ids = np.array(
-            [[0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1],
-             [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1]], dtype=np.int64)  # token_type_ids,
-        input_mask = tf.constant(
-            [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1],
-             [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1]], dtype=np.float32)  # input_mask
-
-        model = AlbertForPretrainingModel.from_pretrained('/Users/luozhouyang/pretrain-models/albert/albert_large')
-        outputs, pooled_outputs = model(inputs=(input_ids, token_type_ids, input_mask))
-        self.assertAllEqual([2, 16, 21128], outputs.shape)
         self.assertAllEqual([2, 2], pooled_outputs.shape)
 
 

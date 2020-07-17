@@ -55,9 +55,10 @@ def initialize(stddev=0.02):
 
 def parse_pretrained_model_files(pretrain_model_dir):
     config_file, ckpt, vocab = None, None, None
+    pretrain_model_dir = os.path.abspath(pretrain_model_dir)
     if not os.path.exists(pretrain_model_dir):
         logging.info('pretrain model dir: {} is not exists.'.format(pretrain_model_dir))
-        return
+        return config_file, ckpt, vocab
     for f in os.listdir(pretrain_model_dir):
         if str(f).endswith('config.json'):
             config_file = os.path.join(pretrain_model_dir, f)

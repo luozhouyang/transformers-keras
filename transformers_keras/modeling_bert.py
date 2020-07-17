@@ -5,7 +5,7 @@ import os
 import tensorflow as tf
 
 from .layers import MultiHeadAttention
-from .modeling_utils import choose_activation, initialize
+from .modeling_utils import choose_activation, initialize, parse_pretrained_model_files
 
 
 class BertEmbedding(tf.keras.layers.Layer):
@@ -452,7 +452,7 @@ class BertModel(tf.keras.Model):
 
     @classmethod
     def from_pretrained(cls, pretrained_model_dir, **kwargs):
-        config_file, ckpt, _ = _parse_files(pretrained_model_dir)
+        config_file, ckpt, _ = parse_pretrained_model_files(pretrained_model_dir)
         model_config = mapping_config(config_file)
         name_mapping = mapping_variables(model_config, load_mlm=False, load_nsp=False)
         model = cls(**model_config)
@@ -519,7 +519,7 @@ class BertForPretrainingModel(tf.keras.Model):
 
     @classmethod
     def from_pretrained(cls, pretrained_model_dir, **kwargs):
-        config_file, ckpt, _ = _parse_files(pretrained_model_dir)
+        config_file, ckpt, _ = parse_pretrained_model_files(pretrained_model_dir)
         model_config = mapping_config(config_file)
         name_mapping = mapping_variables(model_config, load_mlm=True, load_nsp=True)
         model = cls(**model_config)
@@ -546,22 +546,6 @@ class BertForPretrainingModel(tf.keras.Model):
         predictions = self.mlm(seqeuence_outputs)
         relations = self.nsp(pooled_outputs)
         return predictions, relations
-
-
-def _parse_files(pretrain_model_dir):
-    config_file, ckpt, vocab = None, None, None
-    if not os.path.exists(pretrain_model_dir):
-        logging.info('pretrain model dir: {} is not exists.'.format(pretrain_model_dir))
-        return
-    for f in os.listdir(pretrain_model_dir):
-        if str(f).endswith('config.json'):
-            config_file = os.path.join(pretrain_model_dir, f)
-        if 'vocab' in str(f):
-            vocab = os.path.join(pretrain_model_dir, f)
-        if 'ckpt' in str(f):
-            n = '.'.join(str(f).split('.')[:-1])
-            ckpt = os.path.join(pretrain_model_dir, n)
-    return config_file, ckpt, vocab
 
 
 def mapping_config(pretrained_config_file):
