@@ -29,11 +29,11 @@ from .modeling_bert import (
     BertEmbedding,
     BertEncoder,
     BertEncoderLayer,
-    BertForPretrainingModel,
     BertIntermediate,
     BertMLMHead,
-    BertModel,
     BertNSPHead,
+    BertPretrainingHeads,
+    BertPretrainingModel,
 )
 from .modeling_transformer import PositionalEncoding, Transformer, TransformerDecoder, TransformerEmbedding, TransformerEncoder
 from .runners import TransformerRunner
