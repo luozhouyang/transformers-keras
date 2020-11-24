@@ -5,43 +5,10 @@ import os
 import tensorflow as tf
 
 from .layers import MultiHeadAttention
-from .modeling_utils import choose_activation, initialize, parse_pretrained_model_files
-from transformers_keras.adapters.abstract_adapter import zip_weights, parse_pretrained_model_files
+from .modeling_utils import choose_activation, initialize, unpack_inputs_2, unpack_inputs_3 
+from transformers_keras.adapters.abstract_adapter import zip_weights
 from transformers_keras.adapters.bert_adapter import BertAdapter
 
-
-def unpack_input_ids_and_segment_ids(inputs):
-    if not isinstance(inputs, (list, tuple)):
-        raise ValueError('Invalid inputs type! Inputs type must be a list or tuple!')
-    inputs = list(inputs)
-    if len(inputs) == 0:
-        raise ValueError('Invalid inputs, must be not empty!')
-    if len(inputs) == 1:
-        input_ids, segment_ids = inputs[0], None
-    if len(inputs) == 2:
-        input_ids, segment_ids = inputs[0], inputs[1]
-    if segment_ids is None:
-        segment_ids = tf.cast(tf.fill(tf.shape(input_ids), 0), dtype=tf.int32)
-    return input_ids, segment_ids
-
-
-def unpack_input_ids_and_segment_ids_and_mask(inputs):
-    if not isinstance(inputs, (list, tuple)):
-        raise ValueError('Invalid inputs type! Inputs type must be a list or tuple!')
-    inputs = list(inputs)
-    if len(inputs) == 0:
-        raise ValueError('Invalid inputs, must be not empty!')
-    if len(inputs) == 1:
-        input_ids, segment_ids, mask = inputs[0], None, None
-    if len(inputs) == 2:
-        input_ids, segment_ids, mask = inputs[0], inputs[1], None
-    if len(inputs) == 3:
-        input_ids, segment_ids, mask = inputs[0], inputs[1], inputs[2]
-    if segment_ids is None:
-        segment_ids = tf.cast(tf.fill(tf.shape(input_ids), 0), dtype=tf.int32)
-    if mask is None:
-        mask = tf.cast(tf.greater(input_ids, 0), dtype=tf.int32)
-    return input_ids, segment_ids, mask
 
 
 class BertEmbedding(tf.keras.layers.Layer):
@@ -89,7 +56,7 @@ class BertEmbedding(tf.keras.layers.Layer):
         if mode == 'linear':
             return tf.matmul(inputs, self.token_embedding, transpose_b=True)
 
-        input_ids, token_type_ids = unpack_input_ids_and_segment_ids(inputs)
+        input_ids, token_type_ids = unpack_inputs_2(inputs)
         seq_len = tf.shape(input_ids)[1]
         position_ids = tf.range(seq_len, dtype=tf.int32)[tf.newaxis, :]
 
@@ -255,7 +222,7 @@ class Bert(tf.keras.Model):
         self.bert_pooler = BertPooler(hidden_size=hidden_size, stddev=stddev, name='pooler')
 
     def call(self, inputs, training=None):
-        input_ids, token_type_ids, mask = unpack_input_ids_and_segment_ids_and_mask(inputs)
+        input_ids, token_type_ids, mask = unpack_inputs_3(inputs)
         mask = mask[:, tf.newaxis, tf.newaxis, :]  # (batch_size, seq_len) -> (batch_size, 1, 1, seq_len)
         embedding = self.bert_embedding(inputs=(input_ids, token_type_ids), mode='embedding')
         output, all_hidden_states, all_attention_scores = self.bert_encoder(inputs=(embedding, mask))

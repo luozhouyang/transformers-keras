@@ -68,3 +68,39 @@ def parse_pretrained_model_files(pretrain_model_dir):
             n = '.'.join(str(f).split('.')[:-1])
             ckpt = os.path.join(pretrain_model_dir, n)
     return config_file, ckpt, vocab
+
+
+def unpack_inputs_2(inputs):
+    if not isinstance(inputs, (list, tuple)):
+        raise ValueError('Invalid inputs type! Inputs type must be a list or tuple!')
+    inputs = list(inputs)
+    if len(inputs) == 0:
+        raise ValueError('Invalid inputs, must be not empty!')
+    if len(inputs) == 1:
+        input_ids, segment_ids = inputs[0], None
+    if len(inputs) == 2:
+        input_ids, segment_ids = inputs[0], inputs[1]
+    if segment_ids is None:
+        segment_ids = tf.cast(tf.fill(tf.shape(input_ids), 0), dtype=tf.int32)
+    return input_ids, segment_ids
+
+
+def unpack_inputs_3(inputs):
+    if not isinstance(inputs, (list, tuple)):
+        raise ValueError('Invalid inputs type! Inputs type must be a list or tuple!')
+    inputs = list(inputs)
+    if len(inputs) == 0:
+        raise ValueError('Invalid inputs, must be not empty!')
+    if len(inputs) == 1:
+        input_ids, segment_ids, mask = inputs[0], None, None
+    if len(inputs) == 2:
+        input_ids, segment_ids, mask = inputs[0], inputs[1], None
+    if len(inputs) == 3:
+        input_ids, segment_ids, mask = inputs[0], inputs[1], inputs[2]
+    if segment_ids is None:
+        segment_ids = tf.cast(tf.fill(tf.shape(input_ids), 0), dtype=tf.int32)
+    if mask is None:
+        mask = tf.cast(tf.greater(input_ids, 0), dtype=tf.int32)
+    return input_ids, segment_ids, mask
+
+
