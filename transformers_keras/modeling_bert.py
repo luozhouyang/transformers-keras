@@ -49,7 +49,7 @@ class BertEmbedding(tf.keras.layers.Layer):
     def __init__(self,
                  vocab_size=1,
                  max_positions=512,
-                 hidden_size=768,
+                 embedding_size=768,
                  type_vocab_size=2,
                  dropout_rate=0.2,
                  stddev=0.02,
@@ -58,18 +58,18 @@ class BertEmbedding(tf.keras.layers.Layer):
         super().__init__(**kwargs)
         assert vocab_size > 0, "vocab_size must greater than 0."
         self.vocab_size = vocab_size
-        self.hidden_size = hidden_size
+        self.embedding_size = embedding_size
         self.stddev = stddev
 
         self.position_embedding = tf.keras.layers.Embedding(
             max_positions,
-            hidden_size,
+            embedding_size,
             embeddings_initializer=initialize(stddev),
             name='position_embedding'
         )
         self.token_type_embedding = tf.keras.layers.Embedding(
             type_vocab_size,
-            hidden_size,
+            embedding_size,
             embeddings_initializer=initialize(stddev),
             name='token_type_embedding'
         )
@@ -79,7 +79,7 @@ class BertEmbedding(tf.keras.layers.Layer):
     def build(self, input_shape):
         self.token_embedding = self.add_weight(
             'weight',
-            shape=[self.vocab_size, self.hidden_size],
+            shape=[self.vocab_size, self.embedding_size],
             initializer=initialize(self.stddev)
         )
         super().build(input_shape)
@@ -233,7 +233,7 @@ class Bert(tf.keras.Model):
         self.bert_embedding = BertEmbedding(
             vocab_size=vocab_size,
             max_positions=max_positions,
-            hidden_size=hidden_size,
+            embedding_size=hidden_size,
             type_vocab_size=type_vocab_size,
             dropout_rate=hidden_dropout_rate,
             stddev=stddev,
