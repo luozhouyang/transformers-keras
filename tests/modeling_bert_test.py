@@ -2,12 +2,10 @@ import unittest
 
 import numpy as np
 import tensorflow as tf
-
 from transformers_keras.modeling_bert import *
 
 
 class ModelingBertTest(tf.test.TestCase):
-
 
     def testBuildPretrainingModel(self):
         model = BertPretrainingModel(vocab_size=21128)
@@ -16,7 +14,7 @@ class ModelingBertTest(tf.test.TestCase):
         print('=' * 120)
         for v in model.trainable_variables:
             print(v.name, v.shape)
-        
+
     def testBertEmbeddings(self):
         embedding_layer = BertEmbedding(vocab_size=16, max_positions=40)
         inputs = (

@@ -1,7 +1,6 @@
 import tensorflow as tf
-
-from .metrics import (MaskedSparseCategoricalAccuracy,
-                      masked_sparse_categorical_accuracy)
+from transformers_keras.metrics import (MaskedSparseCategoricalAccuracy,
+                                        masked_sparse_categorical_accuracy)
 
 
 class MetricsTest(tf.test.TestCase):

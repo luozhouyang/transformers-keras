@@ -1,7 +1,7 @@
 import tensorflow as tf
-
-from .layers import (DecoderLayer, EncoderLayer, MultiHeadAttention,
-                     ScaledDotProductAttention)
+from transformers_keras.layers import (DecoderLayer, EncoderLayer,
+                                       MultiHeadAttention,
+                                       ScaledDotProductAttention)
 
 
 def _create_padding_mask(x):
