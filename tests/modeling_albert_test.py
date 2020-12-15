@@ -1,17 +1,10 @@
 import numpy as np
 import tensorflow as tf
-
-from .modeling_albert import (
-    Albert,
-    AlbertEmbedding,
-    AlbertEncoder,
-    AlbertEncoderGroup,
-    AlbertEncoderLayer,
-    AlbertForPretrainingModel,
-    AlbertMLMHead,
-    AlbertModel,
-    AlbertSOPHead,
-)
+from transformers_keras.modeling_albert import (Albert, AlbertEmbedding,
+                                                AlbertEncoder,
+                                                AlbertEncoderGroup,
+                                                AlbertEncoderLayer,
+                                                AlbertMLMHead, AlbertSOPHead)
 
 
 class ModelingAlbertTest(tf.test.TestCase):
@@ -118,40 +111,13 @@ class ModelingAlbertTest(tf.test.TestCase):
         outputs = sop(inputs)
         self.assertAllEqual([2, 2], outputs.shape)
 
-    def testAlberModel(self):
-        input_ids = tf.constant(
-            [1, 2, 3, 4, 5, 6, 7, 5, 3, 2, 3, 4, 1, 2, 3, 1, 2, 3, 4, 5, 6, 6, 6, 7, 7, 8, 0, 0, 0, 0, 0, 0],
-            shape=(2, 16),
-            dtype=np.int32)  # input_ids
-        token_type_ids = np.array(
-            [[0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1],
-             [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1]], dtype=np.int64)  # token_type_ids,
-        input_mask = tf.constant(
-            [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1],
-             [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1]], dtype=np.float32)  # input_mask
+    def test_build_model(self):
+        model = Albert(vocab_size=21128)
+        model(model.dummy_inputs())
+        model.summary()
 
-        model = AlbertModel(vocab_size=100, hidden_size=768,
-                            num_layers=4, num_groups=1, num_layers_each_group=1)
-        outputs, pooled_outputs = model(inputs=(input_ids, token_type_ids, input_mask))
-        self.assertAllEqual([2, 16, 768], outputs.shape)
-        self.assertAllEqual([2, 768], pooled_outputs.shape)
-
-    def testAlbertForPretrainingModel(self):
-        input_ids = tf.constant(
-            [1, 2, 3, 4, 5, 6, 7, 5, 3, 2, 3, 4, 1, 2, 3, 1, 2, 3, 4, 5, 6, 6, 6, 7, 7, 8, 0, 0, 0, 0, 0, 0],
-            shape=(2, 16),
-            dtype=np.int32)  # input_ids
-        token_type_ids = np.array(
-            [[0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1],
-             [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1]], dtype=np.int64)  # token_type_ids,
-        input_mask = tf.constant(
-            [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1],
-             [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1]], dtype=np.float32)  # input_mask
-
-        model = AlbertForPretrainingModel(vocab_size=100, num_layers=4, num_groups=1, num_layers_each_group=1)
-        outputs, pooled_outputs = model(inputs=(input_ids, token_type_ids, input_mask))
-        self.assertAllEqual([2, 16, 100], outputs.shape)
-        self.assertAllEqual([2, 2], pooled_outputs.shape)
+        for v in model.trainable_weights:
+            print(v.name)
 
 
 if __name__ == "__main__":

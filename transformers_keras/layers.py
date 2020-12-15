@@ -3,8 +3,9 @@ import tensorflow as tf
 
 class ScaledDotProductAttention(tf.keras.layers.Layer):
 
-    def __init__(self, **kwargs):
+    def __init__(self, attention_dropout_rate=0.1, **kwargs):
         super(ScaledDotProductAttention, self).__init__(**kwargs)
+        self.dropout = tf.keras.layers.Dropout(attention_dropout_rate, name='dropout')
 
     def call(self, inputs, training=None):
         query, key, value, mask = inputs
@@ -17,18 +18,16 @@ class ScaledDotProductAttention(tf.keras.layers.Layer):
         score = score / tf.math.sqrt(dk)
         if mask is not None:
             mask = tf.cast(mask, dtype=self.dtype)
-            score += mask * -10000.0
+            score +=  (1.0 - mask) * -10000.0
         attn_weights = tf.nn.softmax(score, axis=-1)
+        attn_weights = self.dropout(attn_weights, training=training)
         context = tf.matmul(attn_weights, value)
         return context, attn_weights
-
-    def get_config(self):
-        return super().get_config()
 
 
 class MultiHeadAttention(tf.keras.layers.Layer):
 
-    def __init__(self, hidden_size=512, num_attention_heads=8, **kwargs):
+    def __init__(self, hidden_size=512, num_attention_heads=8, hidden_dropout_rate=0.2, attention_dropout_rate=0.1, epsilon=1e-8, **kwargs):
         super(MultiHeadAttention, self).__init__(**kwargs)
         self.hidden_size = hidden_size
         self.num_attention_heads = num_attention_heads
@@ -38,9 +37,12 @@ class MultiHeadAttention(tf.keras.layers.Layer):
         self.key_weight = tf.keras.layers.Dense(self.hidden_size, name='key')
         self.value_weight = tf.keras.layers.Dense(self.hidden_size, name='value')
 
-        self.attention = ScaledDotProductAttention()
+        self.attention = ScaledDotProductAttention(attention_dropout_rate=attention_dropout_rate, name='self')
 
+        # output block
         self.dense = tf.keras.layers.Dense(self.hidden_size, name='dense')
+        self.layer_norm = tf.keras.layers.LayerNormalization(epsilon=epsilon, name='layer_norm')
+        self.dropout = tf.keras.layers.Dropout(hidden_dropout_rate, name='dropout')
 
     def _split_heads(self, x, batch_size):
         x = tf.reshape(x, (batch_size, -1, self.num_attention_heads, self.hidden_size // self.num_attention_heads))
@@ -48,8 +50,9 @@ class MultiHeadAttention(tf.keras.layers.Layer):
 
     def call(self, inputs, training=None):
         query, key, value, mask = inputs
-        batch_size = tf.shape(query)[0]
+        origin_input = query # query == key == value
 
+        batch_size = tf.shape(query)[0]
         query = self._split_heads(self.query_weight(query), batch_size)
         key = self._split_heads(self.key_weight(key), batch_size)
         value = self._split_heads(self.value_weight(value), batch_size)
@@ -58,15 +61,9 @@ class MultiHeadAttention(tf.keras.layers.Layer):
         context = tf.transpose(context, perm=[0, 2, 1, 3])
         context = tf.reshape(context, [batch_size, -1, self.hidden_size])
         output = self.dense(context)
+        output = self.dropout(output, training=training)
+        output = self.layer_norm(output + origin_input)
         return output, attn_weights
-
-    def get_config(self):
-        config = {
-            'hidden_size': self.hidden_size,
-            'num_attention_heads': self.num_attention_heads
-        }
-        base = super().get_config()
-        return dict(list(base.items()) + list(config.items()))
 
 
 class PointWiseFeedForwardNetwork(tf.keras.layers.Layer):

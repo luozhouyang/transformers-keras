@@ -1,7 +1,6 @@
 import tensorflow as tf
-
-from .losses import (MaskedSparseCategoricalCrossentropy,
-                     masked_sparse_categorical_crossentropy)
+from transformers_keras.losses import (MaskedSparseCategoricalCrossentropy,
+                                       masked_sparse_categorical_crossentropy)
 
 
 class LossesTest(tf.test.TestCase):
