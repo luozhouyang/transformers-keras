@@ -15,11 +15,10 @@ setuptools.setup(
     packages=setuptools.find_packages(),
     include_package_data=True,
     install_requires=[
-        "jieba",
     ],
     extras_require={
-        "tf": ["tensorflow>=2.2.0"],
-        "tf-gpu": ["tensorflow-gpu>=2.2.0"],
+        "tf": ["tensorflow>=2.0.1"],
+        "tf-gpu": ["tensorflow-gpu>=2.0.1"],
     },
     license="Apache Software License",
     classifiers=(
