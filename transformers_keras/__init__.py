@@ -3,30 +3,16 @@ import logging
 import tensorflow as tf
 
 from .callbacks import SavedModelExporter, TransformerLearningRate
-from .layers import DecoderLayer, EncoderLayer, MultiHeadAttention, PointWiseFeedForwardNetwork, ScaledDotProductAttention
+from .layers import (DecoderLayer, EncoderLayer, MultiHeadAttention,
+                     PointWiseFeedForwardNetwork, ScaledDotProductAttention)
 from .losses import MaskedSparseCategoricalCrossentropy
 from .metrics import MaskedSparseCategoricalAccuracy
-from .modeling_albert import (
-    Albert,
-    AlbertEmbedding,
-    AlbertEncoder,
-    AlbertEncoderGroup,
-    AlbertEncoderLayer,
-    AlbertMLMHead,
-    AlbertSOPHead,
-)
-from .modeling_bert import (
-    Bert,
-    BertEmbedding,
-    BertEncoder,
-    BertEncoderLayer,
-    BertIntermediate,
-    BertMLMHead,
-    BertNSPHead,
-    BertPretrainingHeads,
-    BertPretrainingModel,
-)
-from .modeling_transformer import PositionalEncoding, Transformer, TransformerDecoder, TransformerEmbedding, TransformerEncoder
+from .modeling_albert import (Albert, AlbertEmbedding, AlbertEncoder,
+                              AlbertEncoderGroup, AlbertEncoderLayer,
+                              AlbertMLMHead, AlbertSOPHead)
+from .modeling_bert import (Bert, BertEmbedding, BertEncoder, BertEncoderLayer,
+                            BertIntermediate, BertMLMHead, BertNSPHead,
+                            BertPretrainingHeads, BertPretrainingModel)
 
 __name__ = 'transformers_keras'
 __version__ = '0.1.4'
