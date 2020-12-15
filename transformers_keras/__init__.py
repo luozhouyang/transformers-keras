@@ -12,9 +12,7 @@ from .modeling_albert import (
     AlbertEncoder,
     AlbertEncoderGroup,
     AlbertEncoderLayer,
-    AlbertForPretrainingModel,
     AlbertMLMHead,
-    AlbertModel,
     AlbertSOPHead,
 )
 from .modeling_bert import (

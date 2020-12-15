@@ -1,5 +1,5 @@
-import logging
 import abc
+import logging
 import os
 
 import tensorflow as tf
@@ -7,10 +7,16 @@ import tensorflow as tf
 
 def zip_weights(model, ckpt, variables_mapping, verbose=True):
     weights, values, names = [], [], []
+    # for k, v in variables_mapping.items():
+    #         print('{} \t -> {}'.format(k, v))
     for w in model.trainable_weights:
         names.append(w.name)
         weights.append(w)
-        v = tf.train.load_variable(ckpt, variables_mapping[w.name])
+        var = variables_mapping.get(w.name, None)
+        if not var:
+            logging.warning('model weight: {} does not found in mapping dict.')
+            continue
+        v = tf.train.load_variable(ckpt, var)
         if w.name == 'bert/nsp/dense/kernel:0':
             v = v.T
         values.append(v)
@@ -19,7 +25,7 @@ def zip_weights(model, ckpt, variables_mapping, verbose=True):
             if n not in variables_mapping:
                 logging.warning('model weight: %s not found in ckpt.', n)
                 continue
-            logging.info('Load model weight: %s <-- %s', n, variables_mapping[n])
+            logging.info('Load model weight: {:70s} <-- {}'.format(n, variables_mapping[n]))
 
     mapped_values = zip(weights, values)
     return mapped_values
