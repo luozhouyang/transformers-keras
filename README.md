@@ -25,7 +25,10 @@ pip install -U transformers-keras
 
 ## BERT
 
-All the bert models pretrained by [google-research/bert](https://github.com/google-research/bert) can be loaded: 
+Supported pretrained models:
+
+* All the BERT models pretrained by [google-research/bert](https://github.com/google-research/bert)
+* All the BERT & RoBERTa models pretrained by [ymcui/Chinese-BERT-wwm](https://github.com/ymcui/Chinese-BERT-wwm)
 
 ```python
 from transformers_keras import Bert
@@ -39,7 +42,9 @@ model(model.dummy_inputs())
 
 ## ALBERT
 
-All the albert models pretrained by [google-research/albert](https://github.com/google-research/albert) can be loaded: 
+Supported pretrained models:
+
+* All the ALBERT models pretrained by [google-research/albert](https://github.com/google-research/albert)
 
 ```python
 from transformers_keras import Albert
@@ -49,4 +54,28 @@ model = Bert.from_pretrained('/path/to/pretrained/albert/model')
 model(model.dummy_inputs())
 ```
 
+## Load other pretrained models
 
+If you want to load pretraine models using other implementationds, whose config and trainable weights are a little different with previous, you can subclass `AbstractAdapter` to adapte these models:
+
+```python
+from transformers_keras.adapters import AbstractAdapter
+from transformers_keras import Bert, Albert
+
+# load custom bert models
+class MyBertAdapter(AbstractAdapter):
+
+  def adapte(self, pretrained_model_dir, **kwargs):
+      # you can refer to `transformers_keras.adapters.bert_adapter`
+      pass
+
+bert = Bert.from_pretrained('/path/to/your/bert/model', adapter=MyBertAdapter())
+
+# or, load custom albert models
+class MyAlbertAdapter(AbstractAdapter):
+
+  def adapte(self, pretrained_model_dir, **kwargs):
+      # you can refer to `transformers_keras.adapters.albert_adapter`
+      pass
+albert = Albert.from_pretrained('/path/to/your/albert/model', adapter=MyAlbertAdapter())
+```
