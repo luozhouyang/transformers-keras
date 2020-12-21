@@ -11,8 +11,7 @@ from .modeling_albert import (Albert, AlbertEmbedding, AlbertEncoder,
                               AlbertEncoderGroup, AlbertEncoderLayer,
                               AlbertMLMHead, AlbertSOPHead)
 from .modeling_bert import (Bert, BertEmbedding, BertEncoder, BertEncoderLayer,
-                            BertIntermediate, BertMLMHead, BertNSPHead,
-                            BertPretrainingHeads, BertPretrainingModel)
+                            BertIntermediate, BertMLMHead, BertNSPHead)
 
 __name__ = 'transformers_keras'
 __version__ = '0.2.0'
