@@ -43,7 +43,7 @@ def build_bert_classify_model(trainable=True):
     input_ids = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name='input_ids')
     # segment_ids and mask inputs are optional
     segment_ids = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name='segment_ids')
-    
+
     bert = Bert.from_pretrained(os.path.join(BASE_DIR, 'chinese_wwm_ext_L-12_H-768_A-12'))
     bert.trainable = trainable
 
@@ -79,7 +79,7 @@ def build_albert_classify_model(trainable=True):
     segment_ids = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name='segment_ids')
 
     albert = Albert.from_pretrained(os.path.join(BASE_DIR, 'albert_large_zh'))
-    bert.trainable = trainable
+    albert.trainable = trainable
 
     _, pooled_output, _, _ = albert(inputs=(input_ids, segment_ids))
     outputs = tf.keras.layers.Dense(2, name='output')(pooled_output)
