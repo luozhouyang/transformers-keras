@@ -12,28 +12,34 @@ os.environ.update({'CUDA_VISIBLE_DEVICES': '-1'})
 
 class LoadPretrainedModelTest(tf.test.TestCase):
 
+    def _do_predict(self, model):
+        input_ids = tf.constant([1, 2, 3, 4, 5, 6, 7, 8], shape=(2, 4))
+        # output_1 should be all close to output_2
+        _, outputs_1, _, _ = model.predict((input_ids,))
+        print(outputs_1)
+        _, outputs_2, _, _ = model(inputs=(input_ids,))
+        print(outputs_2)
+
     def test_load_pretrained_bert(self):
-        model1 = Bert.from_pretrained(os.path.join(BASE_DIR, 'chinese_wwm_ext_L-12_H-768_A-12'))
-        model1.summary()
-
-        model2 = Bert.from_pretrained(os.path.join(BASE_DIR, 'chinese_L-12_H-768_A-12'))
-        model2.summary()
-
-        model3 = Bert.from_pretrained(os.path.join(BASE_DIR, 'chinese_roberta_wwm_ext_L-12_H-768_A-12'))
-        model3.summary()
-
-        model4 = Bert.from_pretrained(os.path.join(BASE_DIR, 'chinese_roberta_wwm_large_ext_L-24_H-1024_A-16'))
-        model4.summary()
+        model_paths = [
+            'chinese_wwm_ext_L-12_H-768_A-12',
+            'chinese_L-12_H-768_A-12',
+            'chinese_roberta_wwm_ext_L-12_H-768_A-12',
+            'chinese_roberta_wwm_large_ext_L-24_H-1024_A-16'
+        ]
+        for p in model_paths:
+            model = Bert.from_pretrained(os.path.join(BASE_DIR, p))
+            model.summary()
+            self._do_predict(model)
 
     def test_load_pretrained_albert(self):
-        model1 = Albert.from_pretrained(os.path.join(BASE_DIR, 'albert_base_zh'))
-        model1.summary()
-
-        model2 = Albert.from_pretrained(os.path.join(BASE_DIR, 'albert_large_zh'))
-        model2.summary()
-
-        model3 = Albert.from_pretrained(os.path.join(BASE_DIR, 'albert_xlarge_zh'))
-        model3.summary()
+        model_paths = [
+            'albert_base_zh', 'albert_large_zh', 'albert_xlarge_zh'
+        ]
+        for p in model_paths:
+            model = Albert.from_pretrained(os.path.join(BASE_DIR, p))
+            model.summary()
+            self._do_predict(model)
 
     def test_bert_classify(self):
 
@@ -62,7 +68,7 @@ class LoadPretrainedModelTest(tf.test.TestCase):
 
             albert = Albert.from_pretrained(os.path.join(BASE_DIR, 'albert_large_zh'))
             albert.trainable = trainable
-            
+
             sequence_output, pooled_output, _, _ = albert(inputs=(input_ids, segment_ids))
             outputs = tf.keras.layers.Dense(2, name='output')(pooled_output)
             model = tf.keras.Model(inputs=[input_ids, segment_ids], outputs=outputs)
