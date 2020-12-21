@@ -33,10 +33,28 @@ Supported pretrained models:
 ```python
 from transformers_keras import Bert
 
+# Used to predict directly
 model = Bert.from_pretrained('/path/to/pretrained/bert/model')
-# then, use this model to fine-tune new model as a keras layer, or to do inference
-model(model.dummy_inputs())
+# segment_ids and mask inputs are optional
+model.predict(inputs=(input_ids, segment_ids, mask))
 
+# Used to fine-tuning
+def build_bert_classify_model(trainable=True):
+    input_ids = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name='input_ids')
+    # segment_ids and mask inputs are optional
+    segment_ids = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name='segment_ids')
+    
+    bert = Bert.from_pretrained(os.path.join(BASE_DIR, 'chinese_wwm_ext_L-12_H-768_A-12'))
+    bert.trainable = trainable
+
+    _, pooled_output, _, _ = bert(inputs=(input_ids, segment_ids))
+    outputs = tf.keras.layers.Dense(2, name='output')(pooled_output)
+    model = tf.keras.Model(inputs=[input_ids, segment_ids], outputs=outputs)
+    model.compile(loss='binary_cross_entropy', optimizer='adam')
+    return model
+
+model = build_bert_classify_model()
+model.summary()
 ```
 
 
@@ -49,9 +67,28 @@ Supported pretrained models:
 ```python
 from transformers_keras import Albert
 
+# Used to predict directly
 model = Bert.from_pretrained('/path/to/pretrained/albert/model')
-# then, use this model to fine-tune new model as a keras layer, or to do inference
+# segment_ids and mask inputs are optional
 model(model.dummy_inputs())
+
+# Used to fine-tuning 
+def build_albert_classify_model(trainable=True):
+    input_ids = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name='input_ids')
+    # segment_ids and mask inputs are optional
+    segment_ids = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name='segment_ids')
+
+    albert = Albert.from_pretrained(os.path.join(BASE_DIR, 'albert_large_zh'))
+    bert.trainable = trainable
+
+    _, pooled_output, _, _ = albert(inputs=(input_ids, segment_ids))
+    outputs = tf.keras.layers.Dense(2, name='output')(pooled_output)
+    model = tf.keras.Model(inputs=[input_ids, segment_ids], outputs=outputs)
+    model.compile(loss='binary_cross_entropy', optimizer='adam')
+    return model
+
+model = build_albert_classify_model()
+model.summary()
 ```
 
 ## Load other pretrained models
@@ -77,5 +114,6 @@ class MyAlbertAdapter(AbstractAdapter):
   def adapte(self, pretrained_model_dir, **kwargs):
       # you can refer to `transformers_keras.adapters.albert_adapter`
       pass
+
 albert = Albert.from_pretrained('/path/to/your/albert/model', adapter=MyAlbertAdapter())
 ```
