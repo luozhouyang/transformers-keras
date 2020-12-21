@@ -4,11 +4,12 @@ import os
 
 import tensorflow as tf
 
-from .layers import MultiHeadAttention
-from .modeling_utils import choose_activation, initialize, unpack_inputs_2, unpack_inputs_3 
 from transformers_keras.adapters.abstract_adapter import zip_weights
 from transformers_keras.adapters.bert_adapter import BertAdapter
 
+from .layers import MultiHeadAttention
+from .modeling_utils import (choose_activation, initialize, unpack_inputs_2,
+                             unpack_inputs_3)
 
 
 class BertEmbedding(tf.keras.layers.Layer):
@@ -100,17 +101,17 @@ class BertEncoderLayer(tf.keras.layers.Layer):
         super().__init__(**kwargs)
         # attention block
         self.attention = MultiHeadAttention(
-            hidden_size=hidden_size, 
-            num_attention_heads=num_attention_heads, 
-            hidden_dropout_rate=hidden_dropout_rate, 
-            attention_dropout_rate=attention_dropout_rate, 
+            hidden_size=hidden_size,
+            num_attention_heads=num_attention_heads,
+            hidden_dropout_rate=hidden_dropout_rate,
+            attention_dropout_rate=attention_dropout_rate,
             name='attention')
         # intermediate block
         self.intermediate = BertIntermediate(
-                intermediate_size=intermediate_size, 
-                activation=activation, 
-                stddev=stddev, 
-                name='intermediate')
+            intermediate_size=intermediate_size,
+            activation=activation,
+            stddev=stddev,
+            name='intermediate')
         # output block
         self.output_dense = tf.keras.layers.Dense(hidden_size, kernel_initializer=initialize(stddev), name='dense')
         self.output_dropout = tf.keras.layers.Dropout(hidden_dropout_rate)
@@ -164,7 +165,7 @@ class BertEncoder(tf.keras.layers.Layer):
 
         return hidden_states, all_hidden_states, all_attention_scores
 
- 
+
 class BertPooler(tf.keras.layers.Layer):
 
     def __init__(self, hidden_size=768, stddev=0.02, **kwargs):
@@ -228,7 +229,7 @@ class Bert(tf.keras.Model):
         output, all_hidden_states, all_attention_scores = self.bert_encoder(inputs=(embedding, mask))
         pooled_output = self.bert_pooler(output)
         return output, pooled_output, all_hidden_states, all_attention_scores
-     
+
     def dummy_inputs(self):
         input_ids = tf.constant([0] * 128, dtype=tf.int64, shape=(1, 128))
         segment_ids = tf.constant([0] * 128, dtype=tf.int64, shape=(1, 128))
@@ -291,58 +292,3 @@ class BertNSPHead(tf.keras.layers.Layer):
         pooled_output = inputs
         relation = self.classifier(pooled_output)
         return relation
-
-
-class BertPretrainingHeads(tf.keras.layers.Layer):
-
-    def __init__(self, embedding, vocab_size, hidden_size, activation='gelu', stddev=0.02, epsilon=1e-8, **kwargs):
-        super().__init__(**kwargs)
-        self.mlm = BertMLMHead(
-                embedding, 
-                vocab_size=vocab_size, 
-                hidden_size=hidden_size, 
-                activation=activation, 
-                epsilon=epsilon, 
-                stddev=stddev, 
-                name='predictions')
-        self.nsp = BertNSPHead(stddev=stddev, name='seq_relationship')
-
-    def call(self, inputs):
-        sequence_outputs, pooled_outputs = inputs
-        mlm_outputs = self.mlm(sequence_outputs)
-        nsp_outputs = self.nsp(pooled_outputs)
-        return mlm_outputs, nsp_outputs
-
-
-def BertPretrainingModel(**kwargs):
-    input_ids = tf.keras.layers.Input(shape=(None,), dtype=tf.int32)
-    segment_ids = tf.keras.layers.Input(shape=(None, ), dtype=tf.int32)
-    bert = Bert(
-            vocab_size=kwargs.get('vocab_size', -1),
-            type_vocab_size=kwargs.get('type_vocab_size', 2),
-            max_positions=kwargs.get('max_positions', 512),
-            num_layers=kwargs.get('num_layers', 12),
-            hidden_size=kwargs.get('hidden_size', 768),
-            intermediate_size=kwargs.get('intermediate_size', 3072),
-            activation=kwargs.get('activation', 'gelu'),
-            hidden_dropout_rate=kwargs.get('hidden_dropout_rate', 0.2),
-            attention_dropout_rate=kwargs.get('attention_dropout_rate', 0.1),
-            stddev=kwargs.get('stddev', 0.02),
-            epsilon=kwargs.get('epsilon', 1e-8),
-            name='bert')
-    sequence_outputs, pooled_outputs, _, _ = bert(inputs=(input_ids, segment_ids))
-    heads = BertPretrainingHeads(embedding=bert.bert_embedding,
-            vocab_size=kwargs.get('vocab_size', -1),
-            hidden_size=kwargs.get('hidden_size', 768),
-            activation=kwargs.get('kwargs', 'gelu'),
-            epsilon=kwargs.get('epsilon', 1e-8),
-            stddev=kwargs.get('stddev', 0.02),
-            name='cls')
-    mlm_outputs, nsp_outputs = heads(inputs=(sequence_outputs, pooled_outputs))
-
-    model = tf.keras.Model(inputs=[input_ids, segment_ids], outputs=[mlm_outputs, nsp_outputs])
-    model.compile(loss='sparse_categorical_crossentropy', optimizer=tf.keras.optimizers.Adam(kwargs.get('lr', 1e-5)))
-    model.summary()
-    return model
-
-
