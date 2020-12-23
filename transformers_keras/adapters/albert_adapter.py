@@ -4,20 +4,12 @@ import os
 
 import tensorflow as tf
 
-from .abstract_adapter import AbstractAdapter, parse_pretrained_model_files
+from .abstract_adapter import AbstractAdapter, zip_weights
 
 
 class AlbertAdapter(AbstractAdapter):
 
-    def adapte(self, pretrained_model_dir, **kwargs):
-        config_file, ckpt, vocab_file = parse_pretrained_model_files(pretrained_model_dir)
-        model_config = self._adapte_config(config_file)
-        name_mapping = self._adapte_variables(
-                num_groups=model_config['num_groups'],
-                num_layers_each_group=model_config['num_layers_each_group'])
-        return model_config, name_mapping, ckpt, vocab_file
-
-    def _adapte_config(self, config_file):
+    def adapte_config(self, config_file, **kwargs):
         with open(config_file, mode='rt', encoding='utf8') as fin:
             config = json.load(fin)
 
@@ -39,7 +31,19 @@ class AlbertAdapter(AbstractAdapter):
         }
         return model_config
 
-    def _adapte_variables(self, num_groups, num_layers_each_group):
+    def adapte_weights(self, model, config, ckpt, **kwargs):
+        # mapping weight names
+        weights_mapping = self._mapping_weight_names(config['num_groups'], config['num_layers_each_group'])
+        # zip weights and its' values
+        zipped_weights = zip_weights(
+            model,
+            ckpt,
+            weights_mapping,
+            verbose=kwargs.get('verbose', True))
+        # set values to weights
+        tf.keras.backend.batch_set_value(zipped_weights)
+
+    def _mapping_weight_names(self, num_groups, num_layers_each_group):
         mapping = {}
 
         # embedding
@@ -98,4 +102,3 @@ class AlbertAdapter(AbstractAdapter):
             mapping[k] = v
 
         return mapping
-

@@ -4,7 +4,7 @@ import os
 
 import tensorflow as tf
 
-from transformers_keras.adapters.abstract_adapter import zip_weights
+from transformers_keras.adapters import parse_pretrained_model_files
 from transformers_keras.adapters.bert_adapter import BertAdapter
 
 from .layers import MultiHeadAttention
@@ -238,13 +238,13 @@ class Bert(tf.keras.Model):
 
     @classmethod
     def from_pretrained(cls, pretrained_model_dir, adapter=None, verbose=True, **kwargs):
+        config_file, ckpt, vocab_file = parse_pretrained_model_files(pretrained_model_dir)
         if not adapter:
             adapter = BertAdapter()
-        model_config, name_mapping, ckpt, vocab_file = adapter.adapte(pretrained_model_dir)
+        model_config = adapter.adapte_config(config_file, **kwargs)
         model = cls(**model_config)
         model(model.dummy_inputs())
-        weights_values = zip_weights(model, ckpt, name_mapping, verbose=verbose)
-        tf.keras.backend.batch_set_value(weights_values)
+        adapter.adapte_weights(model, model_config, ckpt, **kwargs)
         return model
 
 

@@ -97,7 +97,7 @@ model.summary()
 
 ## Load other pretrained models
 
-If you want to load pretraine models using other implementationds, whose config and trainable weights are a little different with previous, you can subclass `AbstractAdapter` to adapte these models:
+If you want to load models pretrained by other implementationds, whose config and trainable weights are a little different from previous, you can subclass `AbstractAdapter` to adapte these models:
 
 ```python
 from transformers_keras.adapters import AbstractAdapter
@@ -106,18 +106,30 @@ from transformers_keras import Bert, Albert
 # load custom bert models
 class MyBertAdapter(AbstractAdapter):
 
-  def adapte(self, pretrained_model_dir, **kwargs):
-      # you can refer to `transformers_keras.adapters.bert_adapter`
-      pass
+    def adapte_config(self, config_file, **kwargs):
+        # adapte model config here
+        # you can refer to `transformers_keras.adapters.bert_adapter`
+        pass
+
+    def adapte_weights(self, model, config, ckpt, **kwargs):
+        # adapte model weights here
+        # you can refer to `transformers_keras.adapters.bert_adapter`
+        pass
 
 bert = Bert.from_pretrained('/path/to/your/bert/model', adapter=MyBertAdapter())
 
 # or, load custom albert models
 class MyAlbertAdapter(AbstractAdapter):
 
-  def adapte(self, pretrained_model_dir, **kwargs):
-      # you can refer to `transformers_keras.adapters.albert_adapter`
-      pass
+    def adapte_config(self, config_file, **kwargs):
+        # adapte model config here
+        # you can refer to `transformers_keras.adapters.albert_adapter`
+        pass
+
+    def adapte_weights(self, model, config, ckpt, **kwargs):
+        # adapte model weights here
+        # you can refer to `transformers_keras.adapters.albert_adapter`
+        pass
 
 albert = Albert.from_pretrained('/path/to/your/albert/model', adapter=MyAlbertAdapter())
 ```

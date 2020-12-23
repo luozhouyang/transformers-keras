@@ -7,8 +7,6 @@ import tensorflow as tf
 
 def zip_weights(model, ckpt, variables_mapping, verbose=True):
     weights, values, names = [], [], []
-    # for k, v in variables_mapping.items():
-    #         print('{} \t -> {}'.format(k, v))
     for w in model.trainable_weights:
         names.append(w.name)
         weights.append(w)
@@ -31,26 +29,29 @@ def zip_weights(model, ckpt, variables_mapping, verbose=True):
     return mapped_values
 
 
-def parse_pretrained_model_files(pretrain_model_dir):
+def parse_pretrained_model_files(pretrained_model_dir):
     config_file, ckpt, vocab = None, None, None
-    pretrain_model_dir = os.path.abspath(pretrain_model_dir)
-    if not os.path.exists(pretrain_model_dir):
-        logging.info('pretrain model dir: {} is not exists.'.format(pretrain_model_dir))
+    pretrained_model_dir = os.path.abspath(pretrained_model_dir)
+    if not os.path.exists(pretrained_model_dir):
+        logging.info('pretrain model dir: {} is not exists.'.format(pretrained_model_dir))
         return config_file, ckpt, vocab
-    for f in os.listdir(pretrain_model_dir):
+    for f in os.listdir(pretrained_model_dir):
         if str(f).endswith('config.json'):
-            config_file = os.path.join(pretrain_model_dir, f)
+            config_file = os.path.join(pretrained_model_dir, f)
         if 'vocab' in str(f):
-            vocab = os.path.join(pretrain_model_dir, f)
+            vocab = os.path.join(pretrained_model_dir, f)
         if 'ckpt' in str(f):
             n = '.'.join(str(f).split('.')[:-1])
-            ckpt = os.path.join(pretrain_model_dir, n)
+            ckpt = os.path.join(pretrained_model_dir, n)
     return config_file, ckpt, vocab
-
 
 
 class AbstractAdapter(abc.ABC):
 
-    def adapte(self, pretrained_model_dir, **kwargs):
+    @abc.abstractmethod
+    def adapte_config(self, config_file, **kwargs):
         raise NotImplementedError()
 
+    @abc.abstractmethod
+    def adapte_weights(self, model, config, ckpt, **kwargs):
+        raise NotImplementedError()

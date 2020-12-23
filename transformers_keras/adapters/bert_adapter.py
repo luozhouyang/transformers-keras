@@ -1,24 +1,15 @@
-import os
 import json
 import logging
+import os
 
 import tensorflow as tf
 
-from .abstract_adapter import AbstractAdapter
-from .abstract_adapter import parse_pretrained_model_files
+from .abstract_adapter import AbstractAdapter, zip_weights
 
 
 class BertAdapter(AbstractAdapter):
-    """Adapte pretrained models to newly build BERT model."""
 
-    def adapte(self, pretrained_model_dir, **kwargs):
-        config_file, ckpt, vocab_file = parse_pretrained_model_files(pretrained_model_dir)
-        model_config = self.adapte_config(config_file)
-        variables_mapping = self.adapte_variables(model_config['num_layers'])
-        return model_config, variables_mapping, ckpt, vocab_file 
-
-    
-    def adapte_config(self, config_file):
+    def adapte_config(self, config_file, **kwrgs):
         with open(config_file, mode='rt', encoding='utf8') as fin:
             config = json.load(fin)
 
@@ -37,10 +28,22 @@ class BertAdapter(AbstractAdapter):
         }
         return model_config
 
-    def adapte_variables(self, num_layers=12):
+    def adapte_weights(self, model, config, ckpt, **kwargs):
+        # mapping weight names
+        weights_mapping = self._mapping_weight_names(config['num_layers'])
+        # zip weight names and values
+        zipped_weights = zip_weights(
+            model,
+            ckpt,
+            weights_mapping,
+            verbose=kwargs.get('verbose', True))
+        # set values to weights
+        tf.keras.backend.batch_set_value(zipped_weights)
+
+    def _mapping_weight_names(self, num_layers=12):
         mapping = {}
-        
-        # embedding 
+
+        # embedding
         mapping.update({
             'bert/embedding/weight:0': 'bert/embeddings/word_embeddings',
             'bert/embedding/token_type_embedding/embeddings:0': 'bert/embeddings/token_type_embeddings',
@@ -49,7 +52,7 @@ class BertAdapter(AbstractAdapter):
             'bert/embedding/layer_norm/beta:0': 'bert/embeddings/LayerNorm/beta',
         })
 
-        # encoder 
+        # encoder
         model_prefix = 'bert/encoder/layer_{}'
         for i in range(num_layers):
             encoder_prefix = 'bert/encoder/layer_{}/'.format(i)
