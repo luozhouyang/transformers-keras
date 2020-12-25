@@ -41,12 +41,12 @@ model.predict((input_ids, segment_ids, mask))
 model(inputs=(input_ids, segment_ids, mask))
 
 # Used to fine-tuning
-def build_bert_classify_model(trainable=True):
+def build_bert_classify_model(pretrained_model_dir, trainable=True, **kwargs):
     input_ids = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name='input_ids')
     # segment_ids and mask inputs are optional
     segment_ids = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name='segment_ids')
 
-    bert = Bert.from_pretrained(os.path.join(BASE_DIR, 'chinese_wwm_ext_L-12_H-768_A-12'))
+    bert = Bert.from_pretrained(pretrained_model_dir, **kwargs)
     bert.trainable = trainable
 
     _, pooled_output, _, _ = bert(inputs=(input_ids, segment_ids))
@@ -55,7 +55,9 @@ def build_bert_classify_model(trainable=True):
     model.compile(loss='binary_cross_entropy', optimizer='adam')
     return model
 
-model = build_bert_classify_model()
+model = build_bert_classify_model(
+            pretrained_model_dir=os.path.join(BASE_DIR, 'chinese_wwm_ext_L-12_H-768_A-12'),
+            trainable=True)
 model.summary()
 ```
 
@@ -77,12 +79,12 @@ model.predict((input_ids, segment_ids, mask))
 model(inputs=(input_ids, segment_ids, mask))
 
 # Used to fine-tuning 
-def build_albert_classify_model(trainable=True):
+def build_albert_classify_model(pretrained_model_dir, trainable=True, **kwargs):
     input_ids = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name='input_ids')
     # segment_ids and mask inputs are optional
     segment_ids = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name='segment_ids')
 
-    albert = Albert.from_pretrained(os.path.join(BASE_DIR, 'albert_large_zh'))
+    albert = Albert.from_pretrained(pretrained_model_dir, **kwargs)
     albert.trainable = trainable
 
     _, pooled_output, _, _ = albert(inputs=(input_ids, segment_ids))
@@ -91,7 +93,9 @@ def build_albert_classify_model(trainable=True):
     model.compile(loss='binary_cross_entropy', optimizer='adam')
     return model
 
-model = build_albert_classify_model()
+model = build_albert_classify_model(
+            pretrained_model_dir=os.path.join(BASE_DIR, 'albert_base'),
+            trainable=True)
 model.summary()
 ```
 
