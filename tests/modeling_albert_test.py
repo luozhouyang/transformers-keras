@@ -72,7 +72,7 @@ class ModelingAlbertTest(tf.test.TestCase):
         for attention in all_attn_weights:
             self.assertAllEqual([2, 8, 16, 16], attention.shape)
 
-    def testAlbert(self):
+    def _build_albert_inputs(self):
         input_ids = tf.constant(
             [1, 2, 3, 4, 5, 6, 7, 5, 3, 2, 3, 4, 1, 2, 3, 1, 2, 3, 4, 5, 6, 6, 6, 7, 7, 8, 0, 0, 0, 0, 0, 0],
             shape=(2, 16),
@@ -81,22 +81,49 @@ class ModelingAlbertTest(tf.test.TestCase):
             [[0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1],
              [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1]], dtype=np.int64)  # token_type_ids,
         input_mask = tf.constant(
-            [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1],
-             [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1]], dtype=np.float32)  # input_mask
+            [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0],
+             [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]], dtype=np.float32)  # input_mask
+        return input_ids, token_type_ids, input_mask
 
-        model = Albert(vocab_size=100, hidden_size=768,
-                       num_layers=4, num_groups=1, num_layers_each_group=1)
-        outputs, pooled_outputs, all_states, all_attn_weights = model(inputs=(input_ids, token_type_ids, input_mask))
-        self.assertAllEqual([2, 16, 768], outputs.shape)
+    def _check_albert_outputs(self, return_states=False, return_attention_weights=False):
+        model = Albert(
+            vocab_size=100, hidden_size=768,
+            num_layers=4, num_groups=1, num_layers_each_group=1,
+            return_states=return_states,
+            return_attention_weights=return_attention_weights)
+        outputs = model(inputs=self._build_albert_inputs())
+        sequence_outputs, pooled_outputs = outputs[0], outputs[1]
+        self.assertAllEqual([2, 16, 768], sequence_outputs.shape)
         self.assertAllEqual([2, 768], pooled_outputs.shape)
 
-        self.assertEqual(4, len(all_states))
-        for state in all_states:
-            self.assertAllEqual([2, 16, 768], state.shape)
+        all_states, all_attn_weights = None, None
+        if return_states and return_attention_weights:
+            self.assertEqual(4, len(outputs))
+            all_states, all_attn_weights = outputs[2], outputs[3]
+        elif return_states and not return_attention_weights:
+            self.assertEqual(3, len(outputs))
+            all_states = outputs[2]
+        elif not return_states and return_attention_weights:
+            self.assertEqual(3, len(outputs))
+            all_attn_weights = outputs[2]
+        else:
+            self.assertEqual(2, len(outputs))
 
-        self.assertEqual(4, len(all_attn_weights))
-        for attention in all_attn_weights:
-            self.assertAllEqual([2, 8, 16, 16], attention.shape)
+        if all_states is not None:
+            self.assertEqual(4, len(all_states))
+            for state in all_states:
+                self.assertAllEqual([2, 16, 768], state.shape)
+
+        if all_attn_weights is not None:
+            self.assertEqual(4, len(all_attn_weights))
+            for attention in all_attn_weights:
+                self.assertAllEqual([2, 8, 16, 16], attention.shape)
+
+    def testAlbert(self):
+        self._check_albert_outputs(return_states=True, return_attention_weights=True)
+        self._check_albert_outputs(return_states=True, return_attention_weights=False)
+        self._check_albert_outputs(return_states=False, return_attention_weights=True)
+        self._check_albert_outputs(return_states=False, return_attention_weights=False)
 
     def testAlbertMLMHead(self):
         embedding = AlbertEmbedding(vocab_size=100)

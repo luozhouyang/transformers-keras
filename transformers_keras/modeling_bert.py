@@ -195,6 +195,8 @@ class Bert(tf.keras.Model):
                  attention_dropout_rate=0.1,
                  stddev=0.02,
                  epsilon=1e-12,
+                 return_states=False,
+                 return_attention_weights=False,
                  **kwargs):
         kwargs.pop('name', None)
         super().__init__(name='bert', **kwargs)
@@ -222,13 +224,21 @@ class Bert(tf.keras.Model):
 
         self.bert_pooler = BertPooler(hidden_size=hidden_size, stddev=stddev, name='pooler')
 
+        self.return_states = return_states
+        self.return_attention_weights = return_attention_weights
+
     def call(self, inputs, training=None):
         input_ids, token_type_ids, mask = unpack_inputs_3(inputs)
         mask = mask[:, tf.newaxis, tf.newaxis, :]  # (batch_size, seq_len) -> (batch_size, 1, 1, seq_len)
         embedding = self.bert_embedding(inputs=(input_ids, token_type_ids), mode='embedding')
         output, all_hidden_states, all_attention_scores = self.bert_encoder(inputs=(embedding, mask))
         pooled_output = self.bert_pooler(output)
-        return output, pooled_output, all_hidden_states, all_attention_scores
+        outputs = (output, pooled_output)
+        if self.return_states:
+            outputs += (all_hidden_states, )
+        if self.return_attention_weights:
+            outputs += (all_attention_scores, )
+        return outputs
 
     def dummy_inputs(self):
         input_ids = tf.constant([0] * 128, dtype=tf.int64, shape=(1, 128))
@@ -242,6 +252,8 @@ class Bert(tf.keras.Model):
         if not adapter:
             adapter = BertAdapter()
         model_config = adapter.adapte_config(config_file, **kwargs)
+        model_config['return_states'] = kwargs.get('return_states', False)
+        model_config['return_attention_weights'] = kwargs.get('return_attention_weights', False)
         model = cls(**model_config)
         model(model.dummy_inputs())
         adapter.adapte_weights(model, model_config, ckpt, **kwargs)
