@@ -49,7 +49,7 @@ def build_bert_classify_model(pretrained_model_dir, trainable=True, **kwargs):
     bert = Bert.from_pretrained(pretrained_model_dir, **kwargs)
     bert.trainable = trainable
 
-    _, pooled_output, _, _ = bert(inputs=(input_ids, segment_ids))
+    sequence_outputs, pooled_output = bert(inputs=(input_ids, segment_ids))
     outputs = tf.keras.layers.Dense(2, name='output')(pooled_output)
     model = tf.keras.Model(inputs=[input_ids, segment_ids], outputs=outputs)
     model.compile(loss='binary_cross_entropy', optimizer='adam')
@@ -87,7 +87,7 @@ def build_albert_classify_model(pretrained_model_dir, trainable=True, **kwargs):
     albert = Albert.from_pretrained(pretrained_model_dir, **kwargs)
     albert.trainable = trainable
 
-    _, pooled_output, _, _ = albert(inputs=(input_ids, segment_ids))
+    sequence_outputs, pooled_output = albert(inputs=(input_ids, segment_ids))
     outputs = tf.keras.layers.Dense(2, name='output')(pooled_output)
     model = tf.keras.Model(inputs=[input_ids, segment_ids], outputs=outputs)
     model.compile(loss='binary_cross_entropy', optimizer='adam')
