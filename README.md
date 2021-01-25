@@ -30,16 +30,37 @@ Supported pretrained models:
 * All the BERT models pretrained by [google-research/bert](https://github.com/google-research/bert)
 * All the BERT & RoBERTa models pretrained by [ymcui/Chinese-BERT-wwm](https://github.com/ymcui/Chinese-BERT-wwm)
 
+### Feature Extraction Examples:
+
 ```python
 from transformers_keras import Bert
 
 # Used to predict directly
 model = Bert.from_pretrained('/path/to/pretrained/bert/model')
 # segment_ids and mask inputs are optional
-model.predict((input_ids, segment_ids, mask))
+sequence_outputs, pooled_output = model.predict((input_ids, segment_ids, mask))
 # or
-model(inputs=(input_ids, segment_ids, mask))
+sequence_outputs, pooled_output = model(inputs=(input_ids, segment_ids, mask))
 
+```
+
+Also, you can optionally get the hidden states and attention weights of each encoder layer:
+
+```python
+from transformers_keras import Bert
+
+# Used to predict directly
+model = Bert.from_pretrained('/path/to/pretrained/bert/model', return_states=True, return_attention_weights=True)
+# segment_ids and mask inputs are optional
+sequence_outputs, pooled_output, all_states, all_attn_weights = model.predict((input_ids, segment_ids, mask))
+# or
+sequence_outputs, pooled_output, all_states, all_attn_weights = model(inputs=(input_ids, segment_ids, mask))
+
+```
+
+### Fine-tuning Examples
+
+```python
 # Used to fine-tuning
 def build_bert_classify_model(pretrained_model_dir, trainable=True, **kwargs):
     input_ids = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name='input_ids')
@@ -68,15 +89,35 @@ Supported pretrained models:
 
 * All the ALBERT models pretrained by [google-research/albert](https://github.com/google-research/albert)
 
+### Feature Extraction Examples
+
 ```python
 from transformers_keras import Albert
 
 # Used to predict directly
-model = Bert.from_pretrained('/path/to/pretrained/albert/model')
+model = Albert.from_pretrained('/path/to/pretrained/albert/model')
 # segment_ids and mask inputs are optional
-model.predict((input_ids, segment_ids, mask))
+sequence_outputs, pooled_output = model.predict((input_ids, segment_ids, mask))
 # or
-model(inputs=(input_ids, segment_ids, mask))
+sequence_outputs, pooled_output = model(inputs=(input_ids, segment_ids, mask))
+```
+
+Also, you can optionally get the hidden states and attention weights of each encoder layer:
+
+```python
+from transformers_keras import Albert
+
+# Used to predict directly
+model = Albert.from_pretrained('/path/to/pretrained/albert/model', return_states=True, return_attention_weights=True)
+# segment_ids and mask inputs are optional
+sequence_outputs, pooled_output, all_states, all_attn_weights = model.predict((input_ids, segment_ids, mask))
+# or
+sequence_outputs, pooled_output, all_states, all_attn_weights = model(inputs=(input_ids, segment_ids, mask))
+```
+
+### Fine-tuing Examples
+
+```python
 
 # Used to fine-tuning 
 def build_albert_classify_model(pretrained_model_dir, trainable=True, **kwargs):
