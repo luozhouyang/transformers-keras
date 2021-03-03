@@ -50,11 +50,14 @@ Also, you can optionally get the hidden states and attention weights of each enc
 from transformers_keras import Bert
 
 # Used to predict directly
-model = Bert.from_pretrained('/path/to/pretrained/bert/model', return_states=True, return_attention_weights=True)
+model = Bert.from_pretrained(
+    '/path/to/pretrained/bert/model', 
+    return_states=True, 
+    return_attention_weights=True)
 # segment_ids and mask inputs are optional
-sequence_outputs, pooled_output, all_states, all_attn_weights = model.predict((input_ids, segment_ids, mask))
+sequence_outputs, pooled_output, states, attn_weights = model.predict((input_ids, segment_ids, mask))
 # or
-sequence_outputs, pooled_output, all_states, all_attn_weights = model(inputs=(input_ids, segment_ids, mask))
+sequence_outputs, pooled_output, states, attn_weights = model(inputs=(input_ids, segment_ids, mask))
 
 ```
 
@@ -108,11 +111,14 @@ Also, you can optionally get the hidden states and attention weights of each enc
 from transformers_keras import Albert
 
 # Used to predict directly
-model = Albert.from_pretrained('/path/to/pretrained/albert/model', return_states=True, return_attention_weights=True)
+model = Albert.from_pretrained(
+    '/path/to/pretrained/albert/model', 
+    return_states=True, 
+    return_attention_weights=True)
 # segment_ids and mask inputs are optional
-sequence_outputs, pooled_output, all_states, all_attn_weights = model.predict((input_ids, segment_ids, mask))
+sequence_outputs, pooled_output, states, attn_weights = model.predict((input_ids, segment_ids, mask))
 # or
-sequence_outputs, pooled_output, all_states, all_attn_weights = model(inputs=(input_ids, segment_ids, mask))
+sequence_outputs, pooled_output, states, attn_weights = model(inputs=(input_ids, segment_ids, mask))
 ```
 
 ### Fine-tuing Examples
@@ -140,7 +146,58 @@ model = build_albert_classify_model(
 model.summary()
 ```
 
-## Load other pretrained models
+## Advanced Usage
+
+Here are some advanced usages:
+
+* Skip loadding weights from checkpoint
+* Load other pretrained models
+
+### Skip loadding weights from checkpoint
+
+You can skip loadding some weights from ckpt.
+
+Examples:
+
+```python
+from transformers_keras import Bert, Albert
+
+ALBERT_MODEL_PATH = '/path/to/albert/model'
+albert = Albert.from_pretrained(
+    ALBERT_MODEL_PATH,
+    # return_states=False,
+    # return_attention_weights=False,
+    skip_token_embedding=True,
+    skip_position_embedding=True,
+    skip_segment_embedding=True,
+    skip_pooler=True,
+    ...
+    )
+
+BERT_MODEL_PATH = '/path/to/bert/model'
+bert = Bert.from_pretrained(
+    BERT_MODEL_PATH,
+    # return_states=False,
+    # return_attention_weights=False,
+    skip_token_embedding=True,
+    skip_position_embedding=True,
+    skip_segment_embedding=True,
+    skip_pooler=True,
+    ...
+    )
+```
+
+All supported kwargs to skip loadding weights:
+
+* `skip_token_embedding`, skip loadding `token_embedding` weights from ckpt
+* `skip_position_embedding`, skip loadding `position_embedding` weights from ckpt
+* `skip_segment_embedding`, skip loadding `token_type_emebdding` weights from ckpt
+* `skip_embedding_layernorm`, skip loadding `layer_norm` weights of emebedding layer from ckpt
+* `skip_pooler`, skip loadding `pooler` weights of pooler layer from ckpt
+
+
+
+### Load other pretrained models
 
 If you want to load models pretrained by other implementationds, whose config and trainable weights are a little different from previous, you can subclass `AbstractAdapter` to adapte these models:
 
