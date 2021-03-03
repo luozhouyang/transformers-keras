@@ -16,6 +16,6 @@ from .tokenizers.bert_tokenizer import BertTokenizer
 from .tokenizers.tokenizer import BasicTokenizer, WordpieceTokenizer
 
 __name__ = 'transformers_keras'
-__version__ = '0.2.2'
+__version__ = '0.2.3'
 
 logging.basicConfig(format="%(asctime)s %(levelname)7s %(filename)15s %(lineno)4d] %(message)s", level=logging.INFO)
