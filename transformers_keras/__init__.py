@@ -16,4 +16,4 @@ from .modeling_bert import (Bert, BertEmbedding, BertEncoder, BertEncoderLayer,
 __name__ = 'transformers_keras'
 __version__ = '0.2.2'
 
-logging.basicConfig(format="%(asctime)s %(levelname)s %(filename)15s %(lineno)4d] %(message)s", level=logging.INFO)
+logging.basicConfig(format="%(asctime)s %(levelname)7s %(filename)15s %(lineno)4d] %(message)s", level=logging.INFO)

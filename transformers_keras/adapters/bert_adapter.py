@@ -9,6 +9,9 @@ from .abstract_adapter import AbstractAdapter, zip_weights
 
 class BertAdapter(AbstractAdapter):
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
     def adapte_config(self, config_file, **kwrgs):
         with open(config_file, mode='rt', encoding='utf8') as fin:
             config = json.load(fin)
@@ -43,14 +46,15 @@ class BertAdapter(AbstractAdapter):
     def _mapping_weight_names(self, num_layers=12):
         mapping = {}
 
-        # embedding
-        mapping.update({
-            'bert/embedding/weight:0': 'bert/embeddings/word_embeddings',
-            'bert/embedding/token_type_embedding/embeddings:0': 'bert/embeddings/token_type_embeddings',
-            'bert/embedding/position_embedding/embeddings:0': 'bert/embeddings/position_embeddings',
-            'bert/embedding/layer_norm/gamma:0': 'bert/embeddings/LayerNorm/gamma',
-            'bert/embedding/layer_norm/beta:0': 'bert/embeddings/LayerNorm/beta',
-        })
+        if not self.skip_token_embedding:
+            mapping['bert/embedding/weight:0'] = 'bert/embeddings/word_embeddings'
+        if not self.skip_position_embedding:
+            mapping['bert/embedding/position_embedding/embeddings:0'] = 'bert/embeddings/position_embeddings'
+        if not self.skip_segment_embedding:
+            mapping['bert/embedding/token_type_embedding/embeddings:0'] = 'bert/embeddings/token_type_embeddings'
+        if not self.skip_embedding_layernorm:
+            mapping['bert/embedding/layer_norm/gamma:0'] = 'bert/embeddings/LayerNorm/gamma'
+            mapping['bert/embedding/layer_norm/beta:0'] = 'bert/embeddings/LayerNorm/beta'
 
         # encoder
         model_prefix = 'bert/encoder/layer_{}'
@@ -77,7 +81,8 @@ class BertAdapter(AbstractAdapter):
             mapping[encoder_prefix + 'layer_norm/beta:0'] = encoder_prefix + 'output/LayerNorm/beta'
 
         # pooler
-        mapping['bert/pooler/dense/kernel:0'] = 'bert/pooler/dense/kernel'
-        mapping['bert/pooler/dense/bias:0'] = 'bert/pooler/dense/bias'
+        if not self.skip_pooler:
+            mapping['bert/pooler/dense/kernel:0'] = 'bert/pooler/dense/kernel'
+            mapping['bert/pooler/dense/bias:0'] = 'bert/pooler/dense/bias'
 
         return mapping

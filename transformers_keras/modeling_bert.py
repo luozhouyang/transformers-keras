@@ -250,7 +250,7 @@ class Bert(tf.keras.Model):
     def from_pretrained(cls, pretrained_model_dir, adapter=None, verbose=True, **kwargs):
         config_file, ckpt, vocab_file = parse_pretrained_model_files(pretrained_model_dir)
         if not adapter:
-            adapter = BertAdapter()
+            adapter = BertAdapter(**kwargs)
         model_config = adapter.adapte_config(config_file, **kwargs)
         model_config['return_states'] = kwargs.get('return_states', False)
         model_config['return_attention_weights'] = kwargs.get('return_attention_weights', False)

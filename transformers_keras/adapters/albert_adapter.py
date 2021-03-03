@@ -9,6 +9,10 @@ from .abstract_adapter import AbstractAdapter, zip_weights
 
 class AlbertAdapter(AbstractAdapter):
 
+    def __init__(self, skip_embedding_mapping_in=False, **kwargs):
+        super().__init__(**kwargs)
+        self.skip_embedding_mapping_in = skip_embedding_mapping_in
+
     def adapte_config(self, config_file, **kwargs):
         with open(config_file, mode='rt', encoding='utf8') as fin:
             config = json.load(fin)
@@ -46,16 +50,18 @@ class AlbertAdapter(AbstractAdapter):
     def _mapping_weight_names(self, num_groups, num_layers_each_group):
         mapping = {}
 
-        # embedding
-        mapping.update({
-            'albert/embeddings/weight:0': 'bert/embeddings/word_embeddings',
-            'albert/embeddings/token_type_embeddings/embeddings:0': 'bert/embeddings/token_type_embeddings',
-            'albert/embeddings/position_embeddings/embeddings:0': 'bert/embeddings/position_embeddings',
-            'albert/embeddings/layer_norm/gamma:0': 'bert/embeddings/LayerNorm/gamma',
-            'albert/embeddings/layer_norm/beta:0': 'bert/embeddings/LayerNorm/beta',
-            'albert/encoder/embedding_mapping/kernel:0': 'bert/encoder/embedding_hidden_mapping_in/kernel',
-            'albert/encoder/embedding_mapping/bias:0': 'bert/encoder/embedding_hidden_mapping_in/bias',
-        })
+        if not self.skip_token_embedding:
+            mapping['albert/embeddings/weight:0'] = 'bert/embeddings/word_embeddings'
+        if not self.skip_position_embedding:
+            mapping['albert/embeddings/position_embeddings/embeddings:0'] = 'bert/embeddings/position_embeddings'
+        if not self.skip_segment_embedding:
+            mapping['albert/embeddings/token_type_embeddings/embeddings:0'] = 'bert/embeddings/token_type_embeddings'
+        if not self.skip_embedding_layernorm:
+            mapping['albert/embeddings/layer_norm/gamma:0'] = 'bert/embeddings/LayerNorm/gamma'
+            mapping['albert/embeddings/layer_norm/beta:0'] = 'bert/embeddings/LayerNorm/beta'
+        if not self.skip_embedding_mapping_in:
+            mapping['albert/encoder/embedding_mapping/kernel:0'] = 'bert/encoder/embedding_hidden_mapping_in/kernel'
+            mapping['albert/encoder/embedding_mapping/bias:0'] = 'bert/encoder/embedding_hidden_mapping_in/bias'
 
         # encoder
         for group in range(num_groups):
@@ -96,9 +102,10 @@ class AlbertAdapter(AbstractAdapter):
                     mapping[k] = v
 
         # pooler
-        for n in ['kernel', 'bias']:
-            k = 'albert/pooler/{}:0'.format(n)
-            v = 'bert/pooler/dense/{}'.format(n)
-            mapping[k] = v
+        if not self.skip_pooler:
+            for n in ['kernel', 'bias']:
+                k = 'albert/pooler/{}:0'.format(n)
+                v = 'bert/pooler/dense/{}'.format(n)
+                mapping[k] = v
 
         return mapping

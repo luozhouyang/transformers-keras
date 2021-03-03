@@ -6,7 +6,7 @@ from transformers_keras.modeling_bert import Bert
 
 BASE_DIR = os.environ.get('BASE_DIR')
 if not BASE_DIR:
-    BASE_DIR = '/home/zhouyang.lzy/pretrain-models'
+    BASE_DIR = '/data/home/zhouyang.lzy/pretrain-models'
 os.environ.update({'CUDA_VISIBLE_DEVICES': '-1'})
 
 
@@ -15,9 +15,9 @@ class LoadPretrainedModelTest(tf.test.TestCase):
     def _do_predict(self, model):
         input_ids = tf.constant([1, 2, 3, 4, 5, 6, 7, 8], shape=(2, 4))
         # output_1 should be all close to output_2
-        _, outputs_1, _, _ = model.predict((input_ids,))
+        _, outputs_1 = model.predict((input_ids,))
         print(outputs_1)
-        _, outputs_2, _, _ = model(inputs=(input_ids,))
+        _, outputs_2 = model(inputs=(input_ids,))
         print(outputs_2)
 
     def test_load_pretrained_bert(self):
@@ -32,6 +32,14 @@ class LoadPretrainedModelTest(tf.test.TestCase):
             model.summary()
             self._do_predict(model)
 
+        # skip weights
+        model = Bert.from_pretrained(
+            os.path.join(BASE_DIR, model_paths[0]),
+            skip_token_embedding=True,
+            skip_pooler=True)
+        model.summary()
+        self._do_predict(model)
+
     def test_load_pretrained_albert(self):
         model_paths = [
             'albert_base_zh', 'albert_large_zh', 'albert_xlarge_zh'
@@ -40,6 +48,13 @@ class LoadPretrainedModelTest(tf.test.TestCase):
             model = Albert.from_pretrained(os.path.join(BASE_DIR, p))
             model.summary()
             self._do_predict(model)
+
+        model = Albert.from_pretrained(
+            os.path.join(BASE_DIR, model_paths[0]),
+            skip_token_embedding=True,
+            skip_pooler=True,)
+        model.summary()
+        self._do_predict(model)
 
     def test_bert_classify(self):
 

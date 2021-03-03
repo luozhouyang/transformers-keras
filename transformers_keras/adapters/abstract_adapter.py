@@ -6,24 +6,20 @@ import tensorflow as tf
 
 
 def zip_weights(model, ckpt, variables_mapping, verbose=True):
-    weights, values, names = [], [], []
+    weights, values = [], []
     for w in model.trainable_weights:
-        names.append(w.name)
-        weights.append(w)
         var = variables_mapping.get(w.name, None)
         if not var:
-            logging.warning('model weight: {} does not found in mapping dict.')
+            logging.warning(
+                'Skip weight: {}, which not found in mapping, thus will not load weight from ckpt.'.format(w.name))
             continue
         v = tf.train.load_variable(ckpt, var)
         if w.name == 'bert/nsp/dense/kernel:0':
             v = v.T
+        weights.append(w)
         values.append(v)
-    if verbose:
-        for n in names:
-            if n not in variables_mapping:
-                logging.warning('model weight: %s not found in ckpt.', n)
-                continue
-            logging.info('Load model weight: {:70s} <-- {}'.format(n, variables_mapping[n]))
+        if verbose:
+            logging.info('Load weight: {:50s} <-- {}'.format(w.name, variables_mapping[w.name]))
 
     mapped_values = zip(weights, values)
     return mapped_values
@@ -47,6 +43,20 @@ def parse_pretrained_model_files(pretrained_model_dir):
 
 
 class AbstractAdapter(abc.ABC):
+
+    def __init__(self,
+                 skip_token_embedding=False,
+                 skip_position_embedding=False,
+                 skip_segment_embedding=False,
+                 skip_embedding_layernorm=False,
+                 skip_pooler=False,
+                 **kwargs):
+        super().__init__()
+        self.skip_token_embedding = skip_token_embedding
+        self.skip_position_embedding = skip_position_embedding
+        self.skip_segment_embedding = skip_segment_embedding
+        self.skip_embedding_layernorm = skip_embedding_layernorm
+        self.skip_pooler = skip_pooler
 
     @abc.abstractmethod
     def adapte_config(self, config_file, **kwargs):
