@@ -31,7 +31,7 @@ class LayersTest(tf.test.TestCase):
         x = tf.random.uniform(shape=(4, 16, 64))
         mask = tf.cast(tf.linalg.band_part(
             tf.ones(shape=(4, 16, 16)), num_lower=0, num_upper=-1), dtype=tf.float32)
-        context, attn_weight = attention(inputs=(x, x, x, mask), training=False)
+        context, attn_weight = attention(x, x, x, mask, training=False)
         self.assertEqual([4, 16, 64], context.shape)
         self.assertEqual([4, 16, 16], attn_weight.shape)
 
@@ -40,7 +40,7 @@ class LayersTest(tf.test.TestCase):
         x = tf.random.uniform(shape=(4, 16, 512))
         mask = tf.cast(tf.linalg.band_part(
             tf.ones(shape=(4, 1, 16, 16)), num_lower=0, num_upper=-1), dtype=tf.float32)
-        context, attn_weight = attention(inputs=(x, x, x, mask), training=False)
+        context, attn_weight = attention(x, x, x, mask, training=False)
         self.assertEqual([4, 16, 512], context.shape)
         self.assertEqual([4, 8, 16, 16], attn_weight.shape)
 
@@ -50,7 +50,7 @@ class LayersTest(tf.test.TestCase):
         padding_mask = tf.constant([[0, 0, 0, 1, 1], [0, 0, 0, 0, 1]], shape=(2, 5), dtype=tf.float32)
         padding_mask = padding_mask[:, tf.newaxis, tf.newaxis, :]
 
-        outputs, attn_weights = encoder_layer(inputs=(x, x, x, padding_mask))
+        outputs, attn_weights = encoder_layer(x, x, x, padding_mask)
         self.assertEqual([2, 5, 512], outputs.shape)
         self.assertEqual([2, 8, 5, 5], attn_weights.shape)
 
@@ -65,7 +65,7 @@ class LayersTest(tf.test.TestCase):
 
         dec_inputs = tf.random.uniform((2, 7, 512))
         dec_outputs, attn_weights1, attn_weights2 = decoder_layer(
-            inputs=(dec_inputs, enc_outputs, look_ahead_mask, padding_mask))
+            dec_inputs, enc_outputs, look_ahead_mask, padding_mask)
 
         self.assertEqual([2, 7, 512], dec_outputs.shape)
         self.assertEqual([2, 8, 7, 7], attn_weights1.shape)

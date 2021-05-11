@@ -17,7 +17,7 @@ class ScaledDotProductAttention(tf.keras.layers.Layer):
         score = score / tf.math.sqrt(dk)
         if attention_mask is not None:
             attention_mask = tf.cast(attention_mask, dtype=self.dtype)
-            score +=  (1.0 - attention_mask) * -10000.0
+            score += (1.0 - attention_mask) * -10000.0
         attn_weights = tf.nn.softmax(score, axis=-1)
         attn_weights = self.dropout(attn_weights, training=training)
         context = tf.matmul(attn_weights, value)
@@ -48,7 +48,7 @@ class MultiHeadAttention(tf.keras.layers.Layer):
         return tf.transpose(x, perm=[0, 2, 1, 3])
 
     def call(self, query, key, value, attention_mask, training=None):
-        origin_input = query # query == key == value
+        origin_input = query  # query == key == value
 
         batch_size = tf.shape(query)[0]
         query = self._split_heads(self.query_weight(query), batch_size)
@@ -104,9 +104,8 @@ class EncoderLayer(tf.keras.layers.Layer):
         self.ffn_dropout = tf.keras.layers.Dropout(self.dropout_rate)
         self.ffn_layer_norm = tf.keras.layers.LayerNormalization(epsilon=self.epsilon)
 
-    def call(self, inputs, training=None):
-        query, key, value, mask = inputs
-        attn, attn_weights = self.attention(inputs=(query, key, value, mask))
+    def call(self, query, key, value, attention_mask, training=None):
+        attn, attn_weights = self.attention(query, key, value, attention_mask)
         attn = self.attn_dropout(attn, training=training)
         attn = self.attn_layer_norm(query + attn)
 
@@ -150,14 +149,12 @@ class DecoderLayer(tf.keras.layers.Layer):
         self.ffn_dropout = tf.keras.layers.Dropout(self.dropout_rate)
         self.ffn_layer_norm = tf.keras.layers.LayerNormalization(epsilon=self.epsilon)
 
-    def call(self, inputs, training=None):
-        x, enc_outputs, look_ahead_mask, padding_mask = inputs
-
-        attn1, attn1_weights = self.self_attention(inputs=(x, x, x, look_ahead_mask))
+    def call(self, x, enc_outputs, look_ahead_mask, padding_mask, training=None):
+        attn1, attn1_weights = self.self_attention(x, x, x, look_ahead_mask)
         attn1 = self.self_attn_dropout(attn1, training=training)
         output1 = self.self_attn_layer_norm(attn1 + x)
 
-        attn2, attn2_weights = self.context_attention(inputs=(output1, enc_outputs, enc_outputs, padding_mask))
+        attn2, attn2_weights = self.context_attention(output1, enc_outputs, enc_outputs, padding_mask)
         attn2 = self.context_attn_dropout(attn2, training=training)
         output2 = self.context_attn_layer_norm(attn2 + output1)
 
