@@ -38,9 +38,9 @@ from transformers_keras import Bert
 # Used to predict directly
 model = Bert.from_pretrained('/path/to/pretrained/bert/model')
 # segment_ids and mask inputs are optional
-sequence_outputs, pooled_output = model.predict((input_ids, segment_ids, mask))
-# or
-sequence_outputs, pooled_output = model(inputs=(input_ids, segment_ids, mask))
+input_ids = tf.constant([[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]])
+segment_ids, attention_mask = None, None
+sequence_outputs, pooled_output = model(input_ids, segment_ids, attention_mask, training=False)
 
 ```
 
@@ -54,10 +54,9 @@ model = Bert.from_pretrained(
     '/path/to/pretrained/bert/model', 
     return_states=True, 
     return_attention_weights=True)
-# segment_ids and mask inputs are optional
-sequence_outputs, pooled_output, states, attn_weights = model.predict((input_ids, segment_ids, mask))
-# or
-sequence_outputs, pooled_output, states, attn_weights = model(inputs=(input_ids, segment_ids, mask))
+input_ids = tf.constant([[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]])
+segment_ids, attention_mask = None, None
+sequence_outputs, pooled_output, states, attn_weights = model(input_ids, segment_ids, attention_mask, training=False)
 
 ```
 
@@ -73,7 +72,7 @@ def build_bert_classify_model(pretrained_model_dir, trainable=True, **kwargs):
     bert = Bert.from_pretrained(pretrained_model_dir, **kwargs)
     bert.trainable = trainable
 
-    sequence_outputs, pooled_output = bert(inputs=(input_ids, segment_ids))
+    sequence_outputs, pooled_output = bert(input_ids, segment_ids, None)
     outputs = tf.keras.layers.Dense(2, name='output')(pooled_output)
     model = tf.keras.Model(inputs=[input_ids, segment_ids], outputs=outputs)
     model.compile(loss='binary_cross_entropy', optimizer='adam')
@@ -99,10 +98,9 @@ from transformers_keras import Albert
 
 # Used to predict directly
 model = Albert.from_pretrained('/path/to/pretrained/albert/model')
-# segment_ids and mask inputs are optional
-sequence_outputs, pooled_output = model.predict((input_ids, segment_ids, mask))
-# or
-sequence_outputs, pooled_output = model(inputs=(input_ids, segment_ids, mask))
+input_ids = tf.constant([[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]])
+segment_ids, attention_mask = None, None
+sequence_outputs, pooled_output = model(input_ids, segment_ids, attention_mask, training=False)
 ```
 
 Also, you can optionally get the hidden states and attention weights of each encoder layer:
@@ -116,9 +114,9 @@ model = Albert.from_pretrained(
     return_states=True, 
     return_attention_weights=True)
 # segment_ids and mask inputs are optional
-sequence_outputs, pooled_output, states, attn_weights = model.predict((input_ids, segment_ids, mask))
-# or
-sequence_outputs, pooled_output, states, attn_weights = model(inputs=(input_ids, segment_ids, mask))
+input_ids = tf.constant([[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]])
+segment_ids, attention_mask = None, None
+sequence_outputs, pooled_output, states, attn_weights = model(input_ids, segment_ids, mask, training=False)
 ```
 
 ### Fine-tuing Examples
@@ -134,7 +132,7 @@ def build_albert_classify_model(pretrained_model_dir, trainable=True, **kwargs):
     albert = Albert.from_pretrained(pretrained_model_dir, **kwargs)
     albert.trainable = trainable
 
-    sequence_outputs, pooled_output = albert(inputs=(input_ids, segment_ids))
+    sequence_outputs, pooled_output = albert(input_ids, segment_ids, None)
     outputs = tf.keras.layers.Dense(2, name='output')(pooled_output)
     model = tf.keras.Model(inputs=[input_ids, segment_ids], outputs=outputs)
     model.compile(loss='binary_cross_entropy', optimizer='adam')
