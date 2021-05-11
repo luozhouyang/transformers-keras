@@ -104,3 +104,10 @@ def unpack_inputs_3(inputs):
     return input_ids, segment_ids, mask
 
 
+def complete_inputs(input_ids, segment_ids, attention_mask):
+    assert input_ids is not None
+    if segment_ids is None:
+        segment_ids = tf.cast(tf.fill(tf.shape(input_ids), 0), dtype=tf.int32)
+    if attention_mask is None:
+        attention_mask = tf.cast(tf.greater(input_ids, 0), dtype=tf.int32)
+    return input_ids, segment_ids, attention_mask

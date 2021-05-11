@@ -14,6 +14,7 @@ class ModelingAlbertTest(tf.test.TestCase):
         inputs = (
             tf.constant([[0, 2, 3, 4, 5, 1]]),  # input_ids
             tf.constant([[0, 0, 0, 1, 1, 1]]),  # token_type_ids
+            # tf.constant([[1, 1, 1, 1, 1, 1]]),  # attention_mask
         )
         outputs = embedding(inputs, training=True)
         self.assertAllEqual([1, 6, 128], outputs.shape)
@@ -24,7 +25,8 @@ class ModelingAlbertTest(tf.test.TestCase):
         mask = tf.constant([[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1],
                             [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1]],
                            shape=(2, 16), dtype=tf.float32)  # mask
-        outputs, attn_weights = encoder(inputs=(hidden_states, mask[:, tf.newaxis, tf.newaxis, :]))
+        attention_mask = mask[:, tf.newaxis, tf.newaxis, :]
+        outputs, attn_weights = encoder(hidden_states, attention_mask)
         self.assertAllEqual([2, 16, 768], outputs.shape)
         self.assertAllEqual([2, 8, 16, 16], attn_weights.shape)
 
@@ -38,7 +40,7 @@ class ModelingAlbertTest(tf.test.TestCase):
 
         def _run_albert_encoder_group(num_layers_each_group):
             group = AlbertEncoderGroup(num_layers_each_group=num_layers_each_group)
-            outputs, group_states, group_attn_weights = group(inputs=(hidden_states, mask))
+            outputs, group_states, group_attn_weights = group(hidden_states, mask)
             self.assertAllEqual([2, 16, 768], outputs.shape)
 
             self.assertEqual(num_layers_each_group, len(group_states))
@@ -61,7 +63,7 @@ class ModelingAlbertTest(tf.test.TestCase):
 
         encoder = AlbertEncoder(num_layers=4, num_groups=1, num_layers_each_group=1, hidden_size=768)
 
-        outputs, all_states, all_attn_weights = encoder(inputs=(hidden_states, mask))
+        outputs, all_states, all_attn_weights = encoder(hidden_states, mask)
         self.assertAllEqual([2, 16, 768], outputs.shape)
 
         self.assertEqual(4, len(all_states))
@@ -91,7 +93,8 @@ class ModelingAlbertTest(tf.test.TestCase):
             num_layers=4, num_groups=1, num_layers_each_group=1,
             return_states=return_states,
             return_attention_weights=return_attention_weights)
-        outputs = model(inputs=self._build_albert_inputs())
+        input_ids, segment_ids, attn_mask = self._build_albert_inputs()
+        outputs = model(input_ids, segment_ids, attn_mask)
         sequence_outputs, pooled_outputs = outputs[0], outputs[1]
         self.assertAllEqual([2, 16, 768], sequence_outputs.shape)
         self.assertAllEqual([2, 768], pooled_outputs.shape)
@@ -140,11 +143,16 @@ class ModelingAlbertTest(tf.test.TestCase):
 
     def test_build_model(self):
         model = Albert(vocab_size=21128)
-        model(model.dummy_inputs())
+        input_ids, segment_ids, attn_mask = model.dummy_inputs()
+        model(input_ids, segment_ids, attn_mask)
         model.summary()
 
         for v in model.trainable_weights:
             print(v.name)
+
+    def test_albert_config(self):
+        model = Albert(vocab_size=21128)
+        print(model.get_config())
 
 
 if __name__ == "__main__":

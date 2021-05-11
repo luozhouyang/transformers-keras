@@ -7,8 +7,7 @@ class ScaledDotProductAttention(tf.keras.layers.Layer):
         super(ScaledDotProductAttention, self).__init__(**kwargs)
         self.dropout = tf.keras.layers.Dropout(attention_dropout_rate, name='dropout')
 
-    def call(self, inputs, training=None):
-        query, key, value, mask = inputs
+    def call(self, query, key, value, attention_mask, training=None):
         query = tf.cast(query, dtype=self.dtype)
         key = tf.cast(key, dtype=self.dtype)
         value = tf.cast(value, dtype=self.dtype)
@@ -16,9 +15,9 @@ class ScaledDotProductAttention(tf.keras.layers.Layer):
         score = tf.matmul(query, key, transpose_b=True)
         dk = tf.cast(tf.shape(query)[-1], tf.float32)
         score = score / tf.math.sqrt(dk)
-        if mask is not None:
-            mask = tf.cast(mask, dtype=self.dtype)
-            score +=  (1.0 - mask) * -10000.0
+        if attention_mask is not None:
+            attention_mask = tf.cast(attention_mask, dtype=self.dtype)
+            score +=  (1.0 - attention_mask) * -10000.0
         attn_weights = tf.nn.softmax(score, axis=-1)
         attn_weights = self.dropout(attn_weights, training=training)
         context = tf.matmul(attn_weights, value)
@@ -27,7 +26,7 @@ class ScaledDotProductAttention(tf.keras.layers.Layer):
 
 class MultiHeadAttention(tf.keras.layers.Layer):
 
-    def __init__(self, hidden_size=512, num_attention_heads=8, hidden_dropout_rate=0.2, attention_dropout_rate=0.1, epsilon=1e-8, **kwargs):
+    def __init__(self, hidden_size=768, num_attention_heads=8, hidden_dropout_rate=0.2, attention_dropout_rate=0.1, epsilon=1e-8, **kwargs):
         super(MultiHeadAttention, self).__init__(**kwargs)
         self.hidden_size = hidden_size
         self.num_attention_heads = num_attention_heads
@@ -48,8 +47,7 @@ class MultiHeadAttention(tf.keras.layers.Layer):
         x = tf.reshape(x, (batch_size, -1, self.num_attention_heads, self.hidden_size // self.num_attention_heads))
         return tf.transpose(x, perm=[0, 2, 1, 3])
 
-    def call(self, inputs, training=None):
-        query, key, value, mask = inputs
+    def call(self, query, key, value, attention_mask, training=None):
         origin_input = query # query == key == value
 
         batch_size = tf.shape(query)[0]
@@ -57,7 +55,7 @@ class MultiHeadAttention(tf.keras.layers.Layer):
         key = self._split_heads(self.key_weight(key), batch_size)
         value = self._split_heads(self.value_weight(value), batch_size)
 
-        context, attn_weights = self.attention(inputs=(query, key, value, mask))
+        context, attn_weights = self.attention(query, key, value, attention_mask)
         context = tf.transpose(context, perm=[0, 2, 1, 3])
         context = tf.reshape(context, [batch_size, -1, self.hidden_size])
         output = self.dense(context)

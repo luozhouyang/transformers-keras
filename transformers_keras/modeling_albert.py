@@ -9,8 +9,8 @@ from transformers_keras.adapters.albert_adapter import AlbertAdapter
 
 from .layers import MultiHeadAttention
 from .modeling_bert import BertEmbedding, BertEncoderLayer, BertIntermediate
-from .modeling_utils import (choose_activation, initialize, unpack_inputs_2,
-                             unpack_inputs_3)
+from .modeling_utils import (choose_activation, complete_inputs, initialize,
+                             unpack_inputs_2)
 
 
 class AlbertEmbedding(tf.keras.layers.Layer):
@@ -96,8 +96,7 @@ class AlbertMultiHeadAttention(tf.keras.layers.Layer):
         x = tf.reshape(x, (batch_size, -1, self.num_attention_heads, self.hidden_size // self.num_attention_heads))
         return tf.transpose(x, perm=[0, 2, 1, 3])
 
-    def _scaled_dot_product_attention(self, inputs, training=None):
-        query, key, value, mask = inputs
+    def _scaled_dot_product_attention(self, query, key, value, attention_mask, training=None):
         query = tf.cast(query, dtype=self.dtype)
         key = tf.cast(key, dtype=self.dtype)
         value = tf.cast(value, dtype=self.dtype)
@@ -105,16 +104,15 @@ class AlbertMultiHeadAttention(tf.keras.layers.Layer):
         score = tf.matmul(query, key, transpose_b=True)
         dk = tf.cast(tf.shape(query)[-1], tf.float32)
         score = score / tf.math.sqrt(dk)
-        if mask is not None:
-            mask = tf.cast(mask, dtype=self.dtype)
-            score += (1.0 - mask) * -10000.0
+        if attention_mask is not None:
+            attention_mask = tf.cast(attention_mask, dtype=self.dtype)
+            score += (1.0 - attention_mask) * -10000.0
         attn_weights = tf.nn.softmax(score, axis=-1)
         attn_weights = self.attention_dropout(attn_weights, training=training)
         context = tf.matmul(attn_weights, value)
         return context, attn_weights
 
-    def call(self, inputs, training=None):
-        query, key, value, mask = inputs
+    def call(self, query, key, value, attention_mask, training=None):
         origin_input = query  # query == key == value
 
         batch_size = tf.shape(query)[0]
@@ -122,7 +120,7 @@ class AlbertMultiHeadAttention(tf.keras.layers.Layer):
         key = self._split_heads(self.key_weight(key), batch_size)
         value = self._split_heads(self.value_weight(value), batch_size)
 
-        context, attn_weights = self._scaled_dot_product_attention(inputs=(query, key, value, mask), training=training)
+        context, attn_weights = self._scaled_dot_product_attention(query, key, value, attention_mask, training=training)
         context = tf.transpose(context, perm=[0, 2, 1, 3])
         context = tf.reshape(context, [batch_size, -1, self.hidden_size])
         output = self.dense(context)
@@ -160,10 +158,9 @@ class AlbertEncoderLayer(tf.keras.layers.Layer):
         self.layer_norm = tf.keras.layers.LayerNormalization(epsilon=epsilon, name='layer_norm')
         self.dropout = tf.keras.layers.Dropout(hidden_dropout_rate)
 
-    def call(self, inputs, training=None):
-        hidden_states, mask = inputs
+    def call(self, hidden_states, attention_mask, training=None):
         attn_output, attn_weights = self.attention(
-            inputs=(hidden_states, hidden_states, hidden_states, mask), training=training)
+            hidden_states, hidden_states, hidden_states, attention_mask, training=training)
         outputs = self.ffn(attn_output)
         outputs = self.activation(outputs)
         outputs = self.ffn_output(outputs)
@@ -201,12 +198,10 @@ class AlbertEncoderGroup(tf.keras.layers.Layer):
             ) for i in range(num_layers_each_group)
         ]
 
-    def call(self, inputs, training=None):
-        hidden_states, attn_mask = inputs
-
+    def call(self, hidden_states, attention_mask, training=None):
         group_hidden_states, group_attn_weights = [], []
         for idx, encoder in enumerate(self.encoder_layers):
-            hidden_states, attn_weights = encoder(inputs=(hidden_states, attn_mask))
+            hidden_states, attn_weights = encoder(hidden_states, attention_mask)
             group_hidden_states.append(hidden_states)
             group_attn_weights.append(attn_weights)
 
@@ -253,8 +248,7 @@ class AlbertEncoder(tf.keras.layers.Layer):
         self.num_layers = num_layers
         self.num_groups = num_groups
 
-    def call(self, inputs, training=None):
-        hidden_states, attention_mask = inputs
+    def call(self, hidden_states, attention_mask, training=None):
         hidden_states = self.embedding_mapping(hidden_states)
 
         all_hidden_states, all_attn_weights = [], []
@@ -262,8 +256,7 @@ class AlbertEncoder(tf.keras.layers.Layer):
             layers_per_group = self.num_layers // self.num_groups
             group_index = i // layers_per_group
             hidden_states, group_hidden_states, group_attn_weights = self.groups[group_index](
-                inputs=(hidden_states, attention_mask),
-            )
+                hidden_states, attention_mask)
             all_hidden_states.extend(group_hidden_states)
             all_attn_weights.extend(group_attn_weights)
 
@@ -294,6 +287,21 @@ class Albert(tf.keras.Model):
         kwargs.pop('name', None)
         super(Albert, self).__init__(name='albert', **kwargs)
         assert vocab_size > 0, "vocab_size must greater than 0."
+
+        self.vocab_size = vocab_size
+        self.type_vocab_size = type_vocab_size
+        self.max_positions = max_positions
+        self.embedding_size = embedding_size
+        self.num_layers = num_layers
+        self.num_groups = num_groups
+        self.num_layers_each_group = num_layers_each_group
+        self.hidden_size = hidden_size
+        self.num_attention_heads = num_attention_heads
+        self.intermediate_size = intermediate_size
+        self.hidden_dropout_rate = hidden_dropout_rate
+        self.attention_dropout_rate = attention_dropout_rate
+        self.stddev = stddev
+        self.initialize_range = stddev
 
         self.embedding = AlbertEmbedding(
             vocab_size=vocab_size,
@@ -329,11 +337,12 @@ class Albert(tf.keras.Model):
         self.return_states = return_states
         self.return_attention_weights = return_attention_weights
 
-    def call(self, inputs, training=None):
-        input_ids, segment_ids, mask = unpack_inputs_3(inputs)
-        mask = mask[:, tf.newaxis, tf.newaxis, :]
+    def call(self, input_ids, segment_ids, attention_mask, training=None):
+        input_ids, segment_ids, attention_mask = complete_inputs(input_ids, segment_ids, attention_mask)
+
+        attention_mask = attention_mask[:, tf.newaxis, tf.newaxis, :]
         embed = self.embedding(inputs=(input_ids, segment_ids), mode='embedding')
-        sequence_outputs, all_hidden_states, all_attn_weights = self.encoder(inputs=(embed, mask))
+        sequence_outputs, all_hidden_states, all_attn_weights = self.encoder(embed, attention_mask)
         # take [CLS]
         pooled_output = self.pooler(sequence_outputs[:, 0])
         outputs = (sequence_outputs, pooled_output)
@@ -346,8 +355,8 @@ class Albert(tf.keras.Model):
     def dummy_inputs(self):
         input_ids = tf.constant([0] * 128, dtype=tf.int64, shape=(1, 128))
         segment_ids = tf.constant([0] * 128, dtype=tf.int64, shape=(1, 128))
-        #mask = tf.constant([1] * 128, dtype=tf.int64, shape=(1, self.max_positions))
-        return (input_ids, segment_ids)
+        attn_mask = tf.constant([1] * 128, dtype=tf.int64, shape=(1, 128))
+        return input_ids, segment_ids, attn_mask
 
     @classmethod
     def from_pretrained(cls, pretrained_model_dir, adapter=None, verbose=True, **kwargs):
@@ -358,9 +367,27 @@ class Albert(tf.keras.Model):
         model_config['return_states'] = kwargs.get('return_states', False)
         model_config['return_attention_weights'] = kwargs.get('return_attention_weights', False)
         model = cls(**model_config)
-        model(model.dummy_inputs())
+        input_ids, segment_ids, attn_mask = model.dummy_inputs()
+        model(input_ids, segment_ids, attn_mask)
         adapter.adapte_weights(model, model_config, ckpt, **kwargs)
         return model
+
+    def get_config(self):
+        config = {
+            'vocab_size': self.vocab_size,
+            'type_vocab_size': self.type_vocab_size,
+            'max_positions': self.max_positions,
+            'num_layers': self.num_layers,
+            'hidden_size': self.hidden_size,
+            'num_attention_heads': self.num_attention_heads,
+            'intermediate_size': self.intermediate_size,
+            'hidden_dropout_rate': self.hidden_dropout_rate,
+            'attention_dropout_rate': self.attention_dropout_rate,
+            'stddev': self.stddev,
+            'return_states': self.return_states,
+            'return_attention_weights': self.return_attention_weights
+        }
+        return config
 
 
 class AlbertMLMHead(tf.keras.layers.Layer):

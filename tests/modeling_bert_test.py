@@ -31,8 +31,7 @@ class ModelingBertTest(tf.test.TestCase):
         encoder = BertEncoderLayer()
         hidden_states = tf.random.uniform((2, 10, 768))
         attention_mask = None
-        outputs, attention_weights = encoder(
-            inputs=(hidden_states, attention_mask), training=True)
+        outputs, attention_weights = encoder(hidden_states, attention_mask, training=True)
 
         self.assertAllEqual([2, 10, 768], outputs.shape)
         self.assertAllEqual([2, 8, 10, 10], attention_weights.shape)
@@ -42,8 +41,7 @@ class ModelingBertTest(tf.test.TestCase):
 
         hidden_states = tf.random.uniform((2, 10, 768))
         attention_mask = None
-        outputs, all_hidden_states, all_attention_scores = encoder(
-            inputs=(hidden_states, attention_mask), training=True)
+        outputs, all_hidden_states, all_attention_scores = encoder(hidden_states, attention_mask, training=True)
 
         self.assertAllEqual([2, 10, 768], outputs.shape)
 
@@ -80,7 +78,8 @@ class ModelingBertTest(tf.test.TestCase):
             num_layers=2,
             return_states=return_states,
             return_attention_weights=return_attention_weights)
-        outputs = model(inputs=self._build_bert_inputs())
+        input_ids, segment_ids, attn_mask = self._build_bert_inputs()
+        outputs = model(input_ids, segment_ids, attn_mask)
         sequence_outputs, pooled_outputs = outputs[0], outputs[1]
         self.assertAllEqual([2, 16, 768], sequence_outputs.shape)
         self.assertAllEqual([2, 768], pooled_outputs.shape)
@@ -127,6 +126,15 @@ class ModelingBertTest(tf.test.TestCase):
         inputs = tf.random.uniform(shape=(2, 768))
         outputs = nsp(inputs)
         self.assertAllEqual([2, 2], outputs.shape)
+
+    def test_bert_config(self):
+        model = Bert(
+            vocab_size=100,
+            num_layers=2,
+            return_states=True,
+            return_attention_weights=True)
+        config = model.get_config()
+        print(config)
 
 
 if __name__ == "__main__":
