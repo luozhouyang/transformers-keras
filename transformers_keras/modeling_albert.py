@@ -292,8 +292,7 @@ class Albert(tf.keras.Model):
                  return_states=False,
                  return_attention_weights=False,
                  **kwargs):
-        kwargs.pop('name', None)
-        super(Albert, self).__init__(name='albert', **kwargs)
+        super(Albert, self).__init__(**kwargs)
         assert vocab_size > 0, "vocab_size must greater than 0."
 
         self.vocab_size = vocab_size

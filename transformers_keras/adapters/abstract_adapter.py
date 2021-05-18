@@ -19,7 +19,7 @@ def zip_weights(model, ckpt, variables_mapping, verbose=True):
         weights.append(w)
         values.append(v)
         if verbose:
-            logging.info('Load weight: {:50s} <-- {}'.format(w.name, variables_mapping[w.name]))
+            logging.info('Load weight: {:60s} <-- {}'.format(w.name, variables_mapping[w.name]))
 
     mapped_values = zip(weights, values)
     return mapped_values

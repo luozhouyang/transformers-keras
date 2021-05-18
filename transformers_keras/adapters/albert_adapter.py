@@ -37,7 +37,8 @@ class AlbertAdapter(AbstractAdapter):
 
     def adapte_weights(self, model, config, ckpt, **kwargs):
         # mapping weight names
-        weights_mapping = self._mapping_weight_names(config['num_groups'], config['num_layers_each_group'])
+        weights_mapping = self._mapping_weight_names(
+            config['num_groups'], config['num_layers_each_group'], model_name=model.name)
         # zip weights and its' values
         zipped_weights = zip_weights(
             model,
@@ -47,7 +48,8 @@ class AlbertAdapter(AbstractAdapter):
         # set values to weights
         tf.keras.backend.batch_set_value(zipped_weights)
 
-    def _mapping_weight_names(self, num_groups, num_layers_each_group):
+    def _mapping_weight_names(self, num_groups, num_layers_each_group, model_name='albert'):
+        logging.info('Using model_name: %s', model_name)
         mapping = {}
 
         if not self.skip_token_embedding:
@@ -108,4 +110,13 @@ class AlbertAdapter(AbstractAdapter):
                 v = 'bert/pooler/dense/{}'.format(n)
                 mapping[k] = v
 
-        return mapping
+        weights_mapping = {}
+        for k, v in mapping.items():
+            parts = str(k).split('/')
+            if parts[0] == 'albert':
+                parts.pop(0)
+            parts.insert(0, model_name)
+            key = '/'.join(parts)
+            weights_mapping[key] = v
+
+        return weights_mapping

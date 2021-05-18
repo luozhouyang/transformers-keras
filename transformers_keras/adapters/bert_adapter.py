@@ -33,7 +33,7 @@ class BertAdapter(AbstractAdapter):
 
     def adapte_weights(self, model, config, ckpt, **kwargs):
         # mapping weight names
-        weights_mapping = self._mapping_weight_names(config['num_layers'])
+        weights_mapping = self._mapping_weight_names(config['num_layers'], model_name=model.name)
         # zip weight names and values
         zipped_weights = zip_weights(
             model,
@@ -43,7 +43,8 @@ class BertAdapter(AbstractAdapter):
         # set values to weights
         tf.keras.backend.batch_set_value(zipped_weights)
 
-    def _mapping_weight_names(self, num_layers=12):
+    def _mapping_weight_names(self, num_layers=12, model_name='bert'):
+        logging.info('Using model_name: %s', model_name)
         mapping = {}
 
         if not self.skip_token_embedding:
@@ -85,4 +86,12 @@ class BertAdapter(AbstractAdapter):
             mapping['bert/pooler/dense/kernel:0'] = 'bert/pooler/dense/kernel'
             mapping['bert/pooler/dense/bias:0'] = 'bert/pooler/dense/bias'
 
-        return mapping
+        weights_mapping = {}
+        for k, v in mapping.items():
+            parts = str(k).split('/')
+            if parts[0] == 'bert':
+                parts.pop(0)
+            parts.insert(0, model_name)
+            key = '/'.join(parts)
+            weights_mapping[key] = v
+        return weights_mapping

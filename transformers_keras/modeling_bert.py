@@ -203,8 +203,7 @@ class Bert(tf.keras.Model):
                  return_states=False,
                  return_attention_weights=False,
                  **kwargs):
-        kwargs.pop('name', None)
-        super().__init__(name='bert', **kwargs)
+        super().__init__(**kwargs)
 
         self.vocab_size = vocab_size
         self.type_vocab_size = type_vocab_size
