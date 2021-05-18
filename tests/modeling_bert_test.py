@@ -37,21 +37,16 @@ class ModelingBertTest(tf.test.TestCase):
         self.assertAllEqual([2, 8, 10, 10], attention_weights.shape)
 
     def testBertEncoder(self):
-        encoder = BertEncoder(num_layers=2)
+        NUM_LAYERS = 4
+        encoder = BertEncoder(num_layers=NUM_LAYERS)
 
         hidden_states = tf.random.uniform((2, 10, 768))
         attention_mask = None
         outputs, all_hidden_states, all_attention_scores = encoder(hidden_states, attention_mask, training=True)
 
         self.assertAllEqual([2, 10, 768], outputs.shape)
-
-        self.assertAllEqual(2, len(all_hidden_states))
-        for state in all_hidden_states:
-            self.assertAllEqual([2, 10, 768], state.shape)
-
-        self.assertAllEqual(2, len(all_attention_scores))
-        for attention in all_attention_scores:
-            self.assertAllEqual([2, 8, 10, 10], attention.shape)
+        self.assertAllEqual([2, NUM_LAYERS, 10, 768], all_hidden_states.shape)
+        self.assertAllEqual([2, NUM_LAYERS, 8, 10, 10], all_attention_scores.shape)
 
     def testBertPooler(self):
         pooler = BertPooler()
@@ -73,9 +68,10 @@ class ModelingBertTest(tf.test.TestCase):
         return input_ids, token_type_ids, input_mask
 
     def _check_bert_outputs(self, return_states=False, return_attention_weights=False):
+        NUM_LAYERS = 4
         model = Bert(
             vocab_size=100,
-            num_layers=2,
+            num_layers=NUM_LAYERS,
             return_states=return_states,
             return_attention_weights=return_attention_weights)
         input_ids, segment_ids, attn_mask = self._build_bert_inputs()
@@ -98,14 +94,16 @@ class ModelingBertTest(tf.test.TestCase):
             self.assertEqual(2, len(outputs))
 
         if all_states is not None:
-            self.assertEqual(2, len(all_states))
-            for state in all_states:
-                self.assertAllEqual([2, 16, 768], state.shape)
+            # self.assertEqual(2, len(all_states))
+            # for state in all_states:
+            #     self.assertAllEqual([2, 16, 768], state.shape)
+            self.assertAllEqual([2, NUM_LAYERS, 16, 768], all_states.shape)
 
         if all_attn_weights is not None:
-            self.assertEqual(2, len(all_attn_weights))
-            for attention in all_attn_weights:
-                self.assertAllEqual([2, 8, 16, 16], attention.shape)
+            # self.assertEqual(2, len(all_attn_weights))
+            # for attention in all_attn_weights:
+            #     self.assertAllEqual([2, 8, 16, 16], attention.shape)
+            self.assertAllEqual([2, NUM_LAYERS, 8, 16, 16], all_attn_weights.shape)
 
     def testBert(self):
         self._check_bert_outputs(return_states=True, return_attention_weights=True)
@@ -135,6 +133,12 @@ class ModelingBertTest(tf.test.TestCase):
             return_attention_weights=True)
         config = model.get_config()
         print(config)
+
+    def test_build_model(self):
+        model = Bert(vocab_size=21128)
+        input_ids, segment_ids, input_mask = model.dummy_inputs()
+        model(input_ids, segment_ids, input_mask)
+        model.summary()
 
 
 if __name__ == "__main__":

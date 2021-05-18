@@ -61,18 +61,15 @@ class ModelingAlbertTest(tf.test.TestCase):
                            shape=(2, 16), dtype=tf.float32)  # mask
         mask = mask[:, tf.newaxis, tf.newaxis, :]
 
-        encoder = AlbertEncoder(num_layers=4, num_groups=1, num_layers_each_group=1, hidden_size=768)
+        NUM_LAYERS = 4
+        NUM_GROUPS = 1
+        encoder = AlbertEncoder(num_layers=NUM_LAYERS, num_groups=NUM_GROUPS, num_layers_each_group=1, hidden_size=768)
 
         outputs, all_states, all_attn_weights = encoder(hidden_states, mask)
         self.assertAllEqual([2, 16, 768], outputs.shape)
 
-        self.assertEqual(4, len(all_states))
-        for state in all_states:
-            self.assertAllEqual([2, 16, 768], state.shape)
-
-        self.assertEqual(4, len(all_attn_weights))
-        for attention in all_attn_weights:
-            self.assertAllEqual([2, 8, 16, 16], attention.shape)
+        self.assertAllEqual([2, NUM_LAYERS * NUM_GROUPS, 16, 768], all_states.shape)
+        self.assertAllEqual([2, NUM_LAYERS * NUM_GROUPS, 8, 16, 16], all_attn_weights.shape)
 
     def _build_albert_inputs(self):
         input_ids = tf.constant(
@@ -88,9 +85,10 @@ class ModelingAlbertTest(tf.test.TestCase):
         return input_ids, token_type_ids, input_mask
 
     def _check_albert_outputs(self, return_states=False, return_attention_weights=False):
+        NUM_LAYERS, NUM_GROUPS, NUM_LAYERS_EACH_GROUP = 4, 1, 1
         model = Albert(
             vocab_size=100, hidden_size=768,
-            num_layers=4, num_groups=1, num_layers_each_group=1,
+            num_layers=NUM_LAYERS, num_groups=NUM_GROUPS, num_layers_each_group=NUM_LAYERS_EACH_GROUP,
             return_states=return_states,
             return_attention_weights=return_attention_weights)
         input_ids, segment_ids, attn_mask = self._build_albert_inputs()
@@ -113,14 +111,10 @@ class ModelingAlbertTest(tf.test.TestCase):
             self.assertEqual(2, len(outputs))
 
         if all_states is not None:
-            self.assertEqual(4, len(all_states))
-            for state in all_states:
-                self.assertAllEqual([2, 16, 768], state.shape)
+            self.assertAllEqual([2, NUM_LAYERS, 16, 768], all_states.shape)
 
         if all_attn_weights is not None:
-            self.assertEqual(4, len(all_attn_weights))
-            for attention in all_attn_weights:
-                self.assertAllEqual([2, 8, 16, 16], attention.shape)
+            self.assertAllEqual([2, NUM_LAYERS, 8, 16, 16], all_attn_weights.shape)
 
     def testAlbert(self):
         self._check_albert_outputs(return_states=True, return_attention_weights=True)

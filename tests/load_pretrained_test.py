@@ -4,10 +4,7 @@ import tensorflow as tf
 from transformers_keras.modeling_albert import Albert
 from transformers_keras.modeling_bert import Bert
 
-BASE_DIR = os.environ.get('BASE_DIR')
-if not BASE_DIR:
-    BASE_DIR = '/data/home/zhouyang.lzy/pretrain-models'
-os.environ.update({'CUDA_VISIBLE_DEVICES': '-1'})
+BASE_DIR = os.environ.get('PRETRAINED_MODE_PATH', None)
 
 
 class LoadPretrainedModelTest(tf.test.TestCase):

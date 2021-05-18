@@ -160,7 +160,14 @@ class BertEncoder(tf.keras.layers.Layer):
             hidden_states, attention_score = encoder(hidden_states, attention_mask)
             all_hidden_states.append(hidden_states)
             all_attention_scores.append(attention_score)
-
+        # stack all_hidden_states to shape:
+        # [batch_size, num_layers, num_attention_heads, hidden_size]
+        all_hidden_states = tf.stack(all_hidden_states, axis=0)
+        all_hidden_states = tf.transpose(all_hidden_states, perm=[1, 0, 2, 3])
+        # stack all_attention_scores to shape:
+        # [batch_size, num_layers, num_attention_heads, seqeucen_length, sequence_length]
+        all_attention_scores = tf.stack(all_attention_scores, axis=0)
+        all_attention_scores = tf.transpose(all_attention_scores, perm=[1, 0, 2, 3, 4])
         return hidden_states, all_hidden_states, all_attention_scores
 
 

@@ -65,7 +65,7 @@ class AlbertEmbedding(tf.keras.layers.Layer):
 
         embedding = tok_embedding + pos_embedding + seg_embedding
         embedding = self.layer_norm(embedding)
-        embedding = self.dropout(embedding)
+        embedding = self.dropout(embedding, training=training)
         return embedding
 
 
@@ -251,16 +251,24 @@ class AlbertEncoder(tf.keras.layers.Layer):
     def call(self, hidden_states, attention_mask, training=None):
         hidden_states = self.embedding_mapping(hidden_states)
 
-        all_hidden_states, all_attn_weights = [], []
+        all_hidden_states, all_attention_weights = [], []
         for i in range(self.num_layers):
             layers_per_group = self.num_layers // self.num_groups
             group_index = i // layers_per_group
             hidden_states, group_hidden_states, group_attn_weights = self.groups[group_index](
                 hidden_states, attention_mask)
             all_hidden_states.extend(group_hidden_states)
-            all_attn_weights.extend(group_attn_weights)
+            all_attention_weights.extend(group_attn_weights)
 
-        return hidden_states, all_hidden_states, all_attn_weights
+        # stack all_hidden_states to shape:
+        # [batch_size, num_layers, num_attention_heads, hidden_size]
+        all_hidden_states = tf.stack(all_hidden_states, axis=0)
+        all_hidden_states = tf.transpose(all_hidden_states, perm=[1, 0, 2, 3])
+        # stack all_attention_scores to shape:
+        # [batch_size, num_layers, num_attention_heads, seqeucen_length, sequence_length]
+        all_attention_weights = tf.stack(all_attention_weights, axis=0)
+        all_attention_weights = tf.transpose(all_attention_weights, perm=[1, 0, 2, 3, 4])
+        return hidden_states, all_hidden_states, all_attention_weights
 
 
 class Albert(tf.keras.Model):
