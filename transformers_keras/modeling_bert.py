@@ -9,7 +9,7 @@ from transformers_keras.adapters.bert_adapter import BertAdapter
 
 from .layers import MultiHeadAttention
 from .modeling_utils import (choose_activation, complete_inputs, initialize,
-                             unpack_inputs_2)
+                             unpack_inputs_2, unpack_inputs_3)
 
 
 class BertEmbedding(tf.keras.layers.Layer):
@@ -244,8 +244,8 @@ class Bert(tf.keras.Model):
         self.return_states = return_states
         self.return_attention_weights = return_attention_weights
 
-    def call(self, input_ids, segment_ids, attention_mask, training=None):
-        input_ids, segment_ids, attention_mask = complete_inputs(input_ids, segment_ids, attention_mask)
+    def call(self, inputs, training=None):
+        input_ids, segment_ids, attention_mask = unpack_inputs_3(inputs)
         # (batch_size, seq_len) -> (batch_size, 1, 1, seq_len)
         attention_mask = attention_mask[:, tf.newaxis, tf.newaxis, :]
         embedding = self.bert_embedding(inputs=(input_ids, segment_ids), mode='embedding')
@@ -274,7 +274,7 @@ class Bert(tf.keras.Model):
         model_config['return_attention_weights'] = kwargs.get('return_attention_weights', False)
         model = cls(**model_config)
         input_ids, segment_ids, attn_mask = model.dummy_inputs()
-        model(input_ids, segment_ids, attn_mask)
+        model(inputs=(input_ids, segment_ids, attn_mask))
         adapter.adapte_weights(model, model_config, ckpt, **kwargs)
         return model
 
