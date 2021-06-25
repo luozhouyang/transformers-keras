@@ -12,7 +12,7 @@ class LoadPretrainedModelTest(tf.test.TestCase):
     def _do_predict(self, model):
         input_ids = tf.constant([1, 2, 3, 4, 5, 6, 7, 8], shape=(2, 4))
         # output_1 should be all close to output_2
-        _, outputs_1 = model(inputs=(input_ids, None, None), training=False)
+        _, outputs_1 = model(input_ids, None, None, training=False)
         print(outputs_1)
         # _, outputs_2 = model(input_ids, None, None)
         # print(outputs_2)
@@ -68,9 +68,11 @@ class LoadPretrainedModelTest(tf.test.TestCase):
             model.compile(loss='binary_cross_entropy', optimizer='adam')
             return model
 
-        for trainable in [True, False]:
+        for trainable in [True]:
             model = _build_bert_model(trainable)
             model.summary()
+
+            model.save('models/export-bert-classify/1', include_optimizer=False)
 
     def test_albert_classify(self):
 

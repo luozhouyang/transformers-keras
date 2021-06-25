@@ -244,8 +244,29 @@ class Bert(tf.keras.Model):
         self.return_states = return_states
         self.return_attention_weights = return_attention_weights
 
-    def call(self, inputs, training=None):
-        input_ids, segment_ids, attention_mask = unpack_inputs_3(inputs)
+    @tf.function(input_signature=[
+        {
+            'input_ids': tf.TensorSpec(shape=(None, None), dtype=tf.int32, name='input_ids'),
+            'segment_ids': tf.TensorSpec(shape=(None, None), dtype=tf.int32, name='segment_ids'),
+            'attention_mask': tf.TensorSpec(shape=(None, None), dtype=tf.int32, name='attention_mask')
+        }
+    ])
+    def serving(self, inputs):
+        input_ids, segment_ids, attention_mask = inputs['input_ids'], inputs['segment_ids'], inputs['attention_mask']
+        outputs = self(input_ids, segment_ids, attention_mask)
+        outputs = list(outputs)
+        results = {
+            'sequence_output': outputs.pop(0),
+            'pooled_output': outputs.pop(0),
+        }
+        if self.return_states:
+            results['hidden_states'] = outputs.pop(0)
+        if self.return_attention_weights:
+            results['attention_weights'] = outputs.pop(0)
+        return results
+
+    def call(self, input_ids, segment_ids=None, attention_mask=None, training=None):
+        input_ids, segment_ids, attention_mask = unpack_inputs_3([input_ids, segment_ids, attention_mask])
         # (batch_size, seq_len) -> (batch_size, 1, 1, seq_len)
         attention_mask = attention_mask[:, tf.newaxis, tf.newaxis, :]
         embedding = self.bert_embedding(inputs=(input_ids, segment_ids), mode='embedding')
@@ -259,9 +280,9 @@ class Bert(tf.keras.Model):
         return outputs
 
     def dummy_inputs(self):
-        input_ids = tf.constant([0] * 128, dtype=tf.int64, shape=(1, 128))
-        segment_ids = tf.constant([0] * 128, dtype=tf.int64, shape=(1, 128))
-        attn_mask = tf.constant([1] * 128, dtype=tf.int64, shape=(1, 128))
+        input_ids = tf.constant([0] * 128, dtype=tf.int32, shape=(1, 128))
+        segment_ids = tf.constant([0] * 128, dtype=tf.int32, shape=(1, 128))
+        attn_mask = tf.constant([1] * 128, dtype=tf.int32, shape=(1, 128))
         return input_ids, segment_ids, attn_mask
 
     @classmethod
@@ -274,7 +295,7 @@ class Bert(tf.keras.Model):
         model_config['return_attention_weights'] = kwargs.get('return_attention_weights', False)
         model = cls(**model_config)
         input_ids, segment_ids, attn_mask = model.dummy_inputs()
-        model(inputs=(input_ids, segment_ids, attn_mask))
+        model(input_ids=input_ids, segment_id=segment_ids, attention_mask=attn_mask)
         adapter.adapte_weights(model, model_config, ckpt, **kwargs)
         return model
 

@@ -75,7 +75,7 @@ class ModelingBertTest(tf.test.TestCase):
             return_states=return_states,
             return_attention_weights=return_attention_weights)
         input_ids, segment_ids, attn_mask = self._build_bert_inputs()
-        outputs = model(inputs=(input_ids, segment_ids, attn_mask))
+        outputs = model(input_ids, segment_ids, attn_mask)
         sequence_outputs, pooled_outputs = outputs[0], outputs[1]
         self.assertAllEqual([2, 16, 768], sequence_outputs.shape)
         self.assertAllEqual([2, 768], pooled_outputs.shape)
@@ -137,8 +137,22 @@ class ModelingBertTest(tf.test.TestCase):
     def test_build_model(self):
         model = Bert(vocab_size=21128)
         input_ids, segment_ids, input_mask = model.dummy_inputs()
-        model(inputs=(input_ids, segment_ids, input_mask))
+        model(input_ids, segment_ids, input_mask)
         model.summary()
+
+    def test_export_saved_model(self):
+        model = Bert(vocab_size=21128, num_layers=12, num_attention_heads=8,
+                     return_states=True, return_attention_weights=True)
+        input_ids, segment_ids, input_mask = model.dummy_inputs()
+        model(input_ids=input_ids, segment_ids=segment_ids, attention_mask=input_mask)
+        model.summary()
+        model.save('models/export/1', include_optimizer=False, signatures=model.serving)
+
+    def test_load_saved_model(self):
+        loaded = tf.saved_model.load('models/export/1')
+        model = loaded.signatures['serving_default']
+        print(model.structured_input_signature)
+        print(model.structured_outputs)
 
 
 if __name__ == "__main__":
