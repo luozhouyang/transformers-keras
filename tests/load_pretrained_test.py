@@ -25,7 +25,7 @@ class LoadPretrainedModelTest(tf.test.TestCase):
             'chinese_roberta_wwm_large_ext_L-24_H-1024_A-16'
         ]
         for p in model_paths:
-            model = Bert.from_pretrained(os.path.join(BASE_DIR, p))
+            model = Bert.from_pretrained(os.path.join(BASE_DIR, p), verbose=True)
             model.summary()
             self._do_predict(model)
 
@@ -33,7 +33,8 @@ class LoadPretrainedModelTest(tf.test.TestCase):
         model = Bert.from_pretrained(
             os.path.join(BASE_DIR, model_paths[0]),
             skip_token_embedding=True,
-            skip_pooler=True)
+            skip_pooler=True,
+            verbose=False)
         model.summary()
         self._do_predict(model)
 

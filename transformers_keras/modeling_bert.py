@@ -7,7 +7,6 @@ import tensorflow as tf
 from transformers_keras.adapters import parse_pretrained_model_files
 from transformers_keras.adapters.bert_adapter import BertAdapter
 
-from .layers import MultiHeadAttention
 from .modeling_utils import (choose_activation, complete_inputs, initialize,
                              unpack_inputs_2, unpack_inputs_3)
 
@@ -20,35 +19,36 @@ class BertEmbedding(tf.keras.layers.Layer):
                  embedding_size=768,
                  type_vocab_size=2,
                  dropout_rate=0.2,
-                 stddev=0.02,
+                 initializer_range=0.02,
                  epsilon=1e-12,
                  **kwargs):
         super().__init__(**kwargs)
         assert vocab_size > 0, "vocab_size must greater than 0."
         self.vocab_size = vocab_size
+        self.max_positions = max_positions
+        self.type_vocab_size = type_vocab_size
         self.embedding_size = embedding_size
-        self.stddev = stddev
-
-        self.token_embedding = self.add_weight(
-            'weight',
-            shape=[self.vocab_size, self.embedding_size],
-            initializer=initialize(self.stddev)
-        )
-
-        self.position_embedding = tf.keras.layers.Embedding(
-            max_positions,
-            embedding_size,
-            embeddings_initializer=initialize(stddev),
-            name='position_embedding'
-        )
-        self.token_type_embedding = tf.keras.layers.Embedding(
-            type_vocab_size,
-            embedding_size,
-            embeddings_initializer=initialize(stddev),
-            name='token_type_embedding'
-        )
-        self.layer_norm = tf.keras.layers.LayerNormalization(epsilon=epsilon, name='layer_norm')
+        self.initializer_range = initializer_range
+        self.layer_norm = tf.keras.layers.LayerNormalization(epsilon=epsilon, name='LayerNorm')
         self.dropout = tf.keras.layers.Dropout(dropout_rate)
+
+    def build(self, input_shape):
+        self.token_embedding = self.add_weight(
+            'word_embeddings',
+            shape=[self.vocab_size, self.embedding_size],
+            initializer=initialize(self.initializer_range)
+        )
+        self.position_embedding = self.add_weight(
+            'position_embeddings',
+            shape=[self.max_positions, self.embedding_size],
+            initializer=initialize(self.initializer_range)
+        )
+        self.token_type_embedding = self.add_weight(
+            'token_type_embeddings',
+            shape=[self.type_vocab_size, self.embedding_size],
+            initializer=initialize(self.initializer_range)
+        )
+        return super().build(input_shape)
 
     @property
     def embedding_table(self):
@@ -60,8 +60,8 @@ class BertEmbedding(tf.keras.layers.Layer):
         if position_ids is None:
             position_ids = tf.range(0, tf.shape(input_ids)[1], dtype=input_ids.dtype)
 
-        position_embeddings = self.position_embedding(position_ids)
-        token_type_embeddings = self.token_type_embedding(segment_ids)
+        position_embeddings = tf.gather(self.position_embedding, position_ids)
+        token_type_embeddings = tf.gather(self.token_embedding, segment_ids)
         token_embeddings = tf.gather(self.token_embedding, input_ids)
 
         embeddings = token_embeddings + token_type_embeddings + position_embeddings
@@ -70,18 +70,140 @@ class BertEmbedding(tf.keras.layers.Layer):
         return embeddings
 
 
-class BertIntermediate(tf.keras.layers.Layer):
+class BertMultiHeadAtttetion(tf.keras.layers.Layer):
 
-    def __init__(self, intermediate_size=3072, activation='gelu', stddev=0.02, **kwargs):
+    def __init__(self,
+                 hidden_size=768,
+                 num_attention_heads=8,
+                 attention_dropout_rate=0.1,
+                 initializer_range=0.02,
+                 epsilon=1e-8,
+                 **kwargs):
+        super().__init__(**kwargs)
+        self.num_attention_heads = num_attention_heads
+        self.hidden_size = hidden_size
+        self.query_weight = tf.keras.layers.Dense(self.hidden_size, name='query')
+        self.key_weight = tf.keras.layers.Dense(self.hidden_size, name='key')
+        self.value_weight = tf.keras.layers.Dense(self.hidden_size, name='value')
+        self.attention_dropout = tf.keras.layers.Dropout(attention_dropout_rate)
+
+    def _split_heads(self, x, batch_size):
+        x = tf.reshape(x, (batch_size, -1, self.num_attention_heads, self.hidden_size // self.num_attention_heads))
+        return tf.transpose(x, perm=[0, 2, 1, 3])
+
+    def _scaled_dot_product_attention(self, query, key, value, attention_mask, training=None):
+        query = tf.cast(query, dtype=self.dtype)
+        key = tf.cast(key, dtype=self.dtype)
+        value = tf.cast(value, dtype=self.dtype)
+
+        score = tf.matmul(query, key, transpose_b=True)
+        dk = tf.cast(tf.shape(query)[-1], self.dtype)
+        score = score / tf.math.sqrt(dk)
+        if attention_mask is not None:
+            attention_mask = tf.cast(attention_mask, dtype=self.dtype)
+            score += (1.0 - attention_mask) * -10000.0
+        attn_weights = tf.nn.softmax(score, axis=-1)
+        attn_weights = self.attention_dropout(attn_weights, training=training)
+        context = tf.matmul(attn_weights, value)
+        return context, attn_weights
+
+    def call(self, query, key, value, attention_mask, training=None):
+        batch_size = tf.shape(query)[0]
+        query = self._split_heads(self.query_weight(query), batch_size)
+        key = self._split_heads(self.key_weight(key), batch_size)
+        value = self._split_heads(self.value_weight(value), batch_size)
+        context, attn_weights = self._scaled_dot_product_attention(
+            query, key, value, attention_mask, training=training)
+        context = tf.transpose(context, perm=[0, 2, 1, 3])
+        context = tf.reshape(context, [batch_size, -1, self.hidden_size])
+        return context, attn_weights
+
+
+class BertAttentionOutput(tf.keras.layers.Layer):
+
+    def __init__(self,
+                 hidden_size=768,
+                 hidden_dropout_rate=0.1,
+                 initializer_range=0.02,
+                 epsilon=1e-5,
+                 **kwargs):
         super().__init__(**kwargs)
         self.dense = tf.keras.layers.Dense(
-            intermediate_size, kernel_initializer=initialize(stddev), name='dense')
+            hidden_size,
+            kernel_initializer=tf.keras.initializers.TruncatedNormal(stddev=initializer_range),
+            name='dense')
+        self.dropout = tf.keras.layers.Dropout(hidden_dropout_rate)
+        self.layernorm = tf.keras.layers.LayerNormalization(epsilon=epsilon, name='LayerNorm')
+
+    def call(self, input_states, hidden_states, training=None):
+        hidden_states = self.dense(hidden_states)
+        hidden_states = self.dropout(hidden_states, training=training)
+        hidden_states = self.layernorm(hidden_states + input_states)
+        return hidden_states
+
+
+class BertAttention(tf.keras.layers.Layer):
+
+    def __init__(self,
+                 hidden_size=768,
+                 num_attention_heads=8,
+                 hidden_dropout_rate=0.1,
+                 attention_dropout_rate=0.1,
+                 initializer_range=0.02,
+                 epsilon=1e-5,
+                 **kwargs):
+        super().__init__(**kwargs)
+        self.attention = BertMultiHeadAtttetion(
+            hidden_size=hidden_size,
+            num_attention_heads=num_attention_heads,
+            attention_dropout_rate=attention_dropout_rate,
+            initializer_range=initializer_range,
+            epsilon=epsilon,
+            name='self')
+        self.attention_output = BertAttentionOutput(
+            hidden_size=hidden_size,
+            hidden_dropout_rate=hidden_dropout_rate,
+            initializer_range=initializer_range,
+            epsilon=epsilon,
+            name='output')
+
+    def call(self, hidden_states, attention_mask, training=None):
+        context, attention_weights = self.attention(
+            hidden_states, hidden_states, hidden_states, attention_mask, training=training)
+        outputs = self.attention_output(hidden_states, context, training=training)
+        return outputs, attention_weights
+
+
+class BertIntermediate(tf.keras.layers.Layer):
+
+    def __init__(self, intermediate_size=3072, activation='gelu', initializer_range=0.02, **kwargs):
+        super().__init__(**kwargs)
+        self.dense = tf.keras.layers.Dense(
+            intermediate_size,
+            kernel_initializer=tf.keras.initializers.TruncatedNormal(stddev=initializer_range),
+            name='dense')
         self.activation = choose_activation(activation)
 
-    def call(self, inputs, training=None):
-        hidden_states = inputs
+    def call(self, hidden_states):
         hidden_states = self.dense(hidden_states)
         hidden_states = self.activation(hidden_states)
+        return hidden_states
+
+
+class BertIntermediateOutput(tf.keras.layers.Layer):
+
+    def __init__(self, hidden_size=768, hidden_dropout_rate=0.1, initializer_range=0.02, epsilon=1e-5, **kwargs):
+        super().__init__(**kwargs)
+        self.dense = tf.keras.layers.Dense(
+            hidden_size,
+            kernel_initializer=tf.keras.initializers.TruncatedNormal(stddev=initializer_range),
+            name='dense')
+        self.dropout = tf.keras.layers.Dropout(hidden_dropout_rate)
+        self.layernorm = tf.keras.layers.LayerNormalization(epsilon=epsilon, name='LayerNorm')
+
+    def call(self, input_states, hidden_states, training=None):
+        hidden_states = self.dropout(self.dense(hidden_states), training=training)
+        hidden_states = self.layernorm(hidden_states + input_states)
         return hidden_states
 
 
@@ -95,32 +217,35 @@ class BertEncoderLayer(tf.keras.layers.Layer):
                  hidden_dropout_rate=0.2,
                  attention_dropout_rate=0.1,
                  epsilon=1e-12,
-                 stddev=0.02,
+                 initializer_range=0.02,
                  **kwargs):
         super().__init__(**kwargs)
         # attention block
-        self.attention = MultiHeadAttention(
+        self.attention = BertAttention(
             hidden_size=hidden_size,
             num_attention_heads=num_attention_heads,
             hidden_dropout_rate=hidden_dropout_rate,
             attention_dropout_rate=attention_dropout_rate,
+            initializer_range=initializer_range,
             name='attention')
         # intermediate block
         self.intermediate = BertIntermediate(
             intermediate_size=intermediate_size,
             activation=activation,
-            stddev=stddev,
+            initializer_range=initializer_range,
             name='intermediate')
         # output block
-        self.output_dense = tf.keras.layers.Dense(hidden_size, kernel_initializer=initialize(stddev), name='dense')
-        self.output_dropout = tf.keras.layers.Dropout(hidden_dropout_rate)
-        self.output_layer_norm = tf.keras.layers.LayerNormalization(epsilon=epsilon, name='layer_norm')
+        self.intermediate_output = BertIntermediateOutput(
+            hidden_size=hidden_size,
+            hidden_dropout_rate=hidden_dropout_rate,
+            initializer_range=initializer_range,
+            epsilon=epsilon,
+            name='output')
 
     def call(self, hidden_states, attn_mask, training=None):
-        attn_output, attn_weights = self.attention(hidden_states, hidden_states, hidden_states, attn_mask)
-        outputs = self.intermediate(inputs=attn_output)
-        outputs = self.output_dropout(self.output_dense(outputs), training=training)
-        outputs = self.output_layer_norm(attn_output + outputs)
+        attn_output, attn_weights = self.attention(hidden_states, attn_mask)
+        outputs = self.intermediate(attn_output)
+        outputs = self.intermediate_output(attn_output, outputs)
         return outputs, attn_weights
 
 
@@ -135,7 +260,7 @@ class BertEncoder(tf.keras.layers.Layer):
                  hidden_dropout_rate=0.2,
                  attention_dropout_rate=0.1,
                  epsilon=1e-12,
-                 stddev=0.02,
+                 initializer_range=0.02,
                  **kwargs):
         super().__init__(**kwargs)
         self.encoder_layers = [
@@ -147,7 +272,7 @@ class BertEncoder(tf.keras.layers.Layer):
                 hidden_dropout_rate=hidden_dropout_rate,
                 attention_dropout_rate=attention_dropout_rate,
                 epsilon=epsilon,
-                stddev=stddev,
+                initializer_range=initializer_range,
                 name='layer_{}'.format(i)
             ) for i in range(num_layers)
         ]
@@ -172,10 +297,10 @@ class BertEncoder(tf.keras.layers.Layer):
 
 class BertPooler(tf.keras.layers.Layer):
 
-    def __init__(self, hidden_size=768, stddev=0.02, **kwargs):
+    def __init__(self, hidden_size=768, initializer_range=0.02, **kwargs):
         super().__init__(**kwargs)
         self.dense = tf.keras.layers.Dense(
-            hidden_size, kernel_initializer=initialize(stddev), activation='tanh', name='dense')
+            hidden_size, kernel_initializer=initialize(initializer_range), activation='tanh', name='dense')
 
     def call(self, inputs, training=None):
         hidden_states = inputs
@@ -197,7 +322,7 @@ class Bert(tf.keras.Model):
                  activation='gelu',
                  hidden_dropout_rate=0.2,
                  attention_dropout_rate=0.1,
-                 stddev=0.02,
+                 initializer_range=0.02,
                  epsilon=1e-12,
                  return_states=False,
                  return_attention_weights=False,
@@ -213,8 +338,8 @@ class Bert(tf.keras.Model):
         self.intermediate_size = intermediate_size
         self.hidden_dropout_rate = hidden_dropout_rate
         self.attention_dropout_rate = attention_dropout_rate
-        self.stddev = stddev
-        self.initialize_range = stddev
+        self.initializer_range = initializer_range
+        self.initialize_range = initializer_range
 
         self.bert_embedding = BertEmbedding(
             vocab_size=vocab_size,
@@ -222,9 +347,9 @@ class Bert(tf.keras.Model):
             embedding_size=hidden_size,
             type_vocab_size=type_vocab_size,
             dropout_rate=hidden_dropout_rate,
-            stddev=stddev,
+            initializer_range=initializer_range,
             epsilon=epsilon,
-            name='embedding')
+            name='embeddings')
 
         self.bert_encoder = BertEncoder(
             num_layers=num_layers,
@@ -235,10 +360,10 @@ class Bert(tf.keras.Model):
             hidden_dropout_rate=hidden_dropout_rate,
             attention_dropout_rate=attention_dropout_rate,
             epsilon=epsilon,
-            stddev=stddev,
+            initializer_range=initializer_range,
             name='encoder')
 
-        self.bert_pooler = BertPooler(hidden_size=hidden_size, stddev=stddev, name='pooler')
+        self.bert_pooler = BertPooler(hidden_size=hidden_size, initializer_range=initializer_range, name='pooler')
 
         self.return_states = return_states
         self.return_attention_weights = return_attention_weights
@@ -288,7 +413,7 @@ class Bert(tf.keras.Model):
         return input_ids, segment_ids, attn_mask
 
     @classmethod
-    def from_pretrained(cls, pretrained_model_dir, adapter=None, verbose=True, **kwargs):
+    def from_pretrained(cls, pretrained_model_dir, adapter=None, **kwargs):
         config_file, ckpt, vocab_file = parse_pretrained_model_files(pretrained_model_dir)
         if not adapter:
             adapter = BertAdapter(**kwargs)
@@ -312,7 +437,7 @@ class Bert(tf.keras.Model):
             'intermediate_size': self.intermediate_size,
             'hidden_dropout_rate': self.hidden_dropout_rate,
             'attention_dropout_rate': self.attention_dropout_rate,
-            'stddev': self.stddev,
+            'initializer_range': self.initializer_range,
             'return_states': self.return_states,
             'return_attention_weights': self.return_attention_weights
         }
