@@ -62,7 +62,7 @@ class LoadPretrainedModelTest(tf.test.TestCase):
             bert = Bert.from_pretrained(os.path.join(BASE_DIR, 'chinese_roberta_wwm_ext_L-12_H-768_A-12'))
             bert.trainable = trainable
 
-            sequence_output, pooled_output = bert(inputs=(input_ids, segment_ids, None))
+            sequence_output, pooled_output = bert(input_ids, segment_ids)
             outputs = tf.keras.layers.Dense(2, name='output')(pooled_output)
             model = tf.keras.Model(inputs=[input_ids, segment_ids], outputs=outputs)
             model.compile(loss='binary_cross_entropy', optimizer='adam')

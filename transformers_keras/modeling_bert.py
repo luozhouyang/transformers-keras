@@ -29,6 +29,12 @@ class BertEmbedding(tf.keras.layers.Layer):
         self.embedding_size = embedding_size
         self.stddev = stddev
 
+        self.token_embedding = self.add_weight(
+            'weight',
+            shape=[self.vocab_size, self.embedding_size],
+            initializer=initialize(self.stddev)
+        )
+
         self.position_embedding = tf.keras.layers.Embedding(
             max_positions,
             embedding_size,
@@ -44,25 +50,18 @@ class BertEmbedding(tf.keras.layers.Layer):
         self.layer_norm = tf.keras.layers.LayerNormalization(epsilon=epsilon, name='layer_norm')
         self.dropout = tf.keras.layers.Dropout(dropout_rate)
 
-    def build(self, input_shape):
-        self.token_embedding = self.add_weight(
-            'weight',
-            shape=[self.vocab_size, self.embedding_size],
-            initializer=initialize(self.stddev)
-        )
-        super().build(input_shape)
+    @property
+    def embedding_table(self):
+        return self.token_embedding
 
-    def call(self, inputs, mode='embedding', training=None):
-        # used for masked lm
-        if mode == 'linear':
-            return tf.matmul(inputs, self.token_embedding, transpose_b=True)
-
-        input_ids, token_type_ids = unpack_inputs_2(inputs)
-        seq_len = tf.shape(input_ids)[1]
-        position_ids = tf.range(seq_len, dtype=tf.int32)[tf.newaxis, :]
+    def call(self, input_ids, segment_ids=None, position_ids=None, training=None):
+        if segment_ids is None:
+            segment_ids = tf.zeros_like(input_ids)
+        if position_ids is None:
+            position_ids = tf.range(0, tf.shape(input_ids)[1], dtype=input_ids.dtype)
 
         position_embeddings = self.position_embedding(position_ids)
-        token_type_embeddings = self.token_type_embedding(token_type_ids)
+        token_type_embeddings = self.token_type_embedding(segment_ids)
         token_embeddings = tf.gather(self.token_embedding, input_ids)
 
         embeddings = token_embeddings + token_type_embeddings + position_embeddings
@@ -265,11 +264,14 @@ class Bert(tf.keras.Model):
             results['attention_weights'] = outputs.pop(0)
         return results
 
+    def get_embedding_table(self):
+        return self.bert_embedding.embedding_table
+
     def call(self, input_ids, segment_ids=None, attention_mask=None, training=None):
         input_ids, segment_ids, attention_mask = unpack_inputs_3([input_ids, segment_ids, attention_mask])
+        embedding = self.bert_embedding(input_ids, segment_ids)
         # (batch_size, seq_len) -> (batch_size, 1, 1, seq_len)
         attention_mask = attention_mask[:, tf.newaxis, tf.newaxis, :]
-        embedding = self.bert_embedding(inputs=(input_ids, segment_ids), mode='embedding')
         output, all_hidden_states, all_attention_scores = self.bert_encoder(embedding, attention_mask)
         pooled_output = self.bert_pooler(output)
         outputs = (output, pooled_output)
@@ -295,7 +297,7 @@ class Bert(tf.keras.Model):
         model_config['return_attention_weights'] = kwargs.get('return_attention_weights', False)
         model = cls(**model_config)
         input_ids, segment_ids, attn_mask = model.dummy_inputs()
-        model(input_ids=input_ids, segment_id=segment_ids, attention_mask=attn_mask)
+        model(input_ids=input_ids, segment_ids=segment_ids, attention_mask=attn_mask)
         adapter.adapte_weights(model, model_config, ckpt, **kwargs)
         return model
 
@@ -315,49 +317,3 @@ class Bert(tf.keras.Model):
             'return_attention_weights': self.return_attention_weights
         }
         return config
-
-
-class BertMLMHead(tf.keras.layers.Layer):
-    """Masked language model for BERT pre-training."""
-
-    def __init__(self,
-                 embedding,
-                 vocab_size=-1,
-                 hidden_size=768,
-                 activation='gelu',
-                 epsilon=1e-12,
-                 stddev=0.02,
-                 **kwargs):
-        super().__init__(**kwargs)
-        assert vocab_size > 0, "vocab_size must greater than 0."
-        self.vocab_size = vocab_size
-        self.embedding = embedding
-        self.activation = choose_activation(activation)
-        self.dense = tf.keras.layers.Dense(hidden_size, kernel_initializer=initialize(stddev), name='dense')
-        self.layer_norm = tf.keras.layers.LayerNormalization(epsilon=epsilon, name='layer_norm')
-
-    def build(self, input_shape):
-        self.bias = self.add_weight(shape=(self.vocab_size,), initializer='zeros', trainable=True, name='bias')
-        super().build(input_shape)
-
-    def call(self, inputs, training=None):
-        hidden_states = inputs
-        hidden_states = self.dense(hidden_states)
-        hidden_states = self.activation(hidden_states)
-        hidden_states = self.layer_norm(hidden_states)
-        hidden_states = self.embedding(inputs=hidden_states, mode='linear')
-        hidden_states = hidden_states + self.bias
-        return hidden_states
-
-
-class BertNSPHead(tf.keras.layers.Layer):
-    """Next sentence prediction for BERT pre-training."""
-
-    def __init__(self, stddev=0.02, **kwargs):
-        super().__init__(**kwargs)
-        self.classifier = tf.keras.layers.Dense(2, kernel_initializer=initialize(stddev), name='dense')
-
-    def call(self, inputs, training=None):
-        pooled_output = inputs
-        relation = self.classifier(pooled_output)
-        return relation

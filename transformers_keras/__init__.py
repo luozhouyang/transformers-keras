@@ -11,7 +11,7 @@ from .modeling_albert import (Albert, AlbertEmbedding, AlbertEncoder,
                               AlbertEncoderGroup, AlbertEncoderLayer,
                               AlbertMLMHead, AlbertSOPHead)
 from .modeling_bert import (Bert, BertEmbedding, BertEncoder, BertEncoderLayer,
-                            BertIntermediate, BertMLMHead, BertNSPHead)
+                            BertIntermediate)
 from .modeling_utils import complete_inputs
 from .tokenizers.bert_tokenizer import BertTokenizer
 from .tokenizers.tokenizer import BasicTokenizer, WordpieceTokenizer

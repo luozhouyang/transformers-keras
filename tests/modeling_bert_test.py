@@ -14,12 +14,8 @@ class ModelingBertTest(tf.test.TestCase):
             # tf.constant([[0, 1, 2, 3, 4, 5]]),
             tf.constant([[0, 0, 0, 1, 1, 1]]),
         )
-        embeddings = embedding_layer(inputs, mode='embedding', training=True)
+        embeddings = embedding_layer(inputs[0], inputs[1], training=True)
         self.assertAllEqual([1, 6, 768], embeddings.shape)
-
-        inputs2 = tf.random.uniform(shape=(1, 768))
-        outputs = embedding_layer(inputs2, mode='linear')
-        self.assertAllEqual([1, 16], outputs.shape)
 
     def testBertIntermediate(self):
         inter = BertIntermediate()
@@ -110,20 +106,6 @@ class ModelingBertTest(tf.test.TestCase):
         self._check_bert_outputs(return_states=True, return_attention_weights=False)
         self._check_bert_outputs(return_states=False, return_attention_weights=True)
         self._check_bert_outputs(return_states=False, return_attention_weights=False)
-
-    def testBertMLMHead(self):
-        embedding = BertEmbedding(vocab_size=100)
-        mlm = BertMLMHead(vocab_size=100, embedding=embedding)
-
-        inputs = tf.random.uniform(shape=(2, 16, 768))
-        outputs = mlm(inputs)
-        self.assertAllEqual([2, 16, mlm.vocab_size], outputs.shape)
-
-    def testBertNSPHead(self):
-        nsp = BertNSPHead()
-        inputs = tf.random.uniform(shape=(2, 768))
-        outputs = nsp(inputs)
-        self.assertAllEqual([2, 2], outputs.shape)
 
     def test_bert_config(self):
         model = Bert(
