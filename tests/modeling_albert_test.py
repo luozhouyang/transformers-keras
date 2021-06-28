@@ -134,6 +134,20 @@ class ModelingAlbertTest(tf.test.TestCase):
         model = Albert(vocab_size=21128)
         print(model.get_config())
 
+    def test_export_saved_model(self):
+        model = Albert(vocab_size=21128, num_layers=12, num_attention_heads=8,
+                       return_states=True, return_attention_weights=True)
+        input_ids, segment_ids, input_mask = model.dummy_inputs()
+        model(input_ids=input_ids, segment_ids=segment_ids, attention_mask=input_mask)
+        model.summary()
+        model.save('models/albert/export/1', include_optimizer=False, signatures=model.serving)
+
+    def test_load_saved_model(self):
+        loaded = tf.saved_model.load('models/albert/export/1')
+        model = loaded.signatures['serving_default']
+        print(model.structured_input_signature)
+        print(model.structured_outputs)
+
 
 if __name__ == "__main__":
     tf.test.main()

@@ -351,6 +351,27 @@ class Albert(tf.keras.Model):
         self.return_states = return_states
         self.return_attention_weights = return_attention_weights
 
+    @tf.function(input_signature=[
+        {
+            'input_ids': tf.TensorSpec(shape=(None, None), dtype=tf.int32, name='input_ids'),
+            'segment_ids': tf.TensorSpec(shape=(None, None), dtype=tf.int32, name='segment_ids'),
+            'attention_mask': tf.TensorSpec(shape=(None, None), dtype=tf.int32, name='attention_mask')
+        }
+    ])
+    def serving(self, inputs):
+        input_ids, segment_ids, attention_mask = inputs['input_ids'], inputs['segment_ids'], inputs['attention_mask']
+        outputs = self(input_ids, segment_ids, attention_mask)
+        outputs = list(outputs)
+        results = {
+            'sequence_output': outputs.pop(0),
+            'pooled_output': outputs.pop(0),
+        }
+        if self.return_states:
+            results['hidden_states'] = outputs.pop(0)
+        if self.return_attention_weights:
+            results['attention_weights'] = outputs.pop(0)
+        return results
+
     def call(self, input_ids, segment_ids=None, attention_mask=None, training=None):
         input_ids, segment_ids, attention_mask = unpack_inputs_3([input_ids, segment_ids, attention_mask])
         attention_mask = attention_mask[:, tf.newaxis, tf.newaxis, :]
