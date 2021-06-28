@@ -26,7 +26,7 @@ class ModelingBertTest(tf.test.TestCase):
     def testBertEncoderLayer(self):
         encoder = BertEncoderLayer()
         hidden_states = tf.random.uniform((2, 10, 768))
-        attention_mask = None
+        attention_mask = tf.constant([1, 1, 1, 1, 1, 1, 1, 1, 1, 1], shape=(1, 10))[tf.newaxis, :]
         outputs, attention_weights = encoder(hidden_states, attention_mask, training=True)
 
         self.assertAllEqual([2, 10, 768], outputs.shape)
