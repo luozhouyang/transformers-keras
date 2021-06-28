@@ -2,6 +2,7 @@ import json
 import logging
 import os
 
+import numpy as np
 import tensorflow as tf
 
 from .abstract_adapter import AbstractAdapter, zip_weights
@@ -32,14 +33,14 @@ class BertAdapter(AbstractAdapter):
         return model_config
 
     def adapte_weights(self, model, config, ckpt, **kwargs):
-        mapping, skipped_weights = {}, []
+        mapping = {}
         ckpt_prefix = kwargs.get('ckpt_prefix', 'bert')
-        ckpt_weights = [x[0] for x in tf.train.list_variables(ckpt)]
-        self_weights = set([x.name for x in model.trainable_weights])
-        for w in ckpt_weights:
+        ckpt_weight_names = [x[0] for x in tf.train.list_variables(ckpt)]
+        self_weight_names = set([x.name for x in model.trainable_weights])
+        for w in ckpt_weight_names:
             if any(x in w for x in ['embeddings', 'pooler', 'encoder']):
                 mw = model.name + w.lstrip(ckpt_prefix) + ':0'
-                if mw not in self_weights:
+                if mw not in self_weight_names:
                     logging.warning('weight: %s not in model weights', mw)
                     continue
                 mapping[mw] = w
@@ -65,6 +66,16 @@ class BertAdapter(AbstractAdapter):
             **kwargs)
         # set values to weights
         tf.keras.backend.batch_set_value(zipped_weights)
+
+        self_weights = {w.name: w.numpy() for w in model.trainable_weights}
+        for k, v in self_weights.items():
+            ckpt_key = mapping.get(k, None)
+            if not ckpt_key:
+                continue
+            ckpt_value = tf.train.load_variable(ckpt, ckpt_key)
+            if ckpt_value is None:
+                logging.warning('ckpt value is None of key: %s', ckpt_key)
+            assert np.allclose(v, ckpt_value)
 
     def _skip_weight(self, mapping, name):
         mapping.pop(name)
