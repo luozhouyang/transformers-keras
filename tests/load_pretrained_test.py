@@ -32,7 +32,7 @@ class LoadPretrainedModelTest(tf.test.TestCase):
             return_states=True, verbose=False)
         return model
 
-    def test_comprare_with_transformers(self):
+    def test_bert_comprare_with_transformers(self):
         model = self._build_model()
         transformer_model = self._build_model_from_transformers()
 
@@ -54,6 +54,42 @@ class LoadPretrainedModelTest(tf.test.TestCase):
             self.assertAllClose(a_sequence_output, b_sequence_output, rtol=0.5, atol=1e-4)
             self.assertAllClose(a_pooled_output, b_pooled_output, rtol=0.02, atol=1e-4)
 
+        _compare_final_outputs()
+
+    def _build_albert_from_transformers(self):
+        from transformers import TFAlbertModel
+        model = TFAlbertModel.from_pretrained(os.path.join(BASE_DIR, 'albert_base_zh_pytorch'), from_pt=True)
+        return model
+
+    def test_albert_compare_with_transformers(self):
+        model = Albert.from_pretrained(os.path.join(BASE_DIR, 'albert_base_zh'))
+        transformer_model = self._build_albert_from_transformers()
+
+        input_ids, segment_ids, attention_mask = self._build_bert_inputs()
+
+        def _compare_embedding_output():
+            a_output = model.embedding(input_ids, segment_ids)
+            b_output = transformer_model.get_layer('albert').embeddings(
+                input_ids=input_ids, token_type_ids=segment_ids, position_ids=None, training=False)
+            self.assertAllClose(a_output, b_output)
+
+        def _compare_mapping_in_output():
+            a_layer = model.encoder.embedding_mapping
+            b_layer = transformer_model.get_layer('albert').encoder.embedding_hidden_mapping_in
+            a_output = a_layer(model.embedding(input_ids, segment_ids))
+            b_output = b_layer(transformer_model.get_layer('albert').embeddings(
+                input_ids=input_ids, token_type_ids=segment_ids, position_ids=None, training=False))
+            self.assertAllClose(a_output, b_output)
+
+        def _compare_final_outputs():
+            a_sequence_output, a_pooled_output = model(input_ids, segment_ids)
+            b_sequence_output, b_pooled_output = transformer_model(
+                input_ids=input_ids, token_type_ids=segment_ids, attention_mask=attention_mask, return_dict=False)
+            self.assertAllClose(a_sequence_output, b_sequence_output, rtol=0.05, atol=1e-5)
+            self.assertAllClose(a_pooled_output, b_pooled_output, rtol=0.002, atol=1e-5)
+
+        _compare_embedding_output()
+        _compare_mapping_in_output()
         _compare_final_outputs()
 
     def _do_predict(self, model):
@@ -131,7 +167,7 @@ class LoadPretrainedModelTest(tf.test.TestCase):
             albert = Albert.from_pretrained(os.path.join(BASE_DIR, 'albert_base_zh'))
             albert.trainable = trainable
 
-            sequence_output, pooled_output = albert(inputs=(input_ids, segment_ids, None))
+            sequence_output, pooled_output = albert(input_ids, segment_ids, None)
             outputs = tf.keras.layers.Dense(2, name='output')(pooled_output)
             model = tf.keras.Model(inputs=[input_ids, segment_ids], outputs=outputs)
             model.compile(loss='binary_cross_entropy', optimizer='adam')

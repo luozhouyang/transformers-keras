@@ -2,6 +2,7 @@ import json
 import logging
 import os
 
+import numpy as np
 import tensorflow as tf
 
 from .abstract_adapter import AbstractAdapter, zip_weights
@@ -37,8 +38,42 @@ class AlbertAdapter(AbstractAdapter):
 
     def adapte_weights(self, model, config, ckpt, **kwargs):
         # mapping weight names
-        weights_mapping = self._mapping_weight_names(
+        weights_mapping = {}
+        ckpt_prefix = kwargs.get('ckpt_prefix', 'bert')
+        for cw in [x[0] for x in tf.train.list_variables(ckpt)]:
+            if any(x in cw for x in ['embeddings/', 'pooler/']):
+                weights_mapping[model.name + cw.lstrip(ckpt_prefix) + ':0'] = cw
+                continue
+            if 'embedding_hidden_mapping_in/kernel' in cw:
+                k = '{}/encoder/embedding_mapping/kernel:0'.format(model.name)
+                v = '{}/encoder/embedding_hidden_mapping_in/kernel'.format(ckpt_prefix)
+                weights_mapping[k] = v
+            if 'embedding_hidden_mapping_in/bias' in cw:
+                k = '{}/encoder/embedding_mapping/bias:0'.format(model.name)
+                v = '{}/encoder/embedding_hidden_mapping_in/bias'.format(ckpt_prefix)
+                weights_mapping[k] = v
+
+        mapping = self._mapping_weight_names(
             config['num_groups'], config['num_layers_each_group'], model_name=model.name)
+        weights_mapping.update(mapping)
+
+        # filter
+        if self.skip_token_embedding:
+            self._skip_weight(weights_mapping, model.name + '/embeddings/word_embeddings:0')
+        if self.skip_position_embedding:
+            self._skip_weight(weights_mapping, model.name + '/embeddings/position_embeddings:0')
+        if self.skip_segment_embedding:
+            self._skip_weight(weights_mapping, model.name + '/embeddings/token_type_embeddings:0')
+        if self.skip_embedding_layernorm:
+            self._skip_weight(weights_mapping, model.name + '/embeddings/LayerNorm/gamma:0')
+            self._skip_weight(weights_mapping, model.name + '/embeddings/LayerNorm/beta:0')
+        if self.skip_pooler:
+            self._skip_weight(weights_mapping, model.name + '/pooler/dense/kernel:0')
+            self._skip_weight(weights_mapping, model.name + '/pooler/dense/bias:0')
+        if self.skip_embedding_mapping_in:
+            self._skip_weight(weights_mapping, model.name + '/encoder/embedding_mapping/kernel:0')
+            self._skip_weight(weights_mapping, model.name + '/encoder/embedding_mapping/bias:0')
+
         # zip weights and its' values
         zipped_weights = zip_weights(
             model,
@@ -48,28 +83,25 @@ class AlbertAdapter(AbstractAdapter):
         # set values to weights
         tf.keras.backend.batch_set_value(zipped_weights)
 
-    def _mapping_weight_names(self, num_groups, num_layers_each_group, model_name='albert'):
+        self_weights = {w.name: w.numpy() for w in model.trainable_weights}
+        for k, v in self_weights.items():
+            ckpt_key = weights_mapping.get(k, None)
+            if not ckpt_key:
+                continue
+            ckpt_value = tf.train.load_variable(ckpt, ckpt_key)
+            if ckpt_value is None:
+                logging.warning('ckpt value is None of key: %s', ckpt_key)
+            assert np.allclose(v, ckpt_value)
+
+    def _mapping_weight_names(self, num_groups, num_layers_each_group, model_name='albert', ckpt_prefix='bert'):
         logging.info('Using model_name: %s', model_name)
         mapping = {}
-
-        if not self.skip_token_embedding:
-            mapping['albert/embeddings/weight:0'] = 'bert/embeddings/word_embeddings'
-        if not self.skip_position_embedding:
-            mapping['albert/embeddings/position_embeddings/embeddings:0'] = 'bert/embeddings/position_embeddings'
-        if not self.skip_segment_embedding:
-            mapping['albert/embeddings/token_type_embeddings/embeddings:0'] = 'bert/embeddings/token_type_embeddings'
-        if not self.skip_embedding_layernorm:
-            mapping['albert/embeddings/layer_norm/gamma:0'] = 'bert/embeddings/LayerNorm/gamma'
-            mapping['albert/embeddings/layer_norm/beta:0'] = 'bert/embeddings/LayerNorm/beta'
-        if not self.skip_embedding_mapping_in:
-            mapping['albert/encoder/embedding_mapping/kernel:0'] = 'bert/encoder/embedding_hidden_mapping_in/kernel'
-            mapping['albert/encoder/embedding_mapping/bias:0'] = 'bert/encoder/embedding_hidden_mapping_in/bias'
 
         # encoder
         for group in range(num_groups):
             for layer in range(num_layers_each_group):
-                k_prefix = 'albert/encoder/group_{}/layer_{}/'.format(group, layer)
-                v_prefix = 'bert/encoder/transformer/group_{}/inner_group_{}/'.format(group, layer)
+                k_prefix = '{}/encoder/group_{}/layer_{}/'.format(model_name, group, layer)
+                v_prefix = '{}/encoder/transformer/group_{}/inner_group_{}/'.format(ckpt_prefix, group, layer)
                 # attention
                 for n in ['query', 'key', 'value']:
                     for x in ['kernel', 'bias']:
@@ -103,20 +135,8 @@ class AlbertAdapter(AbstractAdapter):
                     v = v_prefix + 'ffn_1/intermediate/output/dense/{}'.format(n)
                     mapping[k] = v
 
-        # pooler
-        if not self.skip_pooler:
-            for n in ['kernel', 'bias']:
-                k = 'albert/pooler/{}:0'.format(n)
-                v = 'bert/pooler/dense/{}'.format(n)
-                mapping[k] = v
+        return mapping
 
-        weights_mapping = {}
-        for k, v in mapping.items():
-            parts = str(k).split('/')
-            if parts[0] == 'albert':
-                parts.pop(0)
-            parts.insert(0, model_name)
-            key = '/'.join(parts)
-            weights_mapping[key] = v
-
-        return weights_mapping
+    def _skip_weight(self, mapping, name):
+        mapping.pop(name)
+        logging.info('Skip load weight: %s', name)

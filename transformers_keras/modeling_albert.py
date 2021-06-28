@@ -16,57 +16,55 @@ from .modeling_utils import (choose_activation, complete_inputs, initialize,
 class AlbertEmbedding(tf.keras.layers.Layer):
 
     def __init__(self,
-                 vocab_size=-1,
+                 vocab_size=21128,
                  max_positions=512,
                  type_vocab_size=2,
                  embedding_size=128,
-                 dropout_rate=0.2,
-                 stddev=0.02,
+                 hidden_dropout_rate=0.2,
+                 initializer_range=0.02,
                  epsilon=1e-8,
                  **kwargs):
         super().__init__(**kwargs)
-
         self.vocab_size = vocab_size
+        self.max_positions = max_positions
+        self.type_vocab_size = type_vocab_size
         self.embedding_size = embedding_size
-        self.initializer_range = stddev
+        self.initializer_range = initializer_range
 
-        self.position_embedding = tf.keras.layers.Embedding(
-            max_positions,
-            embedding_size,
-            embeddings_initializer=initialize(stddev),
-            name='position_embeddings')
-        self.segment_embedding = tf.keras.layers.Embedding(
-            type_vocab_size,
-            embedding_size,
-            embeddings_initializer=initialize(stddev),
-            name='token_type_embeddings')
-
-        self.layer_norm = tf.keras.layers.LayerNormalization(epsilon=epsilon, name='layer_norm')
-        self.dropout = tf.keras.layers.Dropout(dropout_rate)
+        self.layernorm = tf.keras.layers.LayerNormalization(epsilon=epsilon, name='LayerNorm')
+        self.dropout = tf.keras.layers.Dropout(hidden_dropout_rate)
 
     def build(self, input_shape):
         self.word_embedding = self.add_weight(
-            name='weight',
+            name='word_embeddings',
             shape=[self.vocab_size, self.embedding_size],
-            initializer=initialize(self.initializer_range))
+            initializer=tf.keras.initializers.TruncatedNormal(stddev=self.initializer_range))
+        self.position_embedding = self.add_weight(
+            name='position_embeddings',
+            shape=[self.max_positions, self.embedding_size],
+            initializer=tf.keras.initializers.TruncatedNormal(stddev=self.initializer_range))
+        self.segment_embedding = self.add_weight(
+            name='token_type_embeddings',
+            shape=[self.type_vocab_size, self.embedding_size],
+            initializer=tf.keras.initializers.TruncatedNormal(stddev=self.initializer_range))
         super().build(input_shape)
 
-    def call(self, inputs, mode='embedding', training=None):
-        if mode == 'linear':
-            return tf.matmul(inputs, self.word_embedding, transpose_b=True)
+    def call(self, input_ids, segment_ids=None, position_ids=None, training=None):
+        if segment_ids is None:
+            segment_ids = tf.zeros_like(input_ids)
+        if position_ids is None:
+            position_ids = tf.range(0, tf.shape(input_ids)[1], dtype=input_ids.dtype)
+            position_ids = tf.expand_dims(position_ids, axis=0)
 
-        input_ids, token_type_ids = unpack_inputs_2(inputs)
-        seq_len = tf.shape(input_ids)[1]
-        position_ids = tf.range(seq_len, dtype=tf.int32)[tf.newaxis, :]
+        position_embeddings = tf.gather(self.position_embedding, position_ids)
+        position_embeddings = tf.tile(position_embeddings, multiples=[tf.shape(input_ids)[0], 1, 1])
+        token_type_embeddings = tf.gather(self.segment_embedding, segment_ids)
+        token_embeddings = tf.gather(self.word_embedding, input_ids)
 
-        pos_embedding = self.position_embedding(position_ids)
-        seg_embedding = self.segment_embedding(token_type_ids)
-        tok_embedding = tf.gather(self.word_embedding, input_ids)
-
-        embedding = tok_embedding + pos_embedding + seg_embedding
-        embedding = self.layer_norm(embedding)
-        embedding = self.dropout(embedding, training=training)
-        return embedding
+        embeddings = token_embeddings + token_type_embeddings + position_embeddings
+        embeddings = self.layernorm(embeddings)
+        embeddings = self.dropout(embeddings, training=training)
+        return embeddings
 
 
 class AlbertMultiHeadAttention(tf.keras.layers.Layer):
@@ -102,11 +100,11 @@ class AlbertMultiHeadAttention(tf.keras.layers.Layer):
         value = tf.cast(value, dtype=self.dtype)
 
         score = tf.matmul(query, key, transpose_b=True)
-        dk = tf.cast(tf.shape(query)[-1], tf.float32)
+        dk = tf.cast(tf.shape(query)[-1], self.dtype)
         score = score / tf.math.sqrt(dk)
         if attention_mask is not None:
             attention_mask = tf.cast(attention_mask, dtype=self.dtype)
-            score += (1.0 - attention_mask) * -10000.0
+            score += tf.cast((1.0 - attention_mask) * -10000.0, self.dtype)
         attn_weights = tf.nn.softmax(score, axis=-1)
         attn_weights = self.attention_dropout(attn_weights, training=training)
         context = tf.matmul(attn_weights, value)
@@ -271,6 +269,20 @@ class AlbertEncoder(tf.keras.layers.Layer):
         return hidden_states, all_hidden_states, all_attention_weights
 
 
+class AlbertPooler(tf.keras.layers.Layer):
+
+    def __init__(self, hidden_size, initializer_range=0.02, **kwargs):
+        super().__init__(**kwargs)
+        self.dense = tf.keras.layers.Dense(
+            hidden_size,
+            kernel_initializer=tf.keras.initializers.TruncatedNormal(stddev=initializer_range),
+            activation='tanh',
+            name='dense')
+
+    def call(self, sequence_output):
+        return self.dense(sequence_output[:, 0])
+
+
 class Albert(tf.keras.Model):
 
     def __init__(self,
@@ -315,9 +327,9 @@ class Albert(tf.keras.Model):
             max_positions=max_positions,
             embedding_size=embedding_size,
             type_vocab_size=type_vocab_size,
-            dropout_rate=hidden_dropout_rate,
+            hidden_dropout_rate=hidden_dropout_rate,
             epsilon=epsilon,
-            stddev=stddev,
+            initializer_range=stddev,
             name='embeddings')
 
         self.encoder = AlbertEncoder(
@@ -334,24 +346,18 @@ class Albert(tf.keras.Model):
             stddev=stddev,
             name='encoder')
 
-        self.pooler = tf.keras.layers.Dense(
-            hidden_size,
-            kernel_initializer=initialize(stddev),
-            activation='tanh',
-            name='pooler'
-        )
+        self.pooler = AlbertPooler(hidden_size=hidden_size, initializer_range=stddev, name='pooler')
 
         self.return_states = return_states
         self.return_attention_weights = return_attention_weights
 
-    def call(self, inputs, training=None):
-        input_ids, segment_ids, attention_mask = unpack_inputs_3(inputs)
-
+    def call(self, input_ids, segment_ids=None, attention_mask=None, training=None):
+        input_ids, segment_ids, attention_mask = unpack_inputs_3([input_ids, segment_ids, attention_mask])
         attention_mask = attention_mask[:, tf.newaxis, tf.newaxis, :]
-        embed = self.embedding(inputs=(input_ids, segment_ids), mode='embedding')
+        embed = self.embedding(input_ids, segment_ids)
         sequence_outputs, all_hidden_states, all_attn_weights = self.encoder(embed, attention_mask)
         # take [CLS]
-        pooled_output = self.pooler(sequence_outputs[:, 0])
+        pooled_output = self.pooler(sequence_outputs)
         outputs = (sequence_outputs, pooled_output)
         if self.return_states:
             outputs += (all_hidden_states, )
@@ -375,7 +381,7 @@ class Albert(tf.keras.Model):
         model_config['return_attention_weights'] = kwargs.get('return_attention_weights', False)
         model = cls(**model_config)
         input_ids, segment_ids, attn_mask = model.dummy_inputs()
-        model(inputs=(input_ids, segment_ids, attn_mask))
+        model(input_ids, segment_ids, attn_mask)
         adapter.adapte_weights(model, model_config, ckpt, **kwargs)
         return model
 
@@ -395,50 +401,3 @@ class Albert(tf.keras.Model):
             'return_attention_weights': self.return_attention_weights
         }
         return config
-
-
-class AlbertMLMHead(tf.keras.layers.Layer):
-
-    def __init__(self,
-                 embedding,
-                 vocab_size=-1,
-                 embedding_size=128,
-                 activation='gelu',
-                 epsilon=1e-12,
-                 stddev=0.02,
-                 **kwargs):
-        super(AlbertMLMHead, self).__init__(**kwargs)
-        assert vocab_size > 0, "vocab_size must greater than 0."
-        self.vocab_size = vocab_size
-        self.embedding = embedding  # use embedding matrix to decode
-        self.activation = choose_activation(activation)
-        self.stddev = stddev
-        self.epsilon = epsilon
-        self.dense = tf.keras.layers.Dense(
-            embedding_size, kernel_initializer=initialize(self.stddev), name='dense')
-        self.layer_norm = tf.keras.layers.LayerNormalization(epsilon=self.epsilon, name='layer_norm')
-
-    def build(self, input_shape):
-        self.decoder_bias = self.add_weight(
-            shape=(self.vocab_size,),
-            initializer='zeros',
-            trainable=True,
-            name='decoder/bias'
-        )
-        super().build(input_shape)
-
-    def call(self, inputs, training=None):
-        pooled_output = inputs
-        output = self.layer_norm(self.activation(self.dense(pooled_output)))
-        output = self.embedding(output, mode='linear') + self.decoder_bias
-        return output
-
-
-class AlbertSOPHead(tf.keras.layers.Layer):
-
-    def __init__(self, stddev=0.02, **kwargs):
-        super(AlbertSOPHead, self).__init__(**kwargs)
-        self.classifier = tf.keras.layers.Dense(2, kernel_initializer=initialize(stddev), name='dense')
-
-    def call(self, inputs, training=None):
-        return self.classifier(inputs)

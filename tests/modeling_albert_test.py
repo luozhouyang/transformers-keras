@@ -3,8 +3,7 @@ import tensorflow as tf
 from transformers_keras.modeling_albert import (Albert, AlbertEmbedding,
                                                 AlbertEncoder,
                                                 AlbertEncoderGroup,
-                                                AlbertEncoderLayer,
-                                                AlbertMLMHead, AlbertSOPHead)
+                                                AlbertEncoderLayer)
 
 
 class ModelingAlbertTest(tf.test.TestCase):
@@ -16,7 +15,7 @@ class ModelingAlbertTest(tf.test.TestCase):
             tf.constant([[0, 0, 0, 1, 1, 1]]),  # token_type_ids
             # tf.constant([[1, 1, 1, 1, 1, 1]]),  # attention_mask
         )
-        outputs = embedding(inputs, training=True)
+        outputs = embedding(inputs[0], inputs[1], training=True)
         self.assertAllEqual([1, 6, 128], outputs.shape)
 
     def testAlbertEncoderLayer(self):
@@ -92,7 +91,7 @@ class ModelingAlbertTest(tf.test.TestCase):
             return_states=return_states,
             return_attention_weights=return_attention_weights)
         input_ids, segment_ids, attn_mask = self._build_albert_inputs()
-        outputs = model(inputs=(input_ids, segment_ids, attn_mask))
+        outputs = model(input_ids, segment_ids, attn_mask)
         sequence_outputs, pooled_outputs = outputs[0], outputs[1]
         self.assertAllEqual([2, 16, 768], sequence_outputs.shape)
         self.assertAllEqual([2, 768], pooled_outputs.shape)
@@ -122,23 +121,10 @@ class ModelingAlbertTest(tf.test.TestCase):
         self._check_albert_outputs(return_states=False, return_attention_weights=True)
         self._check_albert_outputs(return_states=False, return_attention_weights=False)
 
-    def testAlbertMLMHead(self):
-        embedding = AlbertEmbedding(vocab_size=100)
-        mlm = AlbertMLMHead(vocab_size=100, embedding=embedding)
-        inputs = tf.random.uniform(shape=(2, 16, 768))
-        outputs = mlm(inputs)
-        self.assertAllEqual([2, 16, 100], outputs.shape)
-
-    def testAlbertSOPHead(self):
-        sop = AlbertSOPHead()
-        inputs = tf.random.uniform(shape=(2, 768))
-        outputs = sop(inputs)
-        self.assertAllEqual([2, 2], outputs.shape)
-
     def test_build_model(self):
         model = Albert(vocab_size=21128)
         input_ids, segment_ids, attn_mask = model.dummy_inputs()
-        model(inputs=(input_ids, segment_ids, attn_mask))
+        model(input_ids, segment_ids, attn_mask)
         model.summary()
 
         for v in model.trainable_weights:
