@@ -1,24 +1,24 @@
 import abc
+import json
 import logging
 import os
 
 import tensorflow as tf
 
 
-def zip_weights(model, ckpt, variables_mapping, verbose=True):
+def zip_weights(model, ckpt, variables_mapping, **kwargs):
     weights, values = [], []
     for w in model.trainable_weights:
         var = variables_mapping.get(w.name, None)
-        if not var:
-            logging.warning(
-                'Skip weight: {}, which not found in mapping, thus will not load weight from ckpt.'.format(w.name))
+        if var is None:
+            logging.warning('Model weight: %s not collected in weights mapping.', w.name)
             continue
         v = tf.train.load_variable(ckpt, var)
         if w.name == 'bert/nsp/dense/kernel:0':
             v = v.T
         weights.append(w)
         values.append(v)
-        if verbose:
+        if kwargs.get('verbose', True):
             logging.info('Load weight: {:60s} <-- {}'.format(w.name, variables_mapping[w.name]))
 
     mapped_values = zip(weights, values)
@@ -57,6 +57,14 @@ class AbstractAdapter(abc.ABC):
         self.skip_segment_embedding = skip_segment_embedding
         self.skip_embedding_layernorm = skip_embedding_layernorm
         self.skip_pooler = skip_pooler
+
+        logging.info('Adapter skipping config: %s', json.dumps({
+            'skip_token_embedding': self.skip_token_embedding,
+            'skip_position_embedding': self.skip_position_embedding,
+            'skip_segment_embedding': self.skip_segment_embedding,
+            'skip_embedding_layernorm': self.skip_embedding_layernorm,
+            'skip_pooler': self.skip_pooler
+        }))
 
     @abc.abstractmethod
     def adapte_config(self, config_file, **kwargs):

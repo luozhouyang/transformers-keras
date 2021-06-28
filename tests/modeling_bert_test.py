@@ -14,12 +14,8 @@ class ModelingBertTest(tf.test.TestCase):
             # tf.constant([[0, 1, 2, 3, 4, 5]]),
             tf.constant([[0, 0, 0, 1, 1, 1]]),
         )
-        embeddings = embedding_layer(inputs, mode='embedding', training=True)
+        embeddings = embedding_layer(inputs[0], inputs[1], training=True)
         self.assertAllEqual([1, 6, 768], embeddings.shape)
-
-        inputs2 = tf.random.uniform(shape=(1, 768))
-        outputs = embedding_layer(inputs2, mode='linear')
-        self.assertAllEqual([1, 16], outputs.shape)
 
     def testBertIntermediate(self):
         inter = BertIntermediate()
@@ -30,7 +26,7 @@ class ModelingBertTest(tf.test.TestCase):
     def testBertEncoderLayer(self):
         encoder = BertEncoderLayer()
         hidden_states = tf.random.uniform((2, 10, 768))
-        attention_mask = None
+        attention_mask = tf.constant([1, 1, 1, 1, 1, 1, 1, 1, 1, 1], shape=(1, 10))[tf.newaxis, :]
         outputs, attention_weights = encoder(hidden_states, attention_mask, training=True)
 
         self.assertAllEqual([2, 10, 768], outputs.shape)
@@ -75,7 +71,7 @@ class ModelingBertTest(tf.test.TestCase):
             return_states=return_states,
             return_attention_weights=return_attention_weights)
         input_ids, segment_ids, attn_mask = self._build_bert_inputs()
-        outputs = model(inputs=(input_ids, segment_ids, attn_mask))
+        outputs = model(input_ids, segment_ids, attn_mask)
         sequence_outputs, pooled_outputs = outputs[0], outputs[1]
         self.assertAllEqual([2, 16, 768], sequence_outputs.shape)
         self.assertAllEqual([2, 768], pooled_outputs.shape)
@@ -111,20 +107,6 @@ class ModelingBertTest(tf.test.TestCase):
         self._check_bert_outputs(return_states=False, return_attention_weights=True)
         self._check_bert_outputs(return_states=False, return_attention_weights=False)
 
-    def testBertMLMHead(self):
-        embedding = BertEmbedding(vocab_size=100)
-        mlm = BertMLMHead(vocab_size=100, embedding=embedding)
-
-        inputs = tf.random.uniform(shape=(2, 16, 768))
-        outputs = mlm(inputs)
-        self.assertAllEqual([2, 16, mlm.vocab_size], outputs.shape)
-
-    def testBertNSPHead(self):
-        nsp = BertNSPHead()
-        inputs = tf.random.uniform(shape=(2, 768))
-        outputs = nsp(inputs)
-        self.assertAllEqual([2, 2], outputs.shape)
-
     def test_bert_config(self):
         model = Bert(
             vocab_size=100,
@@ -137,8 +119,22 @@ class ModelingBertTest(tf.test.TestCase):
     def test_build_model(self):
         model = Bert(vocab_size=21128)
         input_ids, segment_ids, input_mask = model.dummy_inputs()
-        model(inputs=(input_ids, segment_ids, input_mask))
+        model(input_ids, segment_ids, input_mask)
         model.summary()
+
+    def test_export_saved_model(self):
+        model = Bert(vocab_size=21128, num_layers=12, num_attention_heads=8,
+                     return_states=True, return_attention_weights=True)
+        input_ids, segment_ids, input_mask = model.dummy_inputs()
+        model(input_ids=input_ids, segment_ids=segment_ids, attention_mask=input_mask)
+        model.summary()
+        model.save('models/export/1', include_optimizer=False, signatures=model.serving)
+
+    def test_load_saved_model(self):
+        loaded = tf.saved_model.load('models/export/1')
+        model = loaded.signatures['serving_default']
+        print(model.structured_input_signature)
+        print(model.structured_outputs)
 
 
 if __name__ == "__main__":

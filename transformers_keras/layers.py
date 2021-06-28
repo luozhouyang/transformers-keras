@@ -13,7 +13,7 @@ class ScaledDotProductAttention(tf.keras.layers.Layer):
         value = tf.cast(value, dtype=self.dtype)
 
         score = tf.matmul(query, key, transpose_b=True)
-        dk = tf.cast(tf.shape(query)[-1], tf.float32)
+        dk = tf.cast(tf.shape(query)[-1], self.dtype)
         score = score / tf.math.sqrt(dk)
         if attention_mask is not None:
             attention_mask = tf.cast(attention_mask, dtype=self.dtype)

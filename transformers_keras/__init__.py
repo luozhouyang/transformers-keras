@@ -8,10 +8,9 @@ from .layers import (DecoderLayer, EncoderLayer, MultiHeadAttention,
 from .losses import MaskedSparseCategoricalCrossentropy
 from .metrics import MaskedSparseCategoricalAccuracy
 from .modeling_albert import (Albert, AlbertEmbedding, AlbertEncoder,
-                              AlbertEncoderGroup, AlbertEncoderLayer,
-                              AlbertMLMHead, AlbertSOPHead)
+                              AlbertEncoderGroup, AlbertEncoderLayer)
 from .modeling_bert import (Bert, BertEmbedding, BertEncoder, BertEncoderLayer,
-                            BertIntermediate, BertMLMHead, BertNSPHead)
+                            BertIntermediate)
 from .modeling_utils import complete_inputs
 from .tokenizers.bert_tokenizer import BertTokenizer
 from .tokenizers.tokenizer import BasicTokenizer, WordpieceTokenizer
