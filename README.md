@@ -30,18 +30,16 @@ Supported pretrained models:
 * All the BERT models pretrained by [google-research/bert](https://github.com/google-research/bert)
 * All the BERT & RoBERTa models pretrained by [ymcui/Chinese-BERT-wwm](https://github.com/ymcui/Chinese-BERT-wwm)
 
-### Feature Extraction Examples:
+### Feature Extraction Examples
 
 ```python
 from transformers_keras import Bert
 
 # Used to predict directly
 model = Bert.from_pretrained('/path/to/pretrained/bert/model')
-# segment_ids and mask inputs are optional
 input_ids = tf.constant([[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]])
-segment_ids, attention_mask = None, None
-sequence_outputs, pooled_output = model(
-    inputs=(input_ids, segment_ids, attention_mask), training=False)
+# segment_ids and attention_mask are optional
+sequence_outputs, pooled_output = model(input_ids, training=False)
 
 ```
 
@@ -56,9 +54,8 @@ model = Bert.from_pretrained(
     return_states=True, 
     return_attention_weights=True)
 input_ids = tf.constant([[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]])
-segment_ids, attention_mask = None, None
-sequence_outputs, pooled_output, states, attn_weights = model(
-    inputs=(input_ids, segment_ids, attention_mask), training=False)
+# segment_ids and attention_mask are optional
+sequence_outputs, pooled_output, hidden_states, attn_weights = model(input_ids, training=False)
 
 ```
 
@@ -66,15 +63,14 @@ sequence_outputs, pooled_output, states, attn_weights = model(
 
 ```python
 # Used to fine-tuning
-def build_bert_classify_model(pretrained_model_dir, trainable=True, **kwargs):
+def build_bert_classify_model(pretrained_model_dir, **kwargs):
     input_ids = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name='input_ids')
-    # segment_ids and mask inputs are optional
+    # segment_ids and attention_mask are optional
     segment_ids = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name='segment_ids')
-
+    
     bert = Bert.from_pretrained(pretrained_model_dir, **kwargs)
-    bert.trainable = trainable
 
-    sequence_outputs, pooled_output = bert(inputs=(input_ids, segment_ids, None))
+    sequence_outputs, pooled_output = bert(input_ids, segment_ids)
     outputs = tf.keras.layers.Dense(2, name='output')(pooled_output)
     model = tf.keras.Model(inputs=[input_ids, segment_ids], outputs=outputs)
     model.compile(loss='binary_cross_entropy', optimizer='adam')
@@ -82,9 +78,27 @@ def build_bert_classify_model(pretrained_model_dir, trainable=True, **kwargs):
 
 model = build_bert_classify_model(
             pretrained_model_dir=os.path.join(BASE_DIR, 'chinese_wwm_ext_L-12_H-768_A-12'),
-            trainable=True)
+        )
 model.summary()
 ```
+
+### Export SavedModel for Serving
+
+You can export the pretrained and finetune model in SavedModel format in one minute.
+
+Here has an example to export pretrained BERT model in SavedModel format:
+
+```python
+
+model = Bert.from_pretrained(
+    '/path/to/pretrained/bert/model', 
+    return_states=True, 
+    return_attention_weights=True)
+
+model.save('/path/to/save', signatures=model.serving)
+```
+
+Then, you can use [tensorflow/serving](https://github.com/tensorflow/serving) to serve it.
 
 
 ## ALBERT
@@ -101,9 +115,8 @@ from transformers_keras import Albert
 # Used to predict directly
 model = Albert.from_pretrained('/path/to/pretrained/albert/model')
 input_ids = tf.constant([[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]])
-segment_ids, attention_mask = None, None
-sequence_outputs, pooled_output = model(
-    inputs=(input_ids, segment_ids, attention_mask), training=False)
+# segment_ids and attention_mask are optional
+sequence_outputs, pooled_output = model(input_ids, training=False)
 ```
 
 Also, you can optionally get the hidden states and attention weights of each encoder layer:
@@ -116,11 +129,10 @@ model = Albert.from_pretrained(
     '/path/to/pretrained/albert/model', 
     return_states=True, 
     return_attention_weights=True)
-# segment_ids and mask inputs are optional
+# segment_ids and attention_mask are optional
 input_ids = tf.constant([[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]])
-segment_ids, attention_mask = None, None
-sequence_outputs, pooled_output, states, attn_weights = model(
-    inputs=(input_ids, segment_ids, mask), training=False)
+# segment_ids and attention_mask are optional
+sequence_outputs, pooled_output, states, attn_weights = model(input_ids, training=False)
 ```
 
 ### Fine-tuing Examples
@@ -128,15 +140,14 @@ sequence_outputs, pooled_output, states, attn_weights = model(
 ```python
 
 # Used to fine-tuning 
-def build_albert_classify_model(pretrained_model_dir, trainable=True, **kwargs):
+def build_albert_classify_model(pretrained_model_dir, **kwargs):
     input_ids = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name='input_ids')
-    # segment_ids and mask inputs are optional
+    # segment_ids and attention_mask are optional
     segment_ids = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name='segment_ids')
 
     albert = Albert.from_pretrained(pretrained_model_dir, **kwargs)
-    albert.trainable = trainable
 
-    sequence_outputs, pooled_output = albert(inputs=(input_ids, segment_ids, None))
+    sequence_outputs, pooled_output = albert(input_ids, segment_ids)
     outputs = tf.keras.layers.Dense(2, name='output')(pooled_output)
     model = tf.keras.Model(inputs=[input_ids, segment_ids], outputs=outputs)
     model.compile(loss='binary_cross_entropy', optimizer='adam')
@@ -144,9 +155,29 @@ def build_albert_classify_model(pretrained_model_dir, trainable=True, **kwargs):
 
 model = build_albert_classify_model(
             pretrained_model_dir=os.path.join(BASE_DIR, 'albert_base'),
-            trainable=True)
+        )
 model.summary()
 ```
+
+
+### Export SavedModel for Serving
+
+You can export the pretrained and finetune model in SavedModel format in one minute.
+
+Here has an example to export pretrained ALBERT model in SavedModel format:
+
+```python
+
+model = Albert.from_pretrained(
+    '/path/to/pretrained/albert/model', 
+    return_states=True, 
+    return_attention_weights=True)
+
+model.save('/path/to/save', signatures=model.serving)
+```
+
+Then, you can use [tensorflow/serving](https://github.com/tensorflow/serving) to serve it.
+
 
 ## Advanced Usage
 
