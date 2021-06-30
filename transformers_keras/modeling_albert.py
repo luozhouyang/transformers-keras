@@ -7,10 +7,8 @@ import tensorflow as tf
 from transformers_keras.adapters import parse_pretrained_model_files
 from transformers_keras.adapters.albert_adapter import AlbertAdapter
 
-from .layers import MultiHeadAttention
 from .modeling_bert import BertEmbedding, BertEncoderLayer, BertIntermediate
-from .modeling_utils import (choose_activation, complete_inputs, initialize,
-                             unpack_inputs_2, unpack_inputs_3)
+from .modeling_utils import choose_activation, unpack_inputs_3
 
 
 class AlbertEmbedding(tf.keras.layers.Layer):
@@ -74,7 +72,7 @@ class AlbertMultiHeadAttention(tf.keras.layers.Layer):
                  num_attention_heads=8,
                  hidden_dropout_rate=0.0,
                  attention_dropout_rate=0.0,
-                 stddev=0.02,
+                 initializer_range=0.02,
                  epsilon=1e-8,
                  **kwargs):
         super().__init__(**kwargs)
@@ -85,7 +83,10 @@ class AlbertMultiHeadAttention(tf.keras.layers.Layer):
         self.key_weight = tf.keras.layers.Dense(self.hidden_size, name='key')
         self.value_weight = tf.keras.layers.Dense(self.hidden_size, name='value')
 
-        self.dense = tf.keras.layers.Dense(hidden_size, kernel_initializer=initialize(stddev), name='dense')
+        self.dense = tf.keras.layers.Dense(
+            hidden_size,
+            kernel_initializer=tf.keras.initializers.TruncatedNormal(stddev=initializer_range),
+            name='dense')
         self.layer_norm = tf.keras.layers.LayerNormalization(epsilon=epsilon, name='layer_norm')
         self.attention_dropout = tf.keras.layers.Dropout(attention_dropout_rate)
         self.output_dropout = tf.keras.layers.Dropout(hidden_dropout_rate)
@@ -137,7 +138,7 @@ class AlbertEncoderLayer(tf.keras.layers.Layer):
                  hidden_dropout_rate=0.0,
                  attention_dropout_rate=0.0,
                  epsilon=1e-8,
-                 stddev=0.02,
+                 initializer_range=0.02,
                  **kwargs):
         super().__init__(**kwargs)
 
@@ -146,13 +147,19 @@ class AlbertEncoderLayer(tf.keras.layers.Layer):
             num_attention_heads=num_attention_heads,
             hidden_dropout_rate=hidden_dropout_rate,
             attention_dropout_rate=attention_dropout_rate,
-            stddev=stddev,
+            initializer_range=initializer_range,
             epsilon=epsilon,
             name='attention')
 
-        self.ffn = tf.keras.layers.Dense(intermediate_size, kernel_initializer=initialize(stddev), name='ffn')
+        self.ffn = tf.keras.layers.Dense(
+            intermediate_size,
+            kernel_initializer=tf.keras.initializers.TruncatedNormal(stddev=initializer_range),
+            name='ffn')
         self.activation = choose_activation(activation)
-        self.ffn_output = tf.keras.layers.Dense(hidden_size, kernel_initializer=initialize(stddev), name='ffn_output')
+        self.ffn_output = tf.keras.layers.Dense(
+            hidden_size,
+            kernel_initializer=tf.keras.initializers.TruncatedNormal(stddev=initializer_range),
+            name='ffn_output')
         self.layer_norm = tf.keras.layers.LayerNormalization(epsilon=epsilon, name='layer_norm')
         self.dropout = tf.keras.layers.Dropout(hidden_dropout_rate)
 
@@ -178,7 +185,7 @@ class AlbertEncoderGroup(tf.keras.layers.Layer):
                  hidden_dropout_rate=0.2,
                  attention_dropout_rate=0.1,
                  epsilon=1e-12,
-                 stddev=0.02,
+                 initializer_range=0.02,
                  **kwargs):
         super().__init__(**kwargs)
 
@@ -191,7 +198,7 @@ class AlbertEncoderGroup(tf.keras.layers.Layer):
                 hidden_dropout_rate=hidden_dropout_rate,
                 attention_dropout_rate=attention_dropout_rate,
                 epsilon=epsilon,
-                stddev=stddev,
+                initializer_range=initializer_range,
                 name='layer_{}'.format(i)
             ) for i in range(num_layers_each_group)
         ]
@@ -219,13 +226,13 @@ class AlbertEncoder(tf.keras.layers.Layer):
                  hidden_dropout_rate=0.2,
                  attention_dropout_rate=0.1,
                  epsilon=1e-12,
-                 stddev=0.02,
+                 initializer_range=0.02,
                  **kwargs):
         super(AlbertEncoder, self).__init__(**kwargs)
 
         self.embedding_mapping = tf.keras.layers.Dense(
             hidden_size,
-            kernel_initializer=initialize(stddev),
+            kernel_initializer=tf.keras.initializers.TruncatedNormal(stddev=initializer_range),
             name='embedding_mapping'
         )
         self.groups = [
@@ -238,7 +245,7 @@ class AlbertEncoder(tf.keras.layers.Layer):
                 hidden_dropout_rate=hidden_dropout_rate,
                 attention_dropout_rate=attention_dropout_rate,
                 epsilon=epsilon,
-                stddev=stddev,
+                initializer_range=initializer_range,
                 name='group_{}'.format(i),
             ) for i in range(num_groups)
         ]
@@ -300,7 +307,7 @@ class Albert(tf.keras.Model):
                  hidden_dropout_rate=0.2,
                  attention_dropout_rate=0.1,
                  epsilon=1e-12,
-                 stddev=0.02,
+                 initializer_range=0.02,
                  return_states=False,
                  return_attention_weights=False,
                  **kwargs):
@@ -319,8 +326,8 @@ class Albert(tf.keras.Model):
         self.intermediate_size = intermediate_size
         self.hidden_dropout_rate = hidden_dropout_rate
         self.attention_dropout_rate = attention_dropout_rate
-        self.stddev = stddev
-        self.initialize_range = stddev
+        self.initializer_range = initializer_range
+        self.initialize_range = initializer_range
 
         self.embedding = AlbertEmbedding(
             vocab_size=vocab_size,
@@ -329,7 +336,7 @@ class Albert(tf.keras.Model):
             type_vocab_size=type_vocab_size,
             hidden_dropout_rate=hidden_dropout_rate,
             epsilon=epsilon,
-            initializer_range=stddev,
+            initializer_range=initializer_range,
             name='embeddings')
 
         self.encoder = AlbertEncoder(
@@ -343,10 +350,10 @@ class Albert(tf.keras.Model):
             hidden_dropout_rate=hidden_dropout_rate,
             attention_dropout_rate=attention_dropout_rate,
             epsilon=epsilon,
-            stddev=stddev,
+            initializer_range=initializer_range,
             name='encoder')
 
-        self.pooler = AlbertPooler(hidden_size=hidden_size, initializer_range=stddev, name='pooler')
+        self.pooler = AlbertPooler(hidden_size=hidden_size, initializer_range=initializer_range, name='pooler')
 
         self.return_states = return_states
         self.return_attention_weights = return_attention_weights
@@ -417,7 +424,7 @@ class Albert(tf.keras.Model):
             'intermediate_size': self.intermediate_size,
             'hidden_dropout_rate': self.hidden_dropout_rate,
             'attention_dropout_rate': self.attention_dropout_rate,
-            'stddev': self.stddev,
+            'initializer_range': self.initializer_range,
             'return_states': self.return_states,
             'return_attention_weights': self.return_attention_weights
         }

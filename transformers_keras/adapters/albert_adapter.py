@@ -32,7 +32,7 @@ class AlbertAdapter(AbstractAdapter):
             'activation': config['hidden_act'],
             'hidden_dropout_rate': config['hidden_dropout_prob'],
             'attention_dropout_rate': config['attention_probs_dropout_prob'],
-            'stddev': config['initializer_range'],
+            'initializer_range': config['initializer_range'],
         }
         return model_config
 
