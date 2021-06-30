@@ -12,8 +12,6 @@ from .modeling_albert import (Albert, AlbertEmbedding, AlbertEncoder,
 from .modeling_bert import (Bert, BertEmbedding, BertEncoder, BertEncoderLayer,
                             BertIntermediate)
 from .modeling_utils import complete_inputs
-from .tokenizers.bert_tokenizer import BertTokenizer
-from .tokenizers.tokenizer import BasicTokenizer, WordpieceTokenizer
 
 __name__ = 'transformers_keras'
 __version__ = '0.3.0'
