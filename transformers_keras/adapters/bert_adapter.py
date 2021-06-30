@@ -32,42 +32,50 @@ class BertAdapter(AbstractAdapter):
         }
         return model_config
 
-    def adapte_weights(self, model, config, ckpt, **kwargs):
+    def adapte_weights(self, bert, config, ckpt, **kwargs):
+        logging.info('Bert model name: %s', bert.name)
+        model_prefix = bert.name
+        if kwargs.get('model_prefix', ''):
+            model_prefix = kwargs['model_prefix'] + '/' + bert.name
+        logging.info('Using model prefix: %s', model_prefix)
         mapping = {}
         ckpt_prefix = kwargs.get('ckpt_prefix', 'bert')
         ckpt_weight_names = [x[0] for x in tf.train.list_variables(ckpt)]
-        self_weight_names = set([x.name for x in model.trainable_weights])
+        self_weight_names = set([x.name for x in bert.trainable_weights])
         for w in ckpt_weight_names:
             if any(x in w for x in ['embeddings', 'pooler', 'encoder']):
-                mw = model.name + w.lstrip(ckpt_prefix) + ':0'
+                mw = model_prefix + w.lstrip(ckpt_prefix) + ':0'
                 if mw not in self_weight_names:
                     logging.warning('weight: %s not in model weights', mw)
                     continue
                 mapping[mw] = w
 
         if self.skip_token_embedding:
-            self._skip_weight(mapping, model.name + '/embeddings/word_embeddings:0')
+            self._skip_weight(mapping, model_prefix + '/embeddings/word_embeddings:0')
         if self.skip_position_embedding:
-            self._skip_weight(mapping, model.name + '/embeddings/position_embeddings:0')
+            self._skip_weight(mapping, model_prefix + '/embeddings/position_embeddings:0')
         if self.skip_segment_embedding:
-            self._skip_weight(mapping, model.name + '/embeddings/token_type_embeddings:0')
+            self._skip_weight(mapping, model_prefix + '/embeddings/token_type_embeddings:0')
         if self.skip_embedding_layernorm:
-            self._skip_weight(mapping, model.name + '/embeddings/LayerNorm/gamma:0')
-            self._skip_weight(mapping, model.name + '/embeddings/LayerNorm/beta:0')
+            self._skip_weight(mapping, model_prefix + '/embeddings/LayerNorm/gamma:0')
+            self._skip_weight(mapping, model_prefix + '/embeddings/LayerNorm/beta:0')
         if self.skip_pooler:
-            self._skip_weight(mapping, model.name + '/pooler/dense/kernel:0')
-            self._skip_weight(mapping, model.name + '/pooler/dense/bias:0')
+            self._skip_weight(mapping, model_prefix + '/pooler/dense/kernel:0')
+            self._skip_weight(mapping, model_prefix + '/pooler/dense/bias:0')
 
         # zip weight names and values
         zipped_weights = zip_weights(
-            model,
+            bert,
             ckpt,
             mapping,
             **kwargs)
         # set values to weights
         tf.keras.backend.batch_set_value(zipped_weights)
 
-        self_weights = {w.name: w.numpy() for w in model.trainable_weights}
+        if not kwargs.get('check_weights', False):
+            return
+
+        self_weights = {w.name: w.numpy() for w in bert.trainable_weights}
         for k, v in self_weights.items():
             ckpt_key = mapping.get(k, None)
             if not ckpt_key:

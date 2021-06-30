@@ -322,7 +322,101 @@ class BertPooler(tf.keras.layers.Layer):
         return outputs
 
 
-class Bert(tf.keras.Model):
+class BertPretrainedModel(tf.keras.Model):
+
+    def __init__(self, return_states=False, return_attention_weights=False, **kwargs):
+        super().__init__(**kwargs)
+        self.return_states = return_states
+        self.return_attention_weights = return_attention_weights
+
+    @tf.function(input_signature=[
+        {
+            'input_ids': tf.TensorSpec(shape=(None, None), dtype=tf.int32, name='input_ids'),
+            'segment_ids': tf.TensorSpec(shape=(None, None), dtype=tf.int32, name='segment_ids'),
+            'attention_mask': tf.TensorSpec(shape=(None, None), dtype=tf.int32, name='attention_mask')
+        }
+    ])
+    def serving(self, inputs):
+        return self.forward(inputs)
+
+    def forward(self, inputs):
+        """Forward pass for serving.
+
+        Arguments:
+            inputs: A dict, contains `input_ids`, `segment_ids` and `attention_mask`
+
+        Returns:
+            outputs: A dict, contains outputs from serving
+        """
+        raise NotImplementedError()
+
+    def dummy_inputs(self):
+        input_ids = tf.constant([0] * 128, dtype=tf.int32, shape=(1, 128))
+        segment_ids = tf.constant([0] * 128, dtype=tf.int32, shape=(1, 128))
+        attn_mask = tf.constant([1] * 128, dtype=tf.int32, shape=(1, 128))
+        return input_ids, segment_ids, attn_mask
+
+    @classmethod
+    def _build_extra_config(cls, model_config, **kwargs):
+        extra_config = {}
+        for k, v in kwargs.items():
+            if k not in model_config:
+                if str(k).startswith('override_'):
+                    k = k.lstrip('override_')
+                extra_config[k] = v
+        logging.info('Load extra config: \n%s', json.dumps(extra_config, indent=4))
+        return extra_config
+
+    @classmethod
+    def _merge_config(cls, model_config, extra_config):
+        mixed_config = {}
+        mixed_config.update(**model_config)
+        mixed_config.update(**extra_config)
+        logging.info('Using mixed config: \n%s', json.dumps(mixed_config, indent=4))
+        return mixed_config
+
+    @classmethod
+    def from_pretrained(cls, pretrained_model_dir, adapter=None, **kwargs):
+        config_file, ckpt, vocab_file = parse_pretrained_model_files(pretrained_model_dir)
+        if not adapter:
+            adapter = BertAdapter(**kwargs)
+        model_config = adapter.adapte_config(config_file, **kwargs)
+        logging.info('Load model config: \n%s', json.dumps(model_config, indent=4))
+        extra_config = cls._build_extra_config(model_config, **kwargs)
+        mixed_config = cls._merge_config(model_config, extra_config, **kwargs)
+        model = cls(**mixed_config)
+        input_ids, segment_ids, attn_mask = model.dummy_inputs()
+        model(input_ids, segment_ids, attn_mask, training=False)
+        adapter.adapte_weights(
+            model.bert_model,
+            model_config,
+            ckpt,
+            model_prefix=model.name_prefix,
+            **kwargs)
+        return model
+
+    @classmethod
+    def from_config_file(cls, config_file, **kwargs):
+        with open(config_file, mode='rt', encoding='utf-8') as fin:
+            model_config = json.load(fin)
+        logging.info('Load model config: \n%s', json.dumps(model_config, indent=4))
+        extra_config = cls._build_extra_config(model_config, **kwargs)
+        mixed_config = cls._merge_config(model_config, extra_config, **kwargs)
+        model = cls(**mixed_config)
+        input_ids, segment_ids, attn_mask = model.dummy_inputs()
+        model(input_ids, segment_ids, attn_mask, training=False)
+        return model
+
+    @property
+    def bert_model(self):
+        return self
+
+    @property
+    def name_prefix(self):
+        return ''
+
+
+class Bert(BertPretrainedModel):
 
     def __init__(self,
                  vocab_size=21128,
@@ -340,7 +434,10 @@ class Bert(tf.keras.Model):
                  return_states=False,
                  return_attention_weights=False,
                  **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(
+            return_states=return_states,
+            return_attention_weights=return_attention_weights,
+            **kwargs)
 
         self.vocab_size = vocab_size
         self.type_vocab_size = type_vocab_size
@@ -378,17 +475,10 @@ class Bert(tf.keras.Model):
 
         self.bert_pooler = BertPooler(hidden_size=hidden_size, initializer_range=initializer_range, name='pooler')
 
-        self.return_states = return_states
-        self.return_attention_weights = return_attention_weights
+    def get_embedding_table(self):
+        return self.bert_embedding.embedding_table
 
-    @tf.function(input_signature=[
-        {
-            'input_ids': tf.TensorSpec(shape=(None, None), dtype=tf.int32, name='input_ids'),
-            'segment_ids': tf.TensorSpec(shape=(None, None), dtype=tf.int32, name='segment_ids'),
-            'attention_mask': tf.TensorSpec(shape=(None, None), dtype=tf.int32, name='attention_mask')
-        }
-    ])
-    def serving(self, inputs):
+    def forward(self, inputs):
         input_ids, segment_ids, attention_mask = inputs['input_ids'], inputs['segment_ids'], inputs['attention_mask']
         outputs = self(input_ids, segment_ids, attention_mask)
         outputs = list(outputs)
@@ -401,9 +491,6 @@ class Bert(tf.keras.Model):
         if self.return_attention_weights:
             results['attention_weights'] = outputs.pop(0)
         return results
-
-    def get_embedding_table(self):
-        return self.bert_embedding.embedding_table
 
     def call(self, input_ids, segment_ids=None, attention_mask=None, training=None):
         input_ids, segment_ids, attention_mask = unpack_inputs_3([input_ids, segment_ids, attention_mask])
@@ -419,27 +506,6 @@ class Bert(tf.keras.Model):
         if self.return_attention_weights:
             outputs += (all_attention_scores, )
         return outputs
-
-    def dummy_inputs(self):
-        input_ids = tf.constant([0] * 128, dtype=tf.int32, shape=(1, 128))
-        segment_ids = tf.constant([0] * 128, dtype=tf.int32, shape=(1, 128))
-        attn_mask = tf.constant([1] * 128, dtype=tf.int32, shape=(1, 128))
-        return input_ids, segment_ids, attn_mask
-
-    @classmethod
-    def from_pretrained(cls, pretrained_model_dir, adapter=None, **kwargs):
-        config_file, ckpt, vocab_file = parse_pretrained_model_files(pretrained_model_dir)
-        if not adapter:
-            adapter = BertAdapter(**kwargs)
-        model_config = adapter.adapte_config(config_file, **kwargs)
-        logging.info('Loaded model config: \n%s', json.dumps(model_config, indent=4))
-        model_config['return_states'] = kwargs.get('return_states', False)
-        model_config['return_attention_weights'] = kwargs.get('return_attention_weights', False)
-        model = cls(**model_config)
-        input_ids, segment_ids, attn_mask = model.dummy_inputs()
-        model(input_ids, segment_ids, attn_mask, training=False)
-        adapter.adapte_weights(model, model_config, ckpt, **kwargs)
-        return model
 
     def get_config(self):
         config = {
