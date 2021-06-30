@@ -7,8 +7,7 @@ import tensorflow as tf
 from transformers_keras.adapters import parse_pretrained_model_files
 from transformers_keras.adapters.bert_adapter import BertAdapter
 
-from .modeling_utils import (choose_activation, complete_inputs, initialize,
-                             unpack_inputs_2, unpack_inputs_3)
+from .modeling_utils import choose_activation, unpack_inputs_3
 
 
 class BertEmbedding(tf.keras.layers.Layer):
