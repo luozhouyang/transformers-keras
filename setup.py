@@ -15,10 +15,10 @@ setuptools.setup(
     packages=setuptools.find_packages(),
     include_package_data=True,
     install_requires=[
+
     ],
     extras_require={
-        "tf": ["tensorflow>=2.0.1"],
-        "tf-gpu": ["tensorflow-gpu>=2.0.1"],
+
     },
     license="Apache Software License",
     classifiers=(
@@ -26,6 +26,8 @@ setuptools.setup(
         "Programming Language :: Python :: 3.5",
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
         "License :: OSI Approved :: Apache Software License",
         "Operating System :: OS Independent",
         "Topic :: Scientific/Engineering :: Artificial Intelligence",
