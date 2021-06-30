@@ -4,39 +4,19 @@
 [![PyPI version](https://badge.fury.io/py/transformers-keras.svg)](https://badge.fury.io/py/transformers-keras)
 [![Python](https://img.shields.io/pypi/pyversions/transformers-keras.svg?style=plastic)](https://badge.fury.io/py/transformers-keras)
 
-[English](README_EN.md) | 中文文档 
+Transformer-based models implemented in tensorflow 2.x(Keras).
 
-基于`tf.keras`的Transformers系列模型实现。
-
-# 目录
-1. [安装](#安装)
-2. [实现的模型](#实现的模型)
-3. [BERT](#BERT)
-    - 3.1 [BERT支持的预训练权重](#BERT)
-    - 3.2 [BERT特征抽取示例](#BERT特征抽取示例)
-    - 3.3 [BERT微调模型示例](#BERT微调模型示例)
-    - 3.4 [BERT模型导出和部署](#BERT导出SavedModel格式的模型用Serving部署)
-4. [ALBERT](#ALBERT)
-    - 4.1 [ALBERT支持的预训练权重](#ALBERT)
-    - 4.2 [ALBERT特征抽取示例](#ALBERT特征抽取示例)
-    - 4.3 [ALBERT微调模型示例](#ALBERT微调模型示例)
-    - 4.4 [ALBERT模型导出和部署](#ALBERT导出SavedModel格式的模型用Serving部署)
-5. [进阶使用](#进阶使用)
-    - 5.1 [加载时跳过一些参数的权重](#加载预训练模型权重的过程中跳过一些参数的权重)
-    - 5.2 [加载第三方模型实现的权重](#加载第三方实现的模型的权重)
-
-
-## 安装
+## Installation
 
 ```bash
 pip install -U transformers-keras
 ```
 
-## 实现的模型
+## Models
 
-- [x] Transformer[*已删除*]
+- [x] Transformer[*DELETED*]
   * [Attention Is All You Need](https://arxiv.org/abs/1706.03762). 
-  * TensorFlow官方教程:[Transformer model for language understanding](https://www.tensorflow.org/beta/tutorials/text/transformer)
+  * Here is a tutorial from tensorflow:[Transformer model for language understanding](https://www.tensorflow.org/beta/tutorials/text/transformer)
 - [x] BERT
   * [BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding](https://arxiv.org/abs/1810.04805)
 - [x] ALBERT
@@ -45,49 +25,49 @@ pip install -U transformers-keras
 
 ## BERT
 
-支持加载的预训练BERT模型权重:
+Supported pretrained models:
 
-* 所有使用 [google-research/bert](https://github.com/google-research/bert) 训练的**BERT**模型
-* 所有使用 [ymcui/Chinese-BERT-wwm](https://github.com/ymcui/Chinese-BERT-wwm) 训练的**BERT**和**RoBERTa**模型
+* All the BERT models pretrained by [google-research/bert](https://github.com/google-research/bert)
+* All the BERT & RoBERTa models pretrained by [ymcui/Chinese-BERT-wwm](https://github.com/ymcui/Chinese-BERT-wwm)
 
-### BERT特征抽取示例
+### Feature Extraction Examples
 
 ```python
 from transformers_keras import Bert
 
-# 加载预训练模型权重
+# Used to predict directly
 model = Bert.from_pretrained('/path/to/pretrained/bert/model')
 input_ids = tf.constant([[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]])
-# segment_ids and attention_mask 是可选的
+# segment_ids and attention_mask are optional
 sequence_outputs, pooled_output = model(input_ids, training=False)
 
 ```
 
-另外，可以通过构造器参数 `return_states=True` 和 `return_attention_weights=True` 来获取每一层的 `hidden_states` 和 `attention_weights` 输出:
+Also, you can optionally get the hidden states and attention weights of each encoder layer:
 
 ```python
 from transformers_keras import Bert
 
-# 加载预训练模型权重
+# Used to predict directly
 model = Bert.from_pretrained(
     '/path/to/pretrained/bert/model', 
     return_states=True, 
     return_attention_weights=True)
 input_ids = tf.constant([[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]])
-# segment_ids and attention_mask 是可以选的
+# segment_ids and attention_mask are optional
 sequence_outputs, pooled_output, hidden_states, attn_weights = model(input_ids, training=False)
 
 ```
 
-### BERT微调模型示例
+### Fine-tuning Examples
 
 ```python
-# 构建一个简单的二分类模型
+# Used to fine-tuning
 def build_bert_classify_model(pretrained_model_dir, **kwargs):
     input_ids = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name='input_ids')
-    # segment_ids and attention_mask 是可选的
+    # segment_ids and attention_mask are optional
     segment_ids = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name='segment_ids')
-    # 加载预训练模型权重
+    
     bert = Bert.from_pretrained(pretrained_model_dir, **kwargs)
 
     sequence_outputs, pooled_output = bert(input_ids, segment_ids)
@@ -102,58 +82,60 @@ model = build_bert_classify_model(
 model.summary()
 ```
 
-### BERT导出SavedModel格式的模型用Serving部署
+### Export SavedModel for Serving
 
-你可以很方便地把模型转换成SavedModel格式。这里是一个示例:
+You can export the pretrained and finetune model in SavedModel format in one minute.
+
+Here has an example to export pretrained BERT model in SavedModel format:
 
 ```python
-# 加载预训练模型权重
+
 model = Bert.from_pretrained(
     '/path/to/pretrained/bert/model', 
     return_states=True, 
     return_attention_weights=True)
-# 导出SavedModel格式的模型, model.serving 定义了模型的输入输出
+
 model.save('/path/to/save', signatures=model.serving)
 ```
 
-接下来，就可以使用 [tensorflow/serving](https://github.com/tensorflow/serving) 来部署模型了。
+Then, you can use [tensorflow/serving](https://github.com/tensorflow/serving) to serve it.
 
 
 ## ALBERT
 
-支持加载的预训练ALBERT模型权重:
+Supported pretrained models:
 
-* 所有使用 [google-research/albert](https://github.com/google-research/albert) 训练的模型。
+* All the ALBERT models pretrained by [google-research/albert](https://github.com/google-research/albert)
 
-### ALBERT特征抽取示例
+### Feature Extraction Examples
 
 ```python
 from transformers_keras import Albert
 
-# 加载预训练权重
+# Used to predict directly
 model = Albert.from_pretrained('/path/to/pretrained/albert/model')
 input_ids = tf.constant([[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]])
-# segment_ids and attention_mask 是可选的
+# segment_ids and attention_mask are optional
 sequence_outputs, pooled_output = model(input_ids, training=False)
 ```
 
-另外，可以通过构造器参数 `return_states=True` 和 `return_attention_weights=True` 来获取每一层的 `hidden_states` 和 `attention_weights` 输出:
+Also, you can optionally get the hidden states and attention weights of each encoder layer:
 
 ```python
 from transformers_keras import Albert
 
-# 加载预训练模型权重
+# Used to predict directly
 model = Albert.from_pretrained(
     '/path/to/pretrained/albert/model', 
     return_states=True, 
     return_attention_weights=True)
-
+# segment_ids and attention_mask are optional
 input_ids = tf.constant([[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]])
-# segment_ids and attention_mask 是可选的
+# segment_ids and attention_mask are optional
 sequence_outputs, pooled_output, states, attn_weights = model(input_ids, training=False)
 ```
 
-### ALBERT微调模型示例
+### Fine-tuing Examples
 
 ```python
 
@@ -178,35 +160,37 @@ model.summary()
 ```
 
 
-### ALBERT导出SavedModel格式的模型用Serving部署
+### Export SavedModel for Serving
 
-你可以很方便地把模型转换成SavedModel格式。这里是一个示例:
+You can export the pretrained and finetune model in SavedModel format in one minute.
+
+Here has an example to export pretrained ALBERT model in SavedModel format:
 
 ```python
-# 加载预训练模型权重
+
 model = Albert.from_pretrained(
     '/path/to/pretrained/albert/model', 
     return_states=True, 
     return_attention_weights=True)
-# 导出SavedModel格式的模型, model.serving 定义了模型的输入输出
+
 model.save('/path/to/save', signatures=model.serving)
 ```
 
-接下来，就可以使用 [tensorflow/serving](https://github.com/tensorflow/serving) 来部署模型了。
+Then, you can use [tensorflow/serving](https://github.com/tensorflow/serving) to serve it.
 
 
-## 进阶使用
+## Advanced Usage
 
-支持的高级使用方法:
+Here are some advanced usages:
 
-* 加载预训练模型权重的过程中跳过一些参数的权重
-* 加载第三方实现的模型的权重
+* Skip loadding weights from checkpoint
+* Load other pretrained models
 
-### 加载预训练模型权重的过程中跳过一些参数的权重
+### Skip loadding weights from checkpoint
 
-有些情况下，你可能会在加载预训练权重的过程中，跳过一些权重的加载。这个过程很简单。
+You can skip loadding some weights from ckpt.
 
-这里是一个示例：
+Examples:
 
 ```python
 from transformers_keras import Bert, Albert
@@ -236,53 +220,51 @@ bert = Bert.from_pretrained(
     )
 ```
 
-所有支持跳过加载的权重如下:
+All supported kwargs to skip loadding weights:
 
-* `skip_token_embedding`, 跳过加载ckpt的 `token_embedding` 权重
-* `skip_position_embedding`, 跳过加载ckpt的 `position_embedding` 权重
-* `skip_segment_embedding`, 跳过加载ckpt的 `token_type_emebdding` 权重
-* `skip_embedding_layernorm`, 跳过加载ckpt的 `layer_norm` 权重
-* `skip_pooler`, 跳过加载ckpt的 `pooler` 权重
+* `skip_token_embedding`, skip loadding `token_embedding` weights from ckpt
+* `skip_position_embedding`, skip loadding `position_embedding` weights from ckpt
+* `skip_segment_embedding`, skip loadding `token_type_emebdding` weights from ckpt
+* `skip_embedding_layernorm`, skip loadding `layer_norm` weights of emebedding layer from ckpt
+* `skip_pooler`, skip loadding `pooler` weights of pooler layer from ckpt
 
 
 
-### 加载第三方实现的模型的权重
+### Load other pretrained models
 
-在有一些情况下，第三方实现了一些模型，它的权重的结构组织和官方的实现不太一样。对于一般的预训练加载库，实现这个功能是需要库本身修改代码来实现的。本库通过 **适配器模式** 提供了这种支持。用户只需要继承 **AbstractAdapter** 即可实现自定义的权重加载逻辑。
+If you want to load models pretrained by other implementationds, whose config and trainable weights are a little different from previous, you can subclass `AbstractAdapter` to adapte these models:
 
 ```python
 from transformers_keras.adapters import AbstractAdapter
 from transformers_keras import Bert, Albert
 
-# 自定义的BERT权重适配器
+# load custom bert models
 class MyBertAdapter(AbstractAdapter):
 
     def adapte_config(self, config_file, **kwargs):
-        # 在这里把配置文件的配置项，转化成本库的BERT需要的配置
-        # 本库实现的BERT所需参数都在构造器里，可以简单方便得查看
+        # adapte model config here
+        # you can refer to `transformers_keras.adapters.bert_adapter`
         pass
 
     def adapte_weights(self, model, config, ckpt, **kwargs):
-        # 在这里把ckpt的权重设置到model的权重里
-        # 可以参考BertAdapter的实现过程
+        # adapte model weights here
+        # you can refer to `transformers_keras.adapters.bert_adapter`
         pass
 
-# 加载预训练权重的时候，指定自己的适配器 `adapter=MyBertAdapter()`
 bert = Bert.from_pretrained('/path/to/your/bert/model', adapter=MyBertAdapter())
 
-# 自定义的ALBERT权重适配器
+# or, load custom albert models
 class MyAlbertAdapter(AbstractAdapter):
 
     def adapte_config(self, config_file, **kwargs):
-        # 在这里把配置文件的配置项，转化成本库的BERT需要的配置
-        # 本库实现的ALBERT所需参数都在构造器里，可以简单方便得查看
+        # adapte model config here
+        # you can refer to `transformers_keras.adapters.albert_adapter`
         pass
 
     def adapte_weights(self, model, config, ckpt, **kwargs):
-        # 在这里把ckpt的权重设置到model的权重里
-        # 可以参考AlbertAdapter的实现过程
+        # adapte model weights here
+        # you can refer to `transformers_keras.adapters.albert_adapter`
         pass
 
-# 加载预训练权重的时候，指定自己的适配器 `adapter=MyAlbertAdapter()`
 albert = Albert.from_pretrained('/path/to/your/albert/model', adapter=MyAlbertAdapter())
 ```
