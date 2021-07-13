@@ -325,6 +325,12 @@ class BertPooler(tf.keras.layers.Layer):
 class BertPretrainedModel(tf.keras.Model):
 
     def __init__(self, return_states=False, return_attention_weights=False, **kwargs):
+        unused_keys = []
+        for k, v in kwargs.items():
+            if str(k).startswith('skip_'):
+                unused_keys.append(k)
+        for k in unused_keys:
+            kwargs.pop(k, None)
         super().__init__(**kwargs)
         self.return_states = return_states
         self.return_attention_weights = return_attention_weights
@@ -360,11 +366,14 @@ class BertPretrainedModel(tf.keras.Model):
     def _build_extra_config(cls, model_config, **kwargs):
         extra_config = {}
         for k, v in kwargs.items():
+            if k in ['verbose']:
+                continue
             if k not in model_config:
                 if str(k).startswith('override_'):
                     k = k.lstrip('override_')
                 extra_config[k] = v
-        logging.info('Load extra config: \n%s', json.dumps(extra_config, indent=4))
+        if extra_config:
+            logging.info('Load extra config: \n%s', json.dumps(extra_config, indent=4))
         return extra_config
 
     @classmethod
@@ -383,10 +392,10 @@ class BertPretrainedModel(tf.keras.Model):
         model_config = adapter.adapte_config(config_file, **kwargs)
         logging.info('Load model config: \n%s', json.dumps(model_config, indent=4))
         extra_config = cls._build_extra_config(model_config, **kwargs)
-        mixed_config = cls._merge_config(model_config, extra_config, **kwargs)
+        mixed_config = cls._merge_config(model_config, extra_config)
         model = cls(**mixed_config)
         input_ids, segment_ids, attn_mask = model.dummy_inputs()
-        model(input_ids, segment_ids, attn_mask, training=False)
+        model(inputs=[input_ids, segment_ids, attn_mask], training=False)
         adapter.adapte_weights(
             model.bert_model,
             model_config,
@@ -401,7 +410,7 @@ class BertPretrainedModel(tf.keras.Model):
             model_config = json.load(fin)
         logging.info('Load model config: \n%s', json.dumps(model_config, indent=4))
         extra_config = cls._build_extra_config(model_config, **kwargs)
-        mixed_config = cls._merge_config(model_config, extra_config, **kwargs)
+        mixed_config = cls._merge_config(model_config, extra_config)
         model = cls(**mixed_config)
         input_ids, segment_ids, attn_mask = model.dummy_inputs()
         model(input_ids, segment_ids, attn_mask, training=False)
@@ -480,7 +489,7 @@ class Bert(BertPretrainedModel):
 
     def forward(self, inputs):
         input_ids, segment_ids, attention_mask = inputs['input_ids'], inputs['segment_ids'], inputs['attention_mask']
-        outputs = self(input_ids, segment_ids, attention_mask)
+        outputs = self(inputs=[input_ids, segment_ids, attention_mask])
         outputs = list(outputs)
         results = {
             'sequence_output': outputs.pop(0),
@@ -492,8 +501,8 @@ class Bert(BertPretrainedModel):
             results['attention_weights'] = outputs.pop(0)
         return results
 
-    def call(self, input_ids, segment_ids=None, attention_mask=None, training=None):
-        input_ids, segment_ids, attention_mask = unpack_inputs_3([input_ids, segment_ids, attention_mask])
+    def call(self, inputs, training=None):
+        input_ids, segment_ids, attention_mask = unpack_inputs_3(inputs)
         embedding = self.bert_embedding(input_ids, segment_ids, training=training)
         # (batch_size, seq_len) -> (batch_size, 1, 1, seq_len)
         attention_mask = attention_mask[:, tf.newaxis, tf.newaxis, :]

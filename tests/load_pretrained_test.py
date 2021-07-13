@@ -47,7 +47,7 @@ class LoadPretrainedModelTest(tf.test.TestCase):
         _comprare_embedding_output()
 
         def _compare_final_outputs():
-            a_sequence_output, a_pooled_output, _ = model(input_ids, segment_ids, attention_mask)
+            a_sequence_output, a_pooled_output, _ = model(inputs=[input_ids, segment_ids, attention_mask])
             b_sequence_output, b_pooled_output = transformer_model(
                 input_ids=input_ids, token_type_ids=segment_ids, attention_mask=attention_mask, return_dict=False)
             # b_sequence_output, b_pooled_output = b_outputs[0], b_outputs[1]
@@ -95,7 +95,7 @@ class LoadPretrainedModelTest(tf.test.TestCase):
     def _do_predict(self, model):
         input_ids = tf.constant([1, 2, 3, 4, 5, 6, 7, 8], shape=(2, 4))
         # output_1 should be all close to output_2
-        _, outputs_1 = model(input_ids, None, None, training=False)
+        _, outputs_1 = model(inputs=[input_ids], training=False)
         print(outputs_1)
         # _, outputs_2 = model(input_ids, None, None)
         # print(outputs_2)
@@ -146,7 +146,7 @@ class LoadPretrainedModelTest(tf.test.TestCase):
             bert = Bert.from_pretrained(os.path.join(BASE_DIR, 'chinese_roberta_wwm_ext_L-12_H-768_A-12'))
             bert.trainable = trainable
 
-            sequence_output, pooled_output = bert(input_ids, segment_ids)
+            sequence_output, pooled_output = bert(inputs=[input_ids, segment_ids])
             outputs = tf.keras.layers.Dense(2, name='output')(pooled_output)
             model = tf.keras.Model(inputs=[input_ids, segment_ids], outputs=outputs)
             model.compile(loss='binary_cross_entropy', optimizer='adam')
