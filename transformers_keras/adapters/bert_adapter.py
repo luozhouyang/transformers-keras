@@ -32,11 +32,8 @@ class BertAdapter(AbstractAdapter):
         }
         return model_config
 
-    def adapte_weights(self, bert, config, ckpt, **kwargs):
-        logging.info('Bert model name: %s', bert.name)
-        model_prefix = bert.name
-        if kwargs.get('model_prefix', ''):
-            model_prefix = kwargs['model_prefix'] + '/' + bert.name
+    def adapte_weights(self, bert, config, ckpt, prefix='', **kwargs):
+        model_prefix = prefix + '/' + bert.name if prefix else bert.name
         logging.info('Using model prefix: %s', model_prefix)
         mapping = {}
         ckpt_prefix = kwargs.get('ckpt_prefix', 'bert')

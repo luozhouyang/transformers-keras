@@ -67,9 +67,9 @@ class AbstractAdapter(abc.ABC):
         }))
 
     @abc.abstractmethod
-    def adapte_config(self, config_file, **kwargs):
+    def adapte_config(self, *args, **kwargs):
         raise NotImplementedError()
 
     @abc.abstractmethod
-    def adapte_weights(self, model, config, ckpt, **kwargs):
+    def adapte_weights(self, *args, **kwargs):
         raise NotImplementedError()
