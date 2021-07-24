@@ -5,7 +5,7 @@ import tensorflow as tf
 from .modeling_albert import (Albert, AlbertEmbedding, AlbertEncoder,
                               AlbertEncoderGroup, AlbertEncoderLayer)
 from .modeling_bert import (Bert, BertEmbedding, BertEncoder, BertEncoderLayer,
-                            BertIntermediate, BertPretrainedModel)
+                            BertIntermediate)
 from .modeling_utils import complete_inputs
 
 __name__ = 'transformers_keras'

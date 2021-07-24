@@ -322,110 +322,7 @@ class BertPooler(tf.keras.layers.Layer):
         return outputs
 
 
-class BertPretrainedModel(tf.keras.Model):
-
-    def __init__(self, return_states=False, return_attention_weights=False, **kwargs):
-        unused_keys = []
-        for k, v in kwargs.items():
-            if str(k).startswith('skip_'):
-                unused_keys.append(k)
-        for k in unused_keys:
-            kwargs.pop(k, None)
-        super().__init__(**kwargs)
-        self.return_states = return_states
-        self.return_attention_weights = return_attention_weights
-
-    @tf.function(input_signature=[
-        {
-            'input_ids': tf.TensorSpec(shape=(None, None), dtype=tf.int32, name='input_ids'),
-            'segment_ids': tf.TensorSpec(shape=(None, None), dtype=tf.int32, name='segment_ids'),
-            'attention_mask': tf.TensorSpec(shape=(None, None), dtype=tf.int32, name='attention_mask')
-        }
-    ])
-    def serving(self, inputs):
-        return self.forward(inputs)
-
-    def forward(self, inputs):
-        """Forward pass for serving.
-
-        Arguments:
-            inputs: A dict, contains `input_ids`, `segment_ids` and `attention_mask`
-
-        Returns:
-            outputs: A dict, contains outputs from serving
-        """
-        raise NotImplementedError()
-
-    def dummy_inputs(self):
-        input_ids = tf.constant([0] * 128, dtype=tf.int32, shape=(1, 128))
-        segment_ids = tf.constant([0] * 128, dtype=tf.int32, shape=(1, 128))
-        attn_mask = tf.constant([1] * 128, dtype=tf.int32, shape=(1, 128))
-        return input_ids, segment_ids, attn_mask
-
-    @classmethod
-    def _build_extra_config(cls, model_config, **kwargs):
-        extra_config = {}
-        for k, v in kwargs.items():
-            if k in ['verbose']:
-                continue
-            if k not in model_config:
-                if str(k).startswith('override_'):
-                    k = k.lstrip('override_')
-                extra_config[k] = v
-        if extra_config:
-            logging.info('Load extra config: \n%s', json.dumps(extra_config, indent=4))
-        return extra_config
-
-    @classmethod
-    def _merge_config(cls, model_config, extra_config):
-        mixed_config = {}
-        mixed_config.update(**model_config)
-        mixed_config.update(**extra_config)
-        logging.info('Using mixed config: \n%s', json.dumps(mixed_config, indent=4))
-        return mixed_config
-
-    @classmethod
-    def from_pretrained(cls, pretrained_model_dir, adapter=None, **kwargs):
-        config_file, ckpt, vocab_file = parse_pretrained_model_files(pretrained_model_dir)
-        if not adapter:
-            adapter = BertAdapter(**kwargs)
-        model_config = adapter.adapte_config(config_file, **kwargs)
-        logging.info('Load model config: \n%s', json.dumps(model_config, indent=4))
-        extra_config = cls._build_extra_config(model_config, **kwargs)
-        mixed_config = cls._merge_config(model_config, extra_config)
-        model = cls(**mixed_config)
-        input_ids, segment_ids, attn_mask = model.dummy_inputs()
-        model(inputs=[input_ids, segment_ids, attn_mask], training=False)
-        adapter.adapte_weights(
-            model.bert_model,
-            model_config,
-            ckpt,
-            model_prefix=model.name_prefix,
-            **kwargs)
-        return model
-
-    @classmethod
-    def from_config_file(cls, config_file, **kwargs):
-        with open(config_file, mode='rt', encoding='utf-8') as fin:
-            model_config = json.load(fin)
-        logging.info('Load model config: \n%s', json.dumps(model_config, indent=4))
-        extra_config = cls._build_extra_config(model_config, **kwargs)
-        mixed_config = cls._merge_config(model_config, extra_config)
-        model = cls(**mixed_config)
-        input_ids, segment_ids, attn_mask = model.dummy_inputs()
-        model(input_ids, segment_ids, attn_mask, training=False)
-        return model
-
-    @property
-    def bert_model(self):
-        return self
-
-    @property
-    def name_prefix(self):
-        return ''
-
-
-class Bert(BertPretrainedModel):
+class BertBackbone(tf.keras.layers.Layer):
 
     def __init__(self,
                  vocab_size=21128,
@@ -440,26 +337,8 @@ class Bert(BertPretrainedModel):
                  attention_dropout_rate=0.1,
                  initializer_range=0.02,
                  epsilon=1e-12,
-                 return_states=False,
-                 return_attention_weights=False,
                  **kwargs):
-        super().__init__(
-            return_states=return_states,
-            return_attention_weights=return_attention_weights,
-            **kwargs)
-
-        self.vocab_size = vocab_size
-        self.type_vocab_size = type_vocab_size
-        self.max_positions = max_positions
-        self.num_layers = num_layers
-        self.hidden_size = hidden_size
-        self.num_attention_heads = num_attention_heads
-        self.intermediate_size = intermediate_size
-        self.hidden_dropout_rate = hidden_dropout_rate
-        self.attention_dropout_rate = attention_dropout_rate
-        self.initializer_range = initializer_range
-        self.initialize_range = initializer_range
-
+        super().__init__(**kwargs)
         self.bert_embedding = BertEmbedding(
             vocab_size=vocab_size,
             max_positions=max_positions,
@@ -487,34 +366,103 @@ class Bert(BertPretrainedModel):
     def get_embedding_table(self):
         return self.bert_embedding.embedding_table
 
-    def forward(self, inputs):
-        input_ids, segment_ids, attention_mask = inputs['input_ids'], inputs['segment_ids'], inputs['attention_mask']
-        outputs = self(inputs=[input_ids, segment_ids, attention_mask])
-        outputs = list(outputs)
-        results = {
-            'sequence_output': outputs.pop(0),
-            'pooled_output': outputs.pop(0),
-        }
-        if self.return_states:
-            results['hidden_states'] = outputs.pop(0)
-        if self.return_attention_weights:
-            results['attention_weights'] = outputs.pop(0)
-        return results
-
-    def call(self, inputs, training=None):
-        input_ids, segment_ids, attention_mask = unpack_inputs_3(inputs)
+    def call(self, input_ids, segment_ids, attention_mask, training=None):
         embedding = self.bert_embedding(input_ids, segment_ids, training=training)
         # (batch_size, seq_len) -> (batch_size, 1, 1, seq_len)
         attention_mask = attention_mask[:, tf.newaxis, tf.newaxis, :]
         output, all_hidden_states, all_attention_scores = self.bert_encoder(
             embedding, attention_mask, training=training)
         pooled_output = self.bert_pooler(output)
-        outputs = (output, pooled_output)
+        return output, pooled_output, all_hidden_states, all_attention_scores
+
+
+class Bert(tf.keras.Model):
+
+    def __init__(self,
+                 vocab_size=21128,
+                 max_positions=512,
+                 hidden_size=768,
+                 type_vocab_size=2,
+                 num_layers=6,
+                 num_attention_heads=8,
+                 intermediate_size=3072,
+                 activation='gelu',
+                 hidden_dropout_rate=0.2,
+                 attention_dropout_rate=0.1,
+                 initializer_range=0.02,
+                 epsilon=1e-12,
+                 return_states=False,
+                 return_attention_weights=False,
+                 **kwargs):
+        super().__init__(**kwargs)
+        self.backbone = BertBackbone(
+            vocab_size=vocab_size,
+            max_positions=max_positions,
+            hidden_size=hidden_size,
+            type_vocab_size=type_vocab_size,
+            num_layers=num_layers,
+            num_attention_heads=num_attention_heads,
+            intermediate_size=intermediate_size,
+            activation=activation,
+            hidden_dropout_rate=hidden_dropout_rate,
+            attention_dropout_rate=attention_dropout_rate,
+            initializer_range=initializer_range,
+            epsilon=epsilon,
+            name='bert'
+        )
+        self.vocab_size = vocab_size
+        self.type_vocab_size = type_vocab_size
+        self.max_positions = max_positions
+        self.num_layers = num_layers
+        self.hidden_size = hidden_size
+        self.num_attention_heads = num_attention_heads
+        self.intermediate_size = intermediate_size
+        self.hidden_dropout_rate = hidden_dropout_rate
+        self.attention_dropout_rate = attention_dropout_rate
+        self.initializer_range = initializer_range
+        self.initialize_range = initializer_range
+        self.return_states = return_states
+        self.return_attention_weights = return_attention_weights
+
+    @tf.function(input_signature=[
+        {
+            'input_ids': tf.TensorSpec(shape=(None, None), dtype=tf.int32, name='input_ids'),
+            'segment_ids': tf.TensorSpec(shape=(None, None), dtype=tf.int32, name='segment_ids'),
+            'attention_mask': tf.TensorSpec(shape=(None, None), dtype=tf.int32, name='attention_mask')
+        }
+    ])
+    def serving(self, inputs):
+        input_ids = inputs['input_ids']
+        segment_ids = inputs['segment_ids']
+        attention_mask = inputs['attention_mask']
+        outputs = self(inputs=[input_ids, segment_ids, attention_mask], training=False)
+        outputs = list(outputs)
+        results = {
+            'sequence_output': outputs.pop(0),
+            'pooled_output': outputs.pop(0)
+        }
         if self.return_states:
-            outputs += (all_hidden_states, )
+            results.update({'hidden_states': outputs.pop(0)})
         if self.return_attention_weights:
-            outputs += (all_attention_scores, )
+            results.update({'attention_weights': outputs.pop(0)})
+        return results
+
+    def call(self, inputs, training=None):
+        input_ids, segment_ids, attention_mask = unpack_inputs_3(inputs)
+        sequence_output, pooled_output, hidden_states, attention_weights = self.backbone(
+            input_ids, segment_ids=segment_ids, attention_mask=attention_mask, training=training)
+        outputs = (sequence_output, pooled_output)
+        if self.return_states:
+            outputs += (hidden_states, )
+        if self.return_attention_weights:
+            outputs += (attention_weights, )
         return outputs
+
+    def dummy_inputs(self):
+        input_ids = tf.constant([0] * 128, dtype=tf.int32, shape=(1, 128))
+        segment_ids = tf.constant([0] * 128, dtype=tf.int32, shape=(1, 128))
+        attn_mask = tf.constant([1] * 128, dtype=tf.int32, shape=(1, 128))
+        return input_ids, segment_ids, attn_mask
 
     def get_config(self):
         config = {
@@ -529,6 +477,56 @@ class Bert(BertPretrainedModel):
             'attention_dropout_rate': self.attention_dropout_rate,
             'initializer_range': self.initializer_range,
             'return_states': self.return_states,
-            'return_attention_weights': self.return_attention_weights
+            'return_attention_weights': self.return_attention_weights,
         }
         return config
+
+    @classmethod
+    def from_pretrained(cls, pretrained_model_dir, adapter=None, **kwargs):
+        config_file, ckpt, _ = parse_pretrained_model_files(pretrained_model_dir)
+        if not adapter:
+            adapter = BertAdapter(
+                skip_token_embedding=kwargs.pop('skip_token_embedding', False),
+                skip_position_embedding=kwargs.pop('skip_position_embedding', False),
+                skip_segment_embedding=kwargs.pop('skip_segment_embedding', False),
+                skip_embedding_layernorm=kwargs.pop('skip_embedding_layernorm', False),
+                skip_pooler=kwargs.pop('skip_pooler', False),
+                verbose=kwargs.pop('verbose', False),
+            )
+        model_config = adapter.adapte_config(config_file, **kwargs)
+        logging.info('Load model config: \n%s', json.dumps(model_config, indent=4))
+        model = cls(
+            **model_config,
+            return_states=kwargs.pop('return_states', False),
+            return_attention_weights=kwargs.pop('return_attention_weights', False),
+            **kwargs)
+        input_ids, segment_ids, attn_mask = model.dummy_inputs()
+        model(inputs=[input_ids, segment_ids, attn_mask], training=False)
+        adapter.adapte_weights(
+            bert=model.backbone,
+            config=model_config,
+            ckpt=ckpt,
+            prefix=model.name,
+            **kwargs)
+        return model
+
+    @classmethod
+    def from_config_file(cls, config_file, adapter=None, **kwargs):
+        if not adapter:
+            adapter = BertAdapter(
+                skip_token_embedding=kwargs.pop('skip_token_embedding', False),
+                skip_position_embedding=kwargs.pop('skip_position_embedding', False),
+                skip_segment_embedding=kwargs.pop('skip_segment_embedding', False),
+                skip_embedding_layernorm=kwargs.pop('skip_embedding_layernorm', False),
+                skip_pooler=kwargs.pop('skip_pooler', False)
+            )
+        model_config = adapter.adapte_config(config_file, **kwargs)
+        logging.info('Load model config: \n%s', json.dumps(model_config, indent=4))
+        model = cls(
+            **model_config,
+            return_states=kwargs.pop('return_states', False),
+            return_attention_weights=kwargs.pop('return_attention_weights', False),
+            **kwargs)
+        input_ids, segment_ids, attn_mask = model.dummy_inputs()
+        model(inputs=[input_ids, segment_ids, attn_mask], training=False)
+        return model

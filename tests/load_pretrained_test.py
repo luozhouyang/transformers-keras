@@ -6,7 +6,8 @@ from tokenizers import BertWordPieceTokenizer
 from transformers_keras.modeling_albert import Albert
 from transformers_keras.modeling_bert import Bert
 
-BASE_DIR = os.environ.get('PRETRAINED_MODE_PATH', None)
+BASE_DIR = os.environ['PRETRAINED_MODE_PATH']
+CHINESE_BERT_PATH = os.environ['CHINESE_BERT_PATH']
 
 
 class LoadPretrainedModelTest(tf.test.TestCase):
@@ -39,7 +40,7 @@ class LoadPretrainedModelTest(tf.test.TestCase):
         input_ids, segment_ids, attention_mask = self._build_bert_inputs()
 
         def _comprare_embedding_output():
-            a = model.bert_embedding(input_ids, segment_ids)
+            a = model.backbone.bert_embedding(input_ids, segment_ids)
             embedding = transformer_model.get_layer('bert').embeddings
             b = embedding(input_ids=input_ids, token_type_ids=segment_ids, position_ids=None, training=False)
             self.assertAllClose(a, b)
@@ -102,19 +103,19 @@ class LoadPretrainedModelTest(tf.test.TestCase):
 
     def test_load_pretrained_bert(self):
         model_paths = [
-            'chinese_wwm_ext_L-12_H-768_A-12',
-            'chinese_L-12_H-768_A-12',
+            # 'chinese_wwm_ext_L-12_H-768_A-12',
+            # 'chinese_L-12_H-768_A-12',
             'chinese_roberta_wwm_ext_L-12_H-768_A-12',
             'chinese_roberta_wwm_large_ext_L-24_H-1024_A-16'
         ]
         for p in model_paths:
-            model = Bert.from_pretrained(os.path.join(BASE_DIR, p), verbose=True)
+            model = Bert.from_pretrained(os.path.join(CHINESE_BERT_PATH, p), verbose=True)
             model.summary()
             self._do_predict(model)
 
         # skip weights
         model = Bert.from_pretrained(
-            os.path.join(BASE_DIR, model_paths[0]),
+            os.path.join(CHINESE_BERT_PATH, model_paths[0]),
             skip_token_embedding=True,
             skip_pooler=True,
             verbose=False)
@@ -143,7 +144,7 @@ class LoadPretrainedModelTest(tf.test.TestCase):
             input_ids = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name='input_ids')
             segment_ids = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name='segment_ids')
 
-            bert = Bert.from_pretrained(os.path.join(BASE_DIR, 'chinese_roberta_wwm_ext_L-12_H-768_A-12'))
+            bert = Bert.from_pretrained(os.path.join(CHINESE_BERT_PATH, 'chinese_roberta_wwm_ext_L-12_H-768_A-12'))
             bert.trainable = trainable
 
             sequence_output, pooled_output = bert(inputs=[input_ids, segment_ids])
