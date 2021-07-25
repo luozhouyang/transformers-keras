@@ -290,10 +290,120 @@ class AlbertPooler(tf.keras.layers.Layer):
         return self.dense(sequence_output[:, 0])
 
 
-class Albert(tf.keras.Model):
+class AlbertModel(tf.keras.layers.Layer):
 
     def __init__(self,
-                 vocab_size=-1,
+                 vocab_size=21128,
+                 max_positions=512,
+                 embedding_size=128,
+                 type_vocab_size=2,
+                 num_layers=12,
+                 num_groups=1,
+                 num_layers_each_group=1,
+                 hidden_size=768,
+                 num_attention_heads=8,
+                 intermediate_size=3072,
+                 activation='gelu',
+                 hidden_dropout_rate=0.2,
+                 attention_dropout_rate=0.1,
+                 epsilon=1e-12,
+                 initializer_range=0.02,
+                 **kwargs):
+        super().__init__(**kwargs)
+        self.embedding = AlbertEmbedding(
+            vocab_size=vocab_size,
+            max_positions=max_positions,
+            embedding_size=embedding_size,
+            type_vocab_size=type_vocab_size,
+            hidden_dropout_rate=hidden_dropout_rate,
+            epsilon=epsilon,
+            initializer_range=initializer_range,
+            name='embeddings')
+        self.encoder = AlbertEncoder(
+            num_layers=num_layers,
+            num_groups=num_groups,
+            num_layers_each_group=num_layers_each_group,
+            hidden_size=hidden_size,
+            num_attention_heads=num_attention_heads,
+            intermediate_size=intermediate_size,
+            activation=activation,
+            hidden_dropout_rate=hidden_dropout_rate,
+            attention_dropout_rate=attention_dropout_rate,
+            epsilon=epsilon,
+            initializer_range=initializer_range,
+            name='encoder')
+        self.pooler = AlbertPooler(hidden_size=hidden_size, initializer_range=initializer_range, name='pooler')
+
+    def call(self, input_ids, segment_ids, attention_mask, training=None):
+        attention_mask = attention_mask[:, tf.newaxis, tf.newaxis, :]
+        embed = self.embedding(input_ids, segment_ids)
+        sequence_outputs, all_hidden_states, all_attn_weights = self.encoder(embed, attention_mask)
+        # take [CLS]
+        pooled_output = self.pooler(sequence_outputs)
+        return sequence_outputs, pooled_output, all_hidden_states, all_attn_weights
+
+
+class AlbertPretrainedModel(tf.keras.Model):
+
+    @classmethod
+    def from_pretrained(cls, pretrained_model_dir, model_params=None, adapter=None, use_functional_api=True, **kwargs):
+        config_file, ckpt, _ = parse_pretrained_model_files(pretrained_model_dir)
+        if not adapter:
+            adapter = AlbertAdapter(
+                skip_token_embedding=kwargs.pop('skip_token_embedding', False),
+                skip_position_embedding=kwargs.pop('skip_position_embedding', False),
+                skip_segment_embedding=kwargs.pop('skip_segment_embedding', False),
+                skip_embedding_layernorm=kwargs.pop('skip_embedding_layernorm', False),
+                skip_pooler=kwargs.pop('skip_pooler', False),
+            )
+        model_config = adapter.adapte_config(config_file, **kwargs)
+        if model_params:
+            model_config.update(model_params)
+        logging.info('Load model config: \n%s', json.dumps(model_config, indent=4))
+        model = cls(**model_config, **kwargs)
+        albert_model = getattr(model, 'albert_model', None)
+        assert albert_model is not None, 'AlbertPretrainedModel must have an attribute named albert_model!'
+        inputs = model.dummy_inputs()
+        model(inputs=list(inputs), training=False)
+        adapter.adapte_weights(
+            albert=model.albert_model,
+            config=model_config,
+            ckpt=ckpt,
+            prefix='' if use_functional_api else model.name,
+            **kwargs)
+        return model
+
+    @classmethod
+    def from_config_file(cls, config_file, model_params=None, adapter=None, **kwargs):
+        if not adapter:
+            adapter = AlbertAdapter(
+                skip_token_embedding=kwargs.pop('skip_token_embedding', False),
+                skip_position_embedding=kwargs.pop('skip_position_embedding', False),
+                skip_segment_embedding=kwargs.pop('skip_segment_embedding', False),
+                skip_embedding_layernorm=kwargs.pop('skip_embedding_layernorm', False),
+            )
+        model_config = adapter.adapte_config(config_file, **kwargs)
+        if model_params:
+            model_config.update(model_params)
+        logging.info('Load model config: \n%s', json.dumps(model_config, indent=4))
+        model = cls(**model_config, **kwargs)
+        albert_model = getattr(model, 'albert_model', None)
+        assert albert_model is not None, 'AlbertPretrainedModel must have an attribute named albert_model!'
+        inputs = model.dummy_inputs()
+        model(inputs=list(inputs), training=False)
+        return model
+
+    def dummy_inputs(self):
+        input_ids = tf.constant([0] * 128, dtype=tf.int64, shape=(1, 128))
+        segment_ids = tf.constant([0] * 128, dtype=tf.int64, shape=(1, 128))
+        attn_mask = tf.constant([1] * 128, dtype=tf.int64, shape=(1, 128))
+        return input_ids, segment_ids, attn_mask
+
+
+class Albert(AlbertPretrainedModel):
+
+    def __init__(self,
+                 vocab_size=21128,
                  max_positions=512,
                  embedding_size=128,
                  type_vocab_size=2,
@@ -311,9 +421,41 @@ class Albert(tf.keras.Model):
                  return_states=False,
                  return_attention_weights=False,
                  **kwargs):
-        super(Albert, self).__init__(**kwargs)
-        assert vocab_size > 0, "vocab_size must greater than 0."
+        # build functional model
+        input_ids = tf.keras.layers.Input(shape=(None, ), dtype=tf.int32, name='input_ids')
+        segment_ids = tf.keras.layers.Input(shape=(None, ), dtype=tf.int32, name='segment_ids')
+        attention_mask = tf.keras.layers.Input(shape=(None, ), dtype=tf.int32, name='attention_mask')
+        albert_model = AlbertModel(
+            vocab_size=vocab_size,
+            max_positions=max_positions,
+            embedding_size=embedding_size,
+            type_vocab_size=type_vocab_size,
+            num_layers=num_layers,
+            num_groups=num_groups,
+            num_layers_each_group=num_layers_each_group,
+            hidden_size=hidden_size,
+            num_attention_heads=num_attention_heads,
+            intermediate_size=intermediate_size,
+            activation=activation,
+            hidden_dropout_rate=hidden_dropout_rate,
+            attention_dropout_rate=attention_dropout_rate,
+            epsilon=epsilon,
+            initializer_range=initializer_range,
+            name='albert')
+        sequence_output, pooled_output, hidden_states, attention_weights = albert_model(
+            input_ids, segment_ids, attention_mask)
+        outputs = [
+            tf.keras.layers.Lambda(lambda x: x, name='sequence_output')(sequence_output),
+            tf.keras.layers.Lambda(lambda x: x, name='pooled_output')(pooled_output),
+        ]
+        if return_states:
+            outputs += [tf.keras.layers.Lambda(lambda x: x, name='hidden_states')(hidden_states)]
+        if return_attention_weights:
+            outputs += [tf.keras.layers.Lambda(lambda x: x, name='attention_weights')(attention_weights)]
 
+        super().__init__(inputs=[input_ids, segment_ids, attention_mask], outputs=outputs, **kwargs)
+
+        self.albert_model = albert_model
         self.vocab_size = vocab_size
         self.type_vocab_size = type_vocab_size
         self.max_positions = max_positions
@@ -327,91 +469,8 @@ class Albert(tf.keras.Model):
         self.hidden_dropout_rate = hidden_dropout_rate
         self.attention_dropout_rate = attention_dropout_rate
         self.initializer_range = initializer_range
-        self.initialize_range = initializer_range
-
-        self.embedding = AlbertEmbedding(
-            vocab_size=vocab_size,
-            max_positions=max_positions,
-            embedding_size=embedding_size,
-            type_vocab_size=type_vocab_size,
-            hidden_dropout_rate=hidden_dropout_rate,
-            epsilon=epsilon,
-            initializer_range=initializer_range,
-            name='embeddings')
-
-        self.encoder = AlbertEncoder(
-            num_layers=num_layers,
-            num_groups=num_groups,
-            num_layers_each_group=num_layers_each_group,
-            hidden_size=hidden_size,
-            num_attention_heads=num_attention_heads,
-            intermediate_size=intermediate_size,
-            activation=activation,
-            hidden_dropout_rate=hidden_dropout_rate,
-            attention_dropout_rate=attention_dropout_rate,
-            epsilon=epsilon,
-            initializer_range=initializer_range,
-            name='encoder')
-
-        self.pooler = AlbertPooler(hidden_size=hidden_size, initializer_range=initializer_range, name='pooler')
-
         self.return_states = return_states
         self.return_attention_weights = return_attention_weights
-
-    @tf.function(input_signature=[
-        {
-            'input_ids': tf.TensorSpec(shape=(None, None), dtype=tf.int32, name='input_ids'),
-            'segment_ids': tf.TensorSpec(shape=(None, None), dtype=tf.int32, name='segment_ids'),
-            'attention_mask': tf.TensorSpec(shape=(None, None), dtype=tf.int32, name='attention_mask')
-        }
-    ])
-    def serving(self, inputs):
-        input_ids, segment_ids, attention_mask = inputs['input_ids'], inputs['segment_ids'], inputs['attention_mask']
-        outputs = self(input_ids, segment_ids, attention_mask)
-        outputs = list(outputs)
-        results = {
-            'sequence_output': outputs.pop(0),
-            'pooled_output': outputs.pop(0),
-        }
-        if self.return_states:
-            results['hidden_states'] = outputs.pop(0)
-        if self.return_attention_weights:
-            results['attention_weights'] = outputs.pop(0)
-        return results
-
-    def call(self, input_ids, segment_ids=None, attention_mask=None, training=None):
-        input_ids, segment_ids, attention_mask = unpack_inputs_3([input_ids, segment_ids, attention_mask])
-        attention_mask = attention_mask[:, tf.newaxis, tf.newaxis, :]
-        embed = self.embedding(input_ids, segment_ids)
-        sequence_outputs, all_hidden_states, all_attn_weights = self.encoder(embed, attention_mask)
-        # take [CLS]
-        pooled_output = self.pooler(sequence_outputs)
-        outputs = (sequence_outputs, pooled_output)
-        if self.return_states:
-            outputs += (all_hidden_states, )
-        if self.return_attention_weights:
-            outputs += (all_attn_weights, )
-        return outputs
-
-    def dummy_inputs(self):
-        input_ids = tf.constant([0] * 128, dtype=tf.int64, shape=(1, 128))
-        segment_ids = tf.constant([0] * 128, dtype=tf.int64, shape=(1, 128))
-        attn_mask = tf.constant([1] * 128, dtype=tf.int64, shape=(1, 128))
-        return input_ids, segment_ids, attn_mask
-
-    @classmethod
-    def from_pretrained(cls, pretrained_model_dir, adapter=None, verbose=True, **kwargs):
-        config_file, ckpt, vocab_file = parse_pretrained_model_files(pretrained_model_dir)
-        if not adapter:
-            adapter = AlbertAdapter(**kwargs)
-        model_config = adapter.adapte_config(config_file, **kwargs)
-        model_config['return_states'] = kwargs.get('return_states', False)
-        model_config['return_attention_weights'] = kwargs.get('return_attention_weights', False)
-        model = cls(**model_config)
-        input_ids, segment_ids, attn_mask = model.dummy_inputs()
-        model(input_ids, segment_ids, attn_mask)
-        adapter.adapte_weights(model, model_config, ckpt, **kwargs)
-        return model
 
     def get_config(self):
         config = {

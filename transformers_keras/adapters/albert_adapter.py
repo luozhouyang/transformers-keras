@@ -36,107 +36,150 @@ class AlbertAdapter(AbstractAdapter):
         }
         return model_config
 
-    def adapte_weights(self, model, config, ckpt, **kwargs):
-        # mapping weight names
-        weights_mapping = {}
-        ckpt_prefix = kwargs.get('ckpt_prefix', 'bert')
-        for cw in [x[0] for x in tf.train.list_variables(ckpt)]:
-            if any(x in cw for x in ['embeddings/', 'pooler/']):
-                weights_mapping[model.name + cw.lstrip(ckpt_prefix) + ':0'] = cw
-                continue
-            if 'embedding_hidden_mapping_in/kernel' in cw:
-                k = '{}/encoder/embedding_mapping/kernel:0'.format(model.name)
-                v = '{}/encoder/embedding_hidden_mapping_in/kernel'.format(ckpt_prefix)
-                weights_mapping[k] = v
-            if 'embedding_hidden_mapping_in/bias' in cw:
-                k = '{}/encoder/embedding_mapping/bias:0'.format(model.name)
-                v = '{}/encoder/embedding_hidden_mapping_in/bias'.format(ckpt_prefix)
-                weights_mapping[k] = v
+    def adapte_weights(self, albert, config, ckpt, prefix='', **kwargs):
+        ckpt_prefix = kwargs.pop('ckpt_prefix', 'bert')
+        model_prefix = prefix + '/' + albert.name if prefix else albert.name
+        logging.info('Using model prefix: %s', model_prefix)
+        mapping = {}
+        self_weight_names = set([x.name for x in albert.trainable_weights])
+        ckpt_weight_names = [x[0] for x in tf.train.list_variables(ckpt)]
+        for w in ckpt_weight_names:
+            print(w)
+        mapping.update(self._adapte_embedding_weights(self_weight_names, ckpt_weight_names, model_prefix, ckpt_prefix))
+        mapping.update(self._adapte_encoder_weights(
+            self_weight_names,
+            ckpt_weight_names,
+            model_prefix,
+            ckpt_prefix,
+            num_groups=config['num_groups'],
+            num_layers_each_group=config['num_layers_each_group']))
 
-        mapping = self._mapping_weight_names(
-            config['num_groups'], config['num_layers_each_group'], model_name=model.name)
-        weights_mapping.update(mapping)
+        # skip weights
+        self._skip_weights(mapping, model_prefix)
 
-        # filter
-        if self.skip_token_embedding:
-            self._skip_weight(weights_mapping, model.name + '/embeddings/word_embeddings:0')
-        if self.skip_position_embedding:
-            self._skip_weight(weights_mapping, model.name + '/embeddings/position_embeddings:0')
-        if self.skip_segment_embedding:
-            self._skip_weight(weights_mapping, model.name + '/embeddings/token_type_embeddings:0')
-        if self.skip_embedding_layernorm:
-            self._skip_weight(weights_mapping, model.name + '/embeddings/LayerNorm/gamma:0')
-            self._skip_weight(weights_mapping, model.name + '/embeddings/LayerNorm/beta:0')
-        if self.skip_pooler:
-            self._skip_weight(weights_mapping, model.name + '/pooler/dense/kernel:0')
-            self._skip_weight(weights_mapping, model.name + '/pooler/dense/bias:0')
-        if self.skip_embedding_mapping_in:
-            self._skip_weight(weights_mapping, model.name + '/encoder/embedding_mapping/kernel:0')
-            self._skip_weight(weights_mapping, model.name + '/encoder/embedding_mapping/bias:0')
-
-        # zip weights and its' values
+        # zip weight names and values
         zipped_weights = zip_weights(
-            model,
+            albert,
             ckpt,
-            weights_mapping,
-            verbose=kwargs.get('verbose', True))
+            mapping,
+            **kwargs)
         # set values to weights
         tf.keras.backend.batch_set_value(zipped_weights)
 
-        self_weights = {w.name: w.numpy() for w in model.trainable_weights}
-        for k, v in self_weights.items():
-            ckpt_key = weights_mapping.get(k, None)
-            if not ckpt_key:
-                continue
-            ckpt_value = tf.train.load_variable(ckpt, ckpt_key)
-            if ckpt_value is None:
-                logging.warning('ckpt value is None of key: %s', ckpt_key)
-            assert np.allclose(v, ckpt_value)
+        # check weights
+        self._compoare_weights(mapping, albert, ckpt, **kwargs)
 
-    def _mapping_weight_names(self, num_groups, num_layers_each_group, model_name='albert', ckpt_prefix='bert'):
-        logging.info('Using model_name: %s', model_name)
+    def _adapte_embedding_weights(self, self_weight_names, ckpt_weight_names, model_prefix, ckpt_prefix, **kwargs):
         mapping = {}
+        for w in ckpt_weight_names:
+            # mapping embedding weights
+            if any(x in w for x in ['embeddings', 'pooler']):
+                mw = model_prefix + w.lstrip(ckpt_prefix) + ':0'
+                if mw not in self_weight_names:
+                    logging.warning('weight: %s not in model weights', mw)
+                    continue
+                mapping[mw] = w
+            # mapping embedding mapin weights
+            if 'embedding_hidden_mapping_in/kernel' in w:
+                mw = model_prefix + '/encoder/embedding_mapping/kernel:0'
+                if mw not in self_weight_names:
+                    logging.warning('weight: %s not in model weights', mw)
+                    continue
+                mapping[mw] = w
+            if 'embedding_hidden_mapping_in/bias' in w:
+                mw = model_prefix + '/encoder/embedding_mapping/bias:0'
+                if mw not in self_weight_names:
+                    logging.warning('weight: %s not in model weights', mw)
+                    continue
+                mapping[mw] = w
+        return mapping
 
-        # encoder
-        for group in range(num_groups):
-            for layer in range(num_layers_each_group):
-                k_prefix = '{}/encoder/group_{}/layer_{}/'.format(model_name, group, layer)
+    def _adapte_encoder_weights(self, self_weight_names, ckpt_weight_names, model_prefix, ckpt_prefix, **kwargs):
+        mapping = {}
+        for group in range(kwargs['num_groups']):
+            for layer in range(kwargs['num_layers_each_group']):
+                k_prefix = '{}/encoder/group_{}/layer_{}/'.format(model_prefix, group, layer)
                 v_prefix = '{}/encoder/transformer/group_{}/inner_group_{}/'.format(ckpt_prefix, group, layer)
                 # attention
                 for n in ['query', 'key', 'value']:
                     for x in ['kernel', 'bias']:
                         k = k_prefix + 'attention/{}/{}:0'.format(n, x)
                         v = v_prefix + 'attention_1/self/{}/{}'.format(n, x)
+                        if k not in self_weight_names:
+                            logging.warning('weight: %s not in model weights', k)
+                            continue
                         mapping[k] = v
 
                 # attention dense
                 for n in ['kernel', 'bias']:
                     k = k_prefix + 'attention/dense/{}:0'.format(n)
                     v = v_prefix + 'attention_1/output/dense/{}'.format(n)
+                    if k not in self_weight_names:
+                        logging.warning('weight: %s not in model weights', k)
+                        continue
                     mapping[k] = v
 
                 for n in ['gamma', 'beta']:
                     # attention layer norm
                     k = k_prefix + 'attention/layer_norm/{}:0'.format(n)
                     v = v_prefix + 'LayerNorm/{}'.format(n)
+                    if k not in self_weight_names:
+                        logging.warning('weight: %s not in model weights', k)
+                        continue
                     mapping[k] = v
                     # albert encoder layer norm
                     k = k_prefix + 'layer_norm/{}:0'.format(n)
                     v = v_prefix + 'LayerNorm_1/{}'.format(n)
+                    if k not in self_weight_names:
+                        logging.warning('weight: %s not in model weights', k)
+                        continue
                     mapping[k] = v
 
                 for n in ['kernel', 'bias']:
                     # intermediate
                     k = k_prefix + 'ffn/{}:0'.format(n)
                     v = v_prefix + 'ffn_1/intermediate/dense/{}'.format(n)
+                    if k not in self_weight_names:
+                        logging.warning('weight: %s not in model weights', k)
+                        continue
                     mapping[k] = v
                     # dense
                     k = k_prefix + 'ffn_output/{}:0'.format(n)
                     v = v_prefix + 'ffn_1/intermediate/output/dense/{}'.format(n)
+                    if k not in self_weight_names:
+                        logging.warning('weight: %s not in model weights', k)
+                        continue
                     mapping[k] = v
-
         return mapping
+
+    def _skip_weights(self, mapping, model_prefix):
+        if self.skip_token_embedding:
+            self._skip_weight(mapping, model_prefix + '/embeddings/word_embeddings:0')
+        if self.skip_position_embedding:
+            self._skip_weight(mapping, model_prefix + '/embeddings/position_embeddings:0')
+        if self.skip_segment_embedding:
+            self._skip_weight(mapping, model_prefix + '/embeddings/token_type_embeddings:0')
+        if self.skip_embedding_layernorm:
+            self._skip_weight(mapping, model_prefix + '/embeddings/LayerNorm/gamma:0')
+            self._skip_weight(mapping, model_prefix + '/embeddings/LayerNorm/beta:0')
+        if self.skip_pooler:
+            self._skip_weight(mapping, model_prefix + '/pooler/dense/kernel:0')
+            self._skip_weight(mapping, model_prefix + '/pooler/dense/bias:0')
 
     def _skip_weight(self, mapping, name):
         mapping.pop(name)
         logging.info('Skip load weight: %s', name)
+
+    def _compoare_weights(self, mapping, albert, ckpt, **kwargs):
+        if not kwargs.get('check_weights', False):
+            return
+
+        self_weights = {w.name: w.numpy() for w in albert.trainable_weights}
+        for k, v in self_weights.items():
+            ckpt_key = mapping.get(k, None)
+            if not ckpt_key:
+                continue
+            ckpt_value = tf.train.load_variable(ckpt, ckpt_key)
+            if ckpt_value is None:
+                logging.warning('ckpt value is None of key: %s', ckpt_key)
+            assert np.allclose(v, ckpt_value)

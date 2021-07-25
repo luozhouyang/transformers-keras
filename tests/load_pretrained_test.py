@@ -70,21 +70,21 @@ class LoadPretrainedModelTest(tf.test.TestCase):
         input_ids, segment_ids, attention_mask = self._build_bert_inputs()
 
         def _compare_embedding_output():
-            a_output = model.embedding(input_ids, segment_ids)
+            a_output = model.albert_model.embedding(input_ids, segment_ids)
             b_output = transformer_model.get_layer('albert').embeddings(
                 input_ids=input_ids, token_type_ids=segment_ids, position_ids=None, training=False)
             self.assertAllClose(a_output, b_output)
 
         def _compare_mapping_in_output():
-            a_layer = model.encoder.embedding_mapping
+            a_layer = model.albert_model.encoder.embedding_mapping
             b_layer = transformer_model.get_layer('albert').encoder.embedding_hidden_mapping_in
-            a_output = a_layer(model.embedding(input_ids, segment_ids))
+            a_output = a_layer(model.albert_model.embedding(input_ids, segment_ids))
             b_output = b_layer(transformer_model.get_layer('albert').embeddings(
                 input_ids=input_ids, token_type_ids=segment_ids, position_ids=None, training=False))
             self.assertAllClose(a_output, b_output)
 
         def _compare_final_outputs():
-            a_sequence_output, a_pooled_output = model(input_ids, segment_ids)
+            a_sequence_output, a_pooled_output = model(inputs=[input_ids, segment_ids, attention_mask])
             b_sequence_output, b_pooled_output = transformer_model(
                 input_ids=input_ids, token_type_ids=segment_ids, attention_mask=attention_mask, return_dict=False)
             self.assertAllClose(a_sequence_output, b_sequence_output, rtol=0.05, atol=1e-5)
@@ -112,7 +112,7 @@ class LoadPretrainedModelTest(tf.test.TestCase):
             # 'chinese_roberta_wwm_large_ext_L-24_H-1024_A-16'
         ]
         for p in model_paths:
-            model = Bert.from_pretrained(os.path.join(CHINESE_BERT_PATH, p), verbose=True)
+            model = Bert.from_pretrained(os.path.join(CHINESE_BERT_PATH, p), verbose=True, check_weights=True)
             model.summary()
             self._do_predict(model)
 

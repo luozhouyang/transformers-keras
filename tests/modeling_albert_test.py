@@ -91,7 +91,7 @@ class ModelingAlbertTest(tf.test.TestCase):
             return_states=return_states,
             return_attention_weights=return_attention_weights)
         input_ids, segment_ids, attn_mask = self._build_albert_inputs()
-        outputs = model(input_ids, segment_ids, attn_mask)
+        outputs = model(inputs=[input_ids, segment_ids, attn_mask])
         sequence_outputs, pooled_outputs = outputs[0], outputs[1]
         self.assertAllEqual([2, 16, 768], sequence_outputs.shape)
         self.assertAllEqual([2, 768], pooled_outputs.shape)
@@ -124,7 +124,7 @@ class ModelingAlbertTest(tf.test.TestCase):
     def test_build_model(self):
         model = Albert(vocab_size=21128)
         input_ids, segment_ids, attn_mask = model.dummy_inputs()
-        model(input_ids, segment_ids, attn_mask)
+        model(inputs=[input_ids, segment_ids, attn_mask])
         model.summary()
 
         for v in model.trainable_weights:
@@ -138,9 +138,9 @@ class ModelingAlbertTest(tf.test.TestCase):
         model = Albert(vocab_size=21128, num_layers=12, num_attention_heads=8,
                        return_states=True, return_attention_weights=True)
         input_ids, segment_ids, input_mask = model.dummy_inputs()
-        model(input_ids=input_ids, segment_ids=segment_ids, attention_mask=input_mask)
+        model(inputs=[input_ids, segment_ids, input_mask])
         model.summary()
-        model.save('models/albert/export/1', include_optimizer=False, signatures=model.serving)
+        model.save('models/albert/export/1', include_optimizer=False)
 
     def test_load_saved_model(self):
         loaded = tf.saved_model.load('models/albert/export/1')
