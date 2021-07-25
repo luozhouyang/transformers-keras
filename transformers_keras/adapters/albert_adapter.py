@@ -43,8 +43,7 @@ class AlbertAdapter(AbstractAdapter):
         mapping = {}
         self_weight_names = set([x.name for x in albert.trainable_weights])
         ckpt_weight_names = [x[0] for x in tf.train.list_variables(ckpt)]
-        for w in ckpt_weight_names:
-            print(w)
+
         mapping.update(self._adapte_embedding_weights(self_weight_names, ckpt_weight_names, model_prefix, ckpt_prefix))
         mapping.update(self._adapte_encoder_weights(
             self_weight_names,
@@ -183,3 +182,4 @@ class AlbertAdapter(AbstractAdapter):
             if ckpt_value is None:
                 logging.warning('ckpt value is None of key: %s', ckpt_key)
             assert np.allclose(v, ckpt_value)
+        logging.info('All weights value are checked.')

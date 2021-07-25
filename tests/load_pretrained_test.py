@@ -112,7 +112,7 @@ class LoadPretrainedModelTest(tf.test.TestCase):
             # 'chinese_roberta_wwm_large_ext_L-24_H-1024_A-16'
         ]
         for p in model_paths:
-            model = Bert.from_pretrained(os.path.join(CHINESE_BERT_PATH, p), verbose=True, check_weights=True)
+            model = Bert.from_pretrained(os.path.join(CHINESE_BERT_PATH, p), verbose=False, check_weights=True)
             model.summary()
             self._do_predict(model)
 
@@ -130,7 +130,9 @@ class LoadPretrainedModelTest(tf.test.TestCase):
 
     def test_load_pretrained_albert(self):
         model_paths = [
-            'albert_base_zh', 'albert_large_zh', 'albert_xlarge_zh'
+            'albert_base_zh',
+            # 'albert_large_zh',
+            # 'albert_xlarge_zh'
         ]
         for p in model_paths:
             model = Albert.from_pretrained(os.path.join(BASE_DIR, p))
@@ -171,13 +173,14 @@ class LoadPretrainedModelTest(tf.test.TestCase):
         def _build_albert_model(trainable=True):
             input_ids = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name='input_ids')
             segment_ids = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name='segment_ids')
+            attention_mask = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name='attention_mask')
 
             albert = Albert.from_pretrained(os.path.join(BASE_DIR, 'albert_base_zh'))
             albert.trainable = trainable
 
-            sequence_output, pooled_output = albert(input_ids, segment_ids, None)
+            _, pooled_output = albert(inputs=[input_ids, segment_ids, attention_mask])
             outputs = tf.keras.layers.Dense(2, name='output')(pooled_output)
-            model = tf.keras.Model(inputs=[input_ids, segment_ids], outputs=outputs)
+            model = tf.keras.Model(inputs=[input_ids, segment_ids, attention_mask], outputs=outputs)
             model.compile(loss='binary_cross_entropy', optimizer='adam')
             return model
 

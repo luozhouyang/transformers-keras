@@ -346,7 +346,15 @@ class AlbertModel(tf.keras.layers.Layer):
 class AlbertPretrainedModel(tf.keras.Model):
 
     @classmethod
-    def from_pretrained(cls, pretrained_model_dir, model_params=None, adapter=None, use_functional_api=True, **kwargs):
+    def from_pretrained(
+            cls,
+            pretrained_model_dir,
+            model_params=None,
+            adapter=None,
+            use_functional_api=True,
+            check_weights=True,
+            verbose=True,
+            **kwargs):
         config_file, ckpt, _ = parse_pretrained_model_files(pretrained_model_dir)
         if not adapter:
             adapter = AlbertAdapter(
@@ -370,6 +378,8 @@ class AlbertPretrainedModel(tf.keras.Model):
             config=model_config,
             ckpt=ckpt,
             prefix='' if use_functional_api else model.name,
+            check_weights=check_weights,
+            verbose=verbose,
             **kwargs)
         return model
 

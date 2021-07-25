@@ -380,7 +380,15 @@ class BertPretrainedModel(tf.keras.Model):
     """Base class for all pretrained model. Can not used to initialize an instance directly."""
 
     @classmethod
-    def from_pretrained(cls, pretrained_model_dir, model_params=None, use_functional_api=True, adapter=None, **kwargs):
+    def from_pretrained(
+            cls,
+            pretrained_model_dir,
+            model_params=None,
+            use_functional_api=True,
+            adapter=None,
+            check_weights=True,
+            verbose=True,
+            **kwargs):
         config_file, ckpt, _ = parse_pretrained_model_files(pretrained_model_dir)
         if not adapter:
             adapter = BertAdapter(
@@ -404,6 +412,8 @@ class BertPretrainedModel(tf.keras.Model):
             config=model_config,
             ckpt=ckpt,
             prefix='' if use_functional_api else model.name,
+            check_weights=check_weights,
+            verbose=verbose,
             **kwargs)
         return model
 

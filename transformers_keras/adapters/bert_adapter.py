@@ -47,6 +47,21 @@ class BertAdapter(AbstractAdapter):
                     continue
                 mapping[mw] = w
 
+        # skip weights
+        self._skip_weights(mapping, model_prefix)
+
+        # zip weight names and values
+        zipped_weights = zip_weights(
+            bert,
+            ckpt,
+            mapping,
+            **kwargs)
+        # set values to weights
+        tf.keras.backend.batch_set_value(zipped_weights)
+
+        self._compoare_weights(mapping, bert, ckpt, **kwargs)
+
+    def _skip_weights(self, mapping, model_prefix):
         if self.skip_token_embedding:
             self._skip_weight(mapping, model_prefix + '/embeddings/word_embeddings:0')
         if self.skip_position_embedding:
@@ -60,15 +75,11 @@ class BertAdapter(AbstractAdapter):
             self._skip_weight(mapping, model_prefix + '/pooler/dense/kernel:0')
             self._skip_weight(mapping, model_prefix + '/pooler/dense/bias:0')
 
-        # zip weight names and values
-        zipped_weights = zip_weights(
-            bert,
-            ckpt,
-            mapping,
-            **kwargs)
-        # set values to weights
-        tf.keras.backend.batch_set_value(zipped_weights)
+    def _skip_weight(self, mapping, name):
+        mapping.pop(name)
+        logging.info('Skip load weight: %s', name)
 
+    def _compoare_weights(self, mapping, bert, ckpt, **kwargs):
         if not kwargs.get('check_weights', False):
             return
 
@@ -81,7 +92,4 @@ class BertAdapter(AbstractAdapter):
             if ckpt_value is None:
                 logging.warning('ckpt value is None of key: %s', ckpt_key)
             assert np.allclose(v, ckpt_value)
-
-    def _skip_weight(self, mapping, name):
-        mapping.pop(name)
-        logging.info('Skip load weight: %s', name)
+        logging.info('All weights value are checked.')
