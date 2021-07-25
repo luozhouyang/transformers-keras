@@ -1,23 +1,40 @@
 import os
 import unittest
 
-from transformers_keras.question_answering.models import \
-    BertForQuestionAnsweringModel
+from transformers_keras.question_answering.models import (
+    AlbertForQuestionAnswering, BertForQuestionAnswering)
 
 CHINESE_BERT_PATH = os.environ['CHINESE_BERT_PATH']
 
 
 class QuestionAnsweringTest(unittest.TestCase):
 
-    def test_build_qa_model(self):
-        m = BertForQuestionAnsweringModel()
+    def test_build_betr_for_qa_model(self):
+        m = BertForQuestionAnswering()
         m.summary()
         for w in m.trainable_weights:
             print(w.name)
 
-    def test_load_pretrained_model(self):
-        m = BertForQuestionAnsweringModel.from_pretrained(
+    def test_load_bert_for_qa_pretrained_model(self):
+        m = BertForQuestionAnswering.from_pretrained(
             os.path.join(CHINESE_BERT_PATH, 'chinese_roberta_wwm_ext_L-12_H-768_A-12'),
+            model_params={'num_labels': 2},
+        )
+        m.summary()
+        for w in m.trainable_weights:
+            print(w.name)
+        for w in m.trainable_weights:
+            print(w.numpy())
+
+    def test_build_albetr_for_qa_model(self):
+        m = AlbertForQuestionAnswering()
+        m.summary()
+        for w in m.trainable_weights:
+            print(w.name)
+
+    def test_load_albert_for_qa_pretrained_model(self):
+        m = AlbertForQuestionAnswering.from_pretrained(
+            os.path.join(os.environ['PRETRAINED_MODE_PATH'], 'albert_base_zh'),
             model_params={'num_labels': 2},
         )
         m.summary()
