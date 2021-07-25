@@ -310,23 +310,22 @@ sequence_outputs, pooled_output, states, attn_weights = model(
 以构建一个序列分类网络为例：
 
 ```python
+
 input_ids = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name='input_ids')
 segment_ids = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name='segment_ids')
 attention_mask = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name='attention_mask')
 albert = Albert.from_pretrained(os.path.join(BASE_DIR, 'albert_base_zh'))
-albert.trainable = trainable
 _, pooled_output = albert(inputs=[input_ids, segment_ids, attention_mask])
 outputs = tf.keras.layers.Dense(2, name='output')(pooled_output)
 model = tf.keras.Model(inputs=[input_ids, segment_ids, attention_mask], outputs=outputs)
 model.compile(loss='binary_cross_entropy', optimizer='adam')
-
 model.summary()
 ```
 
 可以得到以下网络输出：
 
-````bash
-Model: "model"
+```bash
+Model: "model_1"
 __________________________________________________________________________________________________
 Layer (type)                    Output Shape         Param #     Connected to                     
 ==================================================================================================
@@ -336,17 +335,16 @@ segment_ids (InputLayer)        [(None, None)]       0
 __________________________________________________________________________________________________
 attention_mask (InputLayer)     [(None, None)]       0                                            
 __________________________________________________________________________________________________
-albert (Albert)                 [(None, None, 768),  10547968    input_ids[0][0]                  
+albert_1 (Albert)               [(None, None, 768),  10547968    input_ids[0][0]                  
                                                                  segment_ids[0][0]                
                                                                  attention_mask[0][0]             
 __________________________________________________________________________________________________
-output (Dense)                  (None, 2)            1538        albert[0][1]                     
+output (Dense)                  (None, 2)            1538        albert_1[0][1]                   
 ==================================================================================================
 Total params: 10,549,506
-Trainable params: 10,549,506
-Non-trainable params: 0
+Trainable params: 1,538
+Non-trainable params: 10,547,968
 __________________________________________________________________________________________________
-
 ```
 
 
@@ -355,6 +353,7 @@ ________________________________________________________________________________
 你可以使用ALBERT构建序列的二分类网络：
 
 ```python
+
 from transformers_keras import AlbertForSequenceClassification
 
 model = AlbertForSequenceClassification.from_pretrained('/path/to/pretrained/model')
