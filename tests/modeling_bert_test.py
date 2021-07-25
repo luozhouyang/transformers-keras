@@ -128,7 +128,7 @@ class ModelingBertTest(tf.test.TestCase):
         input_ids, segment_ids, input_mask = model.dummy_inputs()
         model(inputs=[input_ids, segment_ids, input_mask])
         model.summary()
-        model.save('models/export/2', include_optimizer=False, signatures=model.serving)
+        model.save('models/export/2', include_optimizer=False)
 
     def test_load_saved_model(self):
         loaded = tf.saved_model.load('models/export/2')

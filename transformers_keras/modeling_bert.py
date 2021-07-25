@@ -380,7 +380,7 @@ class BertPretrainedModel(tf.keras.Model):
     """Base class for all pretrained model. Can not used to initialize an instance directly."""
 
     @classmethod
-    def from_pretrained(cls, pretrained_model_dir, model_params=None, use_function_api=True, adapter=None, **kwargs):
+    def from_pretrained(cls, pretrained_model_dir, model_params=None, use_functional_api=True, adapter=None, **kwargs):
         config_file, ckpt, _ = parse_pretrained_model_files(pretrained_model_dir)
         if not adapter:
             adapter = BertAdapter(
@@ -403,7 +403,7 @@ class BertPretrainedModel(tf.keras.Model):
             bert=model.bert_model,
             config=model_config,
             ckpt=ckpt,
-            prefix='' if use_function_api else model.name,
+            prefix='' if use_functional_api else model.name,
             **kwargs)
         return model
 
@@ -496,40 +496,6 @@ class Bert(BertPretrainedModel):
         self.initialize_range = initializer_range
         self.return_states = return_states
         self.return_attention_weights = return_attention_weights
-
-    @tf.function(input_signature=[
-        {
-            'input_ids': tf.TensorSpec(shape=(None, None), dtype=tf.int32, name='input_ids'),
-            'segment_ids': tf.TensorSpec(shape=(None, None), dtype=tf.int32, name='segment_ids'),
-            'attention_mask': tf.TensorSpec(shape=(None, None), dtype=tf.int32, name='attention_mask')
-        }
-    ])
-    def serving(self, inputs):
-        input_ids = inputs['input_ids']
-        segment_ids = inputs['segment_ids']
-        attention_mask = inputs['attention_mask']
-        outputs = self(inputs=[input_ids, segment_ids, attention_mask], training=False)
-        outputs = list(outputs)
-        results = {
-            'sequence_output': outputs.pop(0),
-            'pooled_output': outputs.pop(0)
-        }
-        if self.return_states:
-            results.update({'hidden_states': outputs.pop(0)})
-        if self.return_attention_weights:
-            results.update({'attention_weights': outputs.pop(0)})
-        return results
-
-    def call(self, inputs, training=None):
-        input_ids, segment_ids, attention_mask = unpack_inputs_3(inputs)
-        sequence_output, pooled_output, hidden_states, attention_weights = self.bert_model(
-            input_ids, segment_ids=segment_ids, attention_mask=attention_mask, training=training)
-        outputs = (sequence_output, pooled_output)
-        if self.return_states:
-            outputs += (hidden_states, )
-        if self.return_attention_weights:
-            outputs += (attention_weights, )
-        return outputs
 
     def get_config(self):
         config = {
