@@ -10,6 +10,9 @@ from .modeling_bert import (Bert, BertEmbedding, BertEncoder, BertEncoderLayer,
 from .modeling_utils import complete_inputs
 from .question_answering.models import (AlbertForQuestionAnswering,
                                         BertForQuestionAnswering)
+from .sentence_embedding.simcse_models import (HardNegativeSimCSE,
+                                               SupervisedSimCSE,
+                                               UnsupervisedSimCSE)
 from .sequence_classify.models import (AlbertForSequenceClassification,
                                        BertForSequenceClassification)
 
