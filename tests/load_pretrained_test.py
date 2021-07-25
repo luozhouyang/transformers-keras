@@ -1,5 +1,6 @@
 import json
 import os
+import unittest
 
 import tensorflow as tf
 from tokenizers import BertWordPieceTokenizer
@@ -40,7 +41,7 @@ class LoadPretrainedModelTest(tf.test.TestCase):
         input_ids, segment_ids, attention_mask = self._build_bert_inputs()
 
         def _comprare_embedding_output():
-            a = model.backbone.bert_embedding(input_ids, segment_ids)
+            a = model.bert_model.bert_embedding(input_ids, segment_ids)
             embedding = transformer_model.get_layer('bert').embeddings
             b = embedding(input_ids=input_ids, token_type_ids=segment_ids, position_ids=None, training=False)
             self.assertAllClose(a, b)
@@ -95,8 +96,10 @@ class LoadPretrainedModelTest(tf.test.TestCase):
 
     def _do_predict(self, model):
         input_ids = tf.constant([1, 2, 3, 4, 5, 6, 7, 8], shape=(2, 4))
+        segment_ids = tf.constant([0, 0, 0, 0, 1, 1, 1, 1], shape=(2, 4))
+        attention_mask = tf.constant([1, 1, 1, 1, 1, 1, 1, 1], shape=(2, 4))
         # output_1 should be all close to output_2
-        _, outputs_1 = model(inputs=[input_ids], training=False)
+        _, outputs_1 = model(inputs=[input_ids, segment_ids, attention_mask], training=False)
         print(outputs_1)
         # _, outputs_2 = model(input_ids, None, None)
         # print(outputs_2)
@@ -106,12 +109,15 @@ class LoadPretrainedModelTest(tf.test.TestCase):
             # 'chinese_wwm_ext_L-12_H-768_A-12',
             # 'chinese_L-12_H-768_A-12',
             'chinese_roberta_wwm_ext_L-12_H-768_A-12',
-            'chinese_roberta_wwm_large_ext_L-24_H-1024_A-16'
+            # 'chinese_roberta_wwm_large_ext_L-24_H-1024_A-16'
         ]
         for p in model_paths:
             model = Bert.from_pretrained(os.path.join(CHINESE_BERT_PATH, p), verbose=True)
             model.summary()
             self._do_predict(model)
+
+            for mw, bw in zip(model.trainable_weights, model.bert_model.trainable_weights):
+                print('{} -> {}'.format(mw.name, bw.name))
 
         # skip weights
         model = Bert.from_pretrained(
@@ -143,13 +149,14 @@ class LoadPretrainedModelTest(tf.test.TestCase):
         def _build_bert_model(trainable=True):
             input_ids = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name='input_ids')
             segment_ids = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name='segment_ids')
+            attention_mask = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name='attention_mask')
 
             bert = Bert.from_pretrained(os.path.join(CHINESE_BERT_PATH, 'chinese_roberta_wwm_ext_L-12_H-768_A-12'))
             bert.trainable = trainable
 
-            sequence_output, pooled_output = bert(inputs=[input_ids, segment_ids])
+            _, pooled_output = bert(inputs=[input_ids, segment_ids, attention_mask])
             outputs = tf.keras.layers.Dense(2, name='output')(pooled_output)
-            model = tf.keras.Model(inputs=[input_ids, segment_ids], outputs=outputs)
+            model = tf.keras.Model(inputs=[input_ids, segment_ids, attention_mask], outputs=outputs)
             model.compile(loss='binary_cross_entropy', optimizer='adam')
             return model
 

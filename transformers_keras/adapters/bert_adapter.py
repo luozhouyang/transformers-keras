@@ -13,7 +13,7 @@ class BertAdapter(AbstractAdapter):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def adapte_config(self, config_file, **kwrgs):
+    def adapte_config(self, config_file, **kwargs):
         with open(config_file, mode='rt', encoding='utf8') as fin:
             config = json.load(fin)
 
