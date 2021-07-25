@@ -8,6 +8,8 @@
 
 基于`tf.keras`的Transformers系列模型实现。
 
+所有的`Model`都是keras模型，可以直接用于训练模型、评估模型或者导出模型用于部署。
+
 # 目录
 1. [安装](#安装)
 2. [实现的模型](#实现的模型)
@@ -15,11 +17,17 @@
     - 3.1 [BERT支持的预训练权重](#BERT)
     - 3.2 [BERT特征抽取示例](#BERT特征抽取示例)
     - 3.3 [BERT微调模型示例](#BERT微调模型示例)
+        - 3.3.1 [使用函数式API构建BERT微调模型](#使用函数式API构建BERT微调模型)
+        - 3.3.2 [使用预制的BertForSequenceClassification](#使用预制的BertForSequenceClassification)
+        - 3.3.3 [使用预制的BertForQuestionAnswering](#使用预制的BertForQuestionAnswering)
     - 3.4 [BERT模型导出和部署](#BERT导出SavedModel格式的模型用Serving部署)
 4. [ALBERT](#ALBERT)
     - 4.1 [ALBERT支持的预训练权重](#ALBERT)
     - 4.2 [ALBERT特征抽取示例](#ALBERT特征抽取示例)
     - 4.3 [ALBERT微调模型示例](#ALBERT微调模型示例)
+        - 4.3.1 [使用函数式API构建ALBERT微调模型](#使用函数式API构建ALBERT微调模型)
+        - 4.3.2 [使用预制的AlbertForSequenceClassification](#使用预制的AlbertForSequenceClassification)
+        - 4.3.3 [使用预制的AlbertForQuestionAnswering](#使用预制的AlbertForQuestionAnswering)
     - 4.4 [ALBERT模型导出和部署](#ALBERT导出SavedModel格式的模型用Serving部署)
 5. [进阶使用](#进阶使用)
     - 5.1 [加载时跳过一些参数的权重](#加载预训练模型权重的过程中跳过一些参数的权重)
@@ -58,8 +66,9 @@ from transformers_keras import Bert
 # 加载预训练模型权重
 model = Bert.from_pretrained('/path/to/pretrained/bert/model')
 input_ids = tf.constant([[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]])
-# segment_ids and attention_mask 是可选的
-sequence_outputs, pooled_output = model(input_ids, training=False)
+segment_ids = tf.constant([[0, 0, 0, 0, 0, 0, 0, 0, 0, 0]])
+attention_mask = tf.constant([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1]])
+sequence_outputs, pooled_output = model(inputs=[input_ids, segmet_ids, attention_mask], training=False)
 
 ```
 
@@ -74,37 +83,162 @@ model = Bert.from_pretrained(
     return_states=True, 
     return_attention_weights=True)
 input_ids = tf.constant([[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]])
-# segment_ids and attention_mask 是可以选的
-sequence_outputs, pooled_output, hidden_states, attn_weights = model(input_ids, training=False)
+segment_ids = tf.constant([[0, 0, 0, 0, 0, 0, 0, 0, 0, 0]])
+attention_mask = tf.constant([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1]])
+sequence_outputs, pooled_output, hidden_states, attn_weights = model(
+    inputs=[input_ids, segment_ids, attention_mask], training=False)
 
 ```
 
 ### BERT微调模型示例
 
+微调模型有两种风格，一种是使用`keras functional api`构建新的模型，一种是直接`subclassing Model`的方式。
+
+这里提供一个使用`functional api`构建微调模型的例子：
+
+* [使用函数式API构建BERT微调模型](#使用函数式API构建BERT微调模型)
+
+这里提供两个预制的微调模型，都是使用`subclassing`的方式实现的：
+
+* [使用预制的BertForSequenceClassification](#使用预制的BertForSequenceClassification)
+* [使用预制的BertForQuestionAnswering](#使用预制的BertForQuestionAnswering)
+
+
+#### 使用函数式API构建BERT微调模型
+
+以构建一个序列分类网络为例：
+
 ```python
-# 构建一个简单的二分类模型
-def build_bert_classify_model(pretrained_model_dir, **kwargs):
-    input_ids = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name='input_ids')
-    # segment_ids and attention_mask 是可选的
-    segment_ids = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name='segment_ids')
-    # 加载预训练模型权重
-    bert = Bert.from_pretrained(pretrained_model_dir, **kwargs)
+from transformers_keras import Bert
 
-    sequence_outputs, pooled_output = bert(input_ids, segment_ids)
-    outputs = tf.keras.layers.Dense(2, name='output')(pooled_output)
-    model = tf.keras.Model(inputs=[input_ids, segment_ids], outputs=outputs)
-    model.compile(loss='binary_cross_entropy', optimizer='adam')
-    return model
-
-model = build_bert_classify_model(
-            pretrained_model_dir=os.path.join(BASE_DIR, 'chinese_wwm_ext_L-12_H-768_A-12'),
-        )
+input_ids = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name='input_ids')
+segment_ids = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name='segment_ids')
+attention_mask = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name='attention_mask')
+bert = Bert.from_pretrained('/path/to/pretrained/model')
+_, pooled_output = bert(inputs=[input_ids, segment_ids, attention_mask])
+outputs = tf.keras.layers.Dense(2, name='output')(pooled_output)
+model = tf.keras.Model(inputs=[input_ids, segment_ids, attention_mask], outputs=outputs)
+model.compile(loss='binary_cross_entropy', optimizer='adam')
 model.summary()
+```
+
+可以得到以下的网络输出：
+```bash
+Model: "model"
+__________________________________________________________________________________________________
+Layer (type)                    Output Shape         Param #     Connected to                     
+==================================================================================================
+input_ids (InputLayer)          [(None, None)]       0                                            
+__________________________________________________________________________________________________
+segment_ids (InputLayer)        [(None, None)]       0                                            
+__________________________________________________________________________________________________
+attention_mask (InputLayer)     [(None, None)]       0                                            
+__________________________________________________________________________________________________
+bert (Bert)                     [(None, None, 768),  102267648   input_ids[0][0]                  
+                                                                 segment_ids[0][0]                
+                                                                 attention_mask[0][0]             
+__________________________________________________________________________________________________
+output (Dense)                  (None, 2)            1538        bert[0][1]                       
+==================================================================================================
+Total params: 102,269,186
+Trainable params: 102,269,186
+Non-trainable params: 0
+__________________________________________________________________________________________________
+```
+
+#### 使用预制的BertForSequenceClassification
+
+你可以使用BERT构建序列的二分类网络：
+
+```python
+from transformers_keras import BertForSequenceClassification
+
+model = BertForSequenceClassification.from_pretrained('/path/to/pretrained/model')
+model.summary()
+
+model.compile(
+    loss='binary_crossentropy',
+    optimizer='adam',
+    metrics=['acc']
+)
+model.fit(train_dataset, epoch=10, callbacks=[])
+```
+
+可以得到下面的模型输出：
+```bash
+Model: "bert_for_sequence_classification"
+__________________________________________________________________________________________________
+Layer (type)                    Output Shape         Param #     Connected to                     
+==================================================================================================
+input_ids (InputLayer)          [(None, None)]       0                                            
+__________________________________________________________________________________________________
+segment_ids (InputLayer)        [(None, None)]       0                                            
+__________________________________________________________________________________________________
+attention_mask (InputLayer)     [(None, None)]       0                                            
+__________________________________________________________________________________________________
+bert (BertModel)                ((None, None, 768),  59740416    input_ids[0][0]                  
+                                                                 segment_ids[0][0]                
+                                                                 attention_mask[0][0]             
+__________________________________________________________________________________________________
+dense (Dense)                   (None, 2)            1538        bert[0][1]                       
+==================================================================================================
+Total params: 59,741,954
+Trainable params: 59,741,954
+Non-trainable params: 0
+__________________________________________________________________________________________________
+```
+
+#### 使用预制的BertForQuestionAnswering
+
+另一个例子，使用BERT来做Question Answering：
+
+```python
+from transformers_keras import BertForQuestionAnswering
+
+model = BertForQuestionAnswering.from_pretrained('/path/to/pretrained/model')
+model.summary()
+
+model.compile(
+    loss='sparse_categorical_crossentropy',
+    optimizer='adam',
+    metrics=['acc']
+)
+model.fit(train_dataset, epoch=10, callbacks=[])
+```
+
+可以得到下面的模型输出：
+```bash
+Model: "bert_for_question_answering"
+__________________________________________________________________________________________________
+Layer (type)                    Output Shape         Param #     Connected to                     
+==================================================================================================
+input_ids (InputLayer)          [(None, None)]       0                                            
+__________________________________________________________________________________________________
+segment_ids (InputLayer)        [(None, None)]       0                                            
+__________________________________________________________________________________________________
+attention_mask (InputLayer)     [(None, None)]       0                                            
+__________________________________________________________________________________________________
+bert (BertModel)                ((None, None, 768),  59740416    input_ids[0][0]                  
+                                                                 segment_ids[0][0]                
+                                                                 attention_mask[0][0]             
+__________________________________________________________________________________________________
+dense (Dense)                   (None, None, 2)      1538        bert[0][0]                       
+__________________________________________________________________________________________________
+head (Lambda)                   (None, None)         0           dense[0][0]                      
+__________________________________________________________________________________________________
+tail (Lambda)                   (None, None)         0           dense[0][0]                      
+==================================================================================================
+Total params: 59,741,954
+Trainable params: 59,741,954
+Non-trainable params: 0
+__________________________________________________________________________________________________
 ```
 
 ### BERT导出SavedModel格式的模型用Serving部署
 
-你可以很方便地把模型转换成SavedModel格式。这里是一个示例:
+你可以很方便地把模型转换成SavedModel格式。
+
+这里是直接把BERT模型导出部署的示例:
 
 ```python
 # 加载预训练模型权重
@@ -112,11 +246,12 @@ model = Bert.from_pretrained(
     '/path/to/pretrained/bert/model', 
     return_states=True, 
     return_attention_weights=True)
-# 导出SavedModel格式的模型, model.serving 定义了模型的输入输出
-model.save('/path/to/save', signatures=model.serving)
+model.save('/path/to/save')
 ```
 
 接下来，就可以使用 [tensorflow/serving](https://github.com/tensorflow/serving) 来部署模型了。
+
+> 本项目所有的模型，都可以使用这种方式导出成SavedModel格式，然后直接用serving部署。
 
 
 ## ALBERT
@@ -133,8 +268,9 @@ from transformers_keras import Albert
 # 加载预训练权重
 model = Albert.from_pretrained('/path/to/pretrained/albert/model')
 input_ids = tf.constant([[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]])
-# segment_ids and attention_mask 是可选的
-sequence_outputs, pooled_output = model(input_ids, training=False)
+segment_ids = tf.constant([[0, 0, 0, 0, 0, 0, 0, 0, 0, 0]])
+attention_mask = tf.constant([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1]])
+sequence_outputs, pooled_output = model(inputs=[input_ids, segment_ids, attention_mask], training=False)
 ```
 
 另外，可以通过构造器参数 `return_states=True` 和 `return_attention_weights=True` 来获取每一层的 `hidden_states` 和 `attention_weights` 输出:
@@ -149,32 +285,161 @@ model = Albert.from_pretrained(
     return_attention_weights=True)
 
 input_ids = tf.constant([[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]])
-# segment_ids and attention_mask 是可选的
-sequence_outputs, pooled_output, states, attn_weights = model(input_ids, training=False)
+segment_ids = tf.constant([[0, 0, 0, 0, 0, 0, 0, 0, 0, 0]])
+attention_mask = tf.constant([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1]])
+sequence_outputs, pooled_output, states, attn_weights = model(
+    inputs=[input_ids, segment_ids, attention_mask], training=False)
 ```
 
 ### ALBERT微调模型示例
 
+
+微调模型有两种风格，一种是使用`keras functional api`构建新的模型，一种是直接`subclassing Model`的方式。
+
+这里提供一个使用`functional api`构建微调模型的例子：
+
+* [使用函数式API构建ALBERT微调模型](#使用函数式API构建ALBERT微调模型)
+
+这里提供两个预制的微调模型，都是使用`subclassing`的方式实现的：
+
+* [使用预制的AlbertForSequenceClassification](#使用预制的AlbertForSequenceClassification)
+* [使用预制的AlbertForQuestionAnswering](#使用预制的AlbertForQuestionAnswering)
+
+#### 使用函数式API构建ALBERT微调模型
+
+以构建一个序列分类网络为例：
+
 ```python
+input_ids = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name='input_ids')
+segment_ids = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name='segment_ids')
+attention_mask = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name='attention_mask')
+albert = Albert.from_pretrained(os.path.join(BASE_DIR, 'albert_base_zh'))
+albert.trainable = trainable
+_, pooled_output = albert(inputs=[input_ids, segment_ids, attention_mask])
+outputs = tf.keras.layers.Dense(2, name='output')(pooled_output)
+model = tf.keras.Model(inputs=[input_ids, segment_ids, attention_mask], outputs=outputs)
+model.compile(loss='binary_cross_entropy', optimizer='adam')
 
-# Used to fine-tuning 
-def build_albert_classify_model(pretrained_model_dir, **kwargs):
-    input_ids = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name='input_ids')
-    # segment_ids and attention_mask are optional
-    segment_ids = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name='segment_ids')
-
-    albert = Albert.from_pretrained(pretrained_model_dir, **kwargs)
-
-    sequence_outputs, pooled_output = albert(input_ids, segment_ids)
-    outputs = tf.keras.layers.Dense(2, name='output')(pooled_output)
-    model = tf.keras.Model(inputs=[input_ids, segment_ids], outputs=outputs)
-    model.compile(loss='binary_cross_entropy', optimizer='adam')
-    return model
-
-model = build_albert_classify_model(
-            pretrained_model_dir=os.path.join(BASE_DIR, 'albert_base'),
-        )
 model.summary()
+```
+
+可以得到以下网络输出：
+
+````bash
+Model: "model"
+__________________________________________________________________________________________________
+Layer (type)                    Output Shape         Param #     Connected to                     
+==================================================================================================
+input_ids (InputLayer)          [(None, None)]       0                                            
+__________________________________________________________________________________________________
+segment_ids (InputLayer)        [(None, None)]       0                                            
+__________________________________________________________________________________________________
+attention_mask (InputLayer)     [(None, None)]       0                                            
+__________________________________________________________________________________________________
+albert (Albert)                 [(None, None, 768),  10547968    input_ids[0][0]                  
+                                                                 segment_ids[0][0]                
+                                                                 attention_mask[0][0]             
+__________________________________________________________________________________________________
+output (Dense)                  (None, 2)            1538        albert[0][1]                     
+==================================================================================================
+Total params: 10,549,506
+Trainable params: 10,549,506
+Non-trainable params: 0
+__________________________________________________________________________________________________
+
+```
+
+
+#### 使用预制的AlbertForSequenceClassification
+
+你可以使用ALBERT构建序列的二分类网络：
+
+```python
+from transformers_keras import AlbertForSequenceClassification
+
+model = AlbertForSequenceClassification.from_pretrained('/path/to/pretrained/model')
+model.summary()
+
+model.compile(
+    loss='binary_crossentropy',
+    optimizer='adam',
+    metrics=['acc']
+)
+model.fit(train_dataset, epoch=10, callbacks=[])
+
+```
+
+可以得到下面的模型输出：
+
+```bash
+Model: "albert_for_sequence_classification"
+__________________________________________________________________________________________________
+Layer (type)                    Output Shape         Param #     Connected to                     
+==================================================================================================
+input_ids (InputLayer)          [(None, None)]       0                                            
+__________________________________________________________________________________________________
+segment_ids (InputLayer)        [(None, None)]       0                                            
+__________________________________________________________________________________________________
+attention_mask (InputLayer)     [(None, None)]       0                                            
+__________________________________________________________________________________________________
+albert (AlbertModel)            ((None, None, 768),  10547968    input_ids[0][0]                  
+                                                                 segment_ids[0][0]                
+                                                                 attention_mask[0][0]             
+__________________________________________________________________________________________________
+dense (Dense)                   (None, 2)            1538        albert[0][1]                     
+==================================================================================================
+Total params: 10,549,506
+Trainable params: 10,549,506
+Non-trainable params: 0
+__________________________________________________________________________________________________
+
+```
+
+#### 使用预制的AlbertForQuestionAnswering
+
+另一个例子，使用BERT来做Question Answering：
+
+```python
+from transformers_keras import AlbertForQuestionAnswering
+
+model = AlbertForQuestionAnswering.from_pretrained('/path/to/pretrained/model')
+model.summary()
+
+model.compile(
+    loss='sparse_categorical_crossentropy',
+    optimizer='adam',
+    metrics=['acc']
+)
+model.fit(train_dataset, epoch=10, callbacks=[])
+```
+
+可以得到下面的模型输出：
+
+```bash
+Model: "albert_for_question_answering"
+__________________________________________________________________________________________________
+Layer (type)                    Output Shape         Param #     Connected to                     
+==================================================================================================
+input_ids (InputLayer)          [(None, None)]       0                                            
+__________________________________________________________________________________________________
+segment_ids (InputLayer)        [(None, None)]       0                                            
+__________________________________________________________________________________________________
+attention_mask (InputLayer)     [(None, None)]       0                                            
+__________________________________________________________________________________________________
+albert (AlbertModel)            ((None, None, 768),  10547968    input_ids[0][0]                  
+                                                                 segment_ids[0][0]                
+                                                                 attention_mask[0][0]             
+__________________________________________________________________________________________________
+dense (Dense)                   (None, None, 2)      1538        albert[0][0]                     
+__________________________________________________________________________________________________
+head (Lambda)                   (None, None)         0           dense[0][0]                      
+__________________________________________________________________________________________________
+tail (Lambda)                   (None, None)         0           dense[0][0]                      
+==================================================================================================
+Total params: 10,549,506
+Trainable params: 10,549,506
+Non-trainable params: 0
+__________________________________________________________________________________________________
 ```
 
 
@@ -188,11 +453,12 @@ model = Albert.from_pretrained(
     '/path/to/pretrained/albert/model', 
     return_states=True, 
     return_attention_weights=True)
-# 导出SavedModel格式的模型, model.serving 定义了模型的输入输出
-model.save('/path/to/save', signatures=model.serving)
+model.save('/path/to/save')
 ```
 
 接下来，就可以使用 [tensorflow/serving](https://github.com/tensorflow/serving) 来部署模型了。
+
+> 本项目所有的模型，都可以使用这种方式导出成SavedModel格式，然后直接用serving部署。
 
 
 ## 进阶使用
