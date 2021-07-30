@@ -2,11 +2,17 @@ import unittest
 
 import numpy as np
 import tensorflow as tf
-from transformers_keras.modeling_bert import *
+from transformers_keras.modeling_bert import (
+    Bert,
+    BertEmbedding,
+    BertEncoder,
+    BertEncoderLayer,
+    BertIntermediate,
+    BertPooler,
+)
 
 
 class ModelingBertTest(tf.test.TestCase):
-
     def testBertEmbeddings(self):
         embedding_layer = BertEmbedding(vocab_size=16, max_positions=40)
         inputs = (
@@ -54,13 +60,16 @@ class ModelingBertTest(tf.test.TestCase):
         input_ids = tf.constant(
             [1, 2, 3, 4, 5, 6, 7, 5, 3, 2, 3, 4, 1, 2, 3, 1, 2, 3, 4, 5, 6, 6, 6, 7, 7, 8, 0, 0, 0, 0, 0, 0],
             shape=(2, 16),
-            dtype=np.int32)  # input_ids
+            dtype=np.int32,
+        )  # input_ids
         token_type_ids = np.array(
-            [[0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1],
-             [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1]], dtype=np.int64)  # token_type_ids,
+            [[0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1], [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1]],
+            dtype=np.int64,
+        )  # token_type_ids,
         input_mask = tf.constant(
-            [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0],
-             [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]], dtype=np.float32)  # input_mask
+            [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0], [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]],
+            dtype=np.float32,
+        )  # input_mask
         return input_ids, token_type_ids, input_mask
 
     def _check_bert_outputs(self, return_states=False, return_attention_weights=False):
@@ -69,7 +78,8 @@ class ModelingBertTest(tf.test.TestCase):
             vocab_size=100,
             num_layers=NUM_LAYERS,
             return_states=return_states,
-            return_attention_weights=return_attention_weights)
+            return_attention_weights=return_attention_weights,
+        )
         input_ids, segment_ids, attn_mask = self._build_bert_inputs()
         outputs = model(inputs=[input_ids, segment_ids, attn_mask])
         sequence_outputs, pooled_outputs = outputs[0], outputs[1]
@@ -108,11 +118,7 @@ class ModelingBertTest(tf.test.TestCase):
         self._check_bert_outputs(return_states=False, return_attention_weights=False)
 
     def test_bert_config(self):
-        model = Bert(
-            vocab_size=100,
-            num_layers=2,
-            return_states=True,
-            return_attention_weights=True)
+        model = Bert(vocab_size=100, num_layers=2, return_states=True, return_attention_weights=True)
         config = model.get_config()
         print(config)
 
@@ -123,16 +129,17 @@ class ModelingBertTest(tf.test.TestCase):
         model.summary()
 
     def test_export_saved_model(self):
-        model = Bert(vocab_size=21128, num_layers=12, num_attention_heads=8,
-                     return_states=True, return_attention_weights=True)
+        model = Bert(
+            vocab_size=21128, num_layers=12, num_attention_heads=8, return_states=True, return_attention_weights=True
+        )
         input_ids, segment_ids, input_mask = model.dummy_inputs()
         model(inputs=[input_ids, segment_ids, input_mask])
         model.summary()
-        model.save('models/export/2', include_optimizer=False)
+        model.save("models/export/2", include_optimizer=False)
 
     def test_load_saved_model(self):
-        loaded = tf.saved_model.load('models/export/2')
-        model = loaded.signatures['serving_default']
+        loaded = tf.saved_model.load("models/export/2")
+        model = loaded.signatures["serving_default"]
         print(model.structured_input_signature)
         print(model.structured_outputs)
 

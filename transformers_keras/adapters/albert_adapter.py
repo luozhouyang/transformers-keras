@@ -66,7 +66,7 @@ class AlbertAdapter(AbstractAdapter):
         tf.keras.backend.batch_set_value(zipped_weights)
 
         # check weights
-        self._compoare_weights(mapping, albert, ckpt, **kwargs)
+        self._compare_weights(mapping, albert, ckpt, **kwargs)
 
     def _adapte_embedding_weights(self, self_weight_names, ckpt_weight_names, model_prefix, ckpt_prefix, **kwargs):
         mapping = {}
@@ -169,7 +169,7 @@ class AlbertAdapter(AbstractAdapter):
         mapping.pop(name)
         logging.info('Skip load weight: %s', name)
 
-    def _compoare_weights(self, mapping, albert, ckpt, **kwargs):
+    def _compare_weights(self, mapping, albert, ckpt, **kwargs):
         if not kwargs.get('check_weights', False):
             return
 
