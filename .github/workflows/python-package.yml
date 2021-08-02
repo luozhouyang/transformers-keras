@@ -41,4 +41,5 @@ jobs:
           --ignore transformers_keras/modeling_transformer_test.py \
           --ignore tests/load_pretrained_test.py \
           --ignore tests/question_answering_tests \
-          --ignore tests/sequence_classify_tests
+          --ignore tests/sequence_classify_tests \
+          --ignore tests/token_classification_tests
