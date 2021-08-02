@@ -9,11 +9,13 @@ CHINESE_BERT_PATH = os.environ['CHINESE_BERT_PATH']
 
 class QuestionAnsweringTest(unittest.TestCase):
 
-    def test_build_betr_for_qa_model(self):
+    def test_build_bert_for_qa_model(self):
         m = BertForQuestionAnswering()
         m.summary()
         for w in m.trainable_weights:
             print(w.name)
+
+        m.save('models/bert-for-qa/1')
 
     def test_load_bert_for_qa_pretrained_model(self):
         m = BertForQuestionAnswering.from_pretrained(
@@ -25,6 +27,8 @@ class QuestionAnsweringTest(unittest.TestCase):
             print(w.name)
         for w in m.trainable_weights:
             print(w.numpy())
+
+        m.save('models/bert-for-qa/2')
 
     def test_build_albetr_for_qa_model(self):
         m = AlbertForQuestionAnswering()
