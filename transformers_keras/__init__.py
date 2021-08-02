@@ -2,6 +2,9 @@ import logging
 
 import tensorflow as tf
 
+from token_classification.crf_models import AlertCRFForTokenClassification, BertCRFForTokenClassification, CRFModel
+from token_classification.models import AlbertForTokenClassification, BertForTokenClassification
+
 from .modeling_albert import (
     Albert,
     AlbertEmbedding,
