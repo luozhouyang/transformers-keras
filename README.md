@@ -11,27 +11,18 @@
 所有的`Model`都是keras模型，可以直接用于训练模型、评估模型或者导出模型用于部署。
 
 # 目录
-1. [安装](#安装)
-2. [实现的模型](#实现的模型)
-3. [BERT](#BERT)
-    - 3.1 [BERT支持的预训练权重](#BERT)
-    - 3.2 [BERT特征抽取示例](#BERT特征抽取示例)
-    - 3.3 [BERT微调模型示例](#BERT微调模型示例)
-        - 3.3.1 [使用函数式API构建BERT微调模型](#使用函数式API构建BERT微调模型)
-        - 3.3.2 [使用预制的BertForSequenceClassification](#使用预制的BertForSequenceClassification)
-        - 3.3.3 [使用预制的BertForQuestionAnswering](#使用预制的BertForQuestionAnswering)
-    - 3.4 [BERT模型导出和部署](#BERT导出SavedModel格式的模型用Serving部署)
-4. [ALBERT](#ALBERT)
-    - 4.1 [ALBERT支持的预训练权重](#ALBERT)
-    - 4.2 [ALBERT特征抽取示例](#ALBERT特征抽取示例)
-    - 4.3 [ALBERT微调模型示例](#ALBERT微调模型示例)
-        - 4.3.1 [使用函数式API构建ALBERT微调模型](#使用函数式API构建ALBERT微调模型)
-        - 4.3.2 [使用预制的AlbertForSequenceClassification](#使用预制的AlbertForSequenceClassification)
-        - 4.3.3 [使用预制的AlbertForQuestionAnswering](#使用预制的AlbertForQuestionAnswering)
-    - 4.4 [ALBERT模型导出和部署](#ALBERT导出SavedModel格式的模型用Serving部署)
-5. [进阶使用](#进阶使用)
-    - 5.1 [加载时跳过一些参数的权重](#加载预训练模型权重的过程中跳过一些参数的权重)
-    - 5.2 [加载第三方模型实现的权重](#加载第三方实现的模型的权重)
+- [安装](#安装)
+- [支持加载的预训练权重](#支持加载的预训练权重)
+- [简单使用示例](#简单使用示例)
+    - [BERT特征抽取示例](#BERT特征抽取示例)
+    - [BERT微调模型示例](#BERT微调模型示例)
+        - [使用函数式API构建BERT微调模型](#使用函数式API构建BERT微调模型)
+        - [使用预制的BertForSequenceClassification](#使用预制的BertForSequenceClassification)
+        - [使用预制的BertForQuestionAnswering](#使用预制的BertForQuestionAnswering)
+    - [BERT模型导出和部署](#BERT导出SavedModel格式的模型用Serving部署)
+- [进阶使用](#进阶使用)
+    - [加载时跳过一些参数的权重](#加载预训练模型权重的过程中跳过一些参数的权重)
+    - [加载第三方模型实现的权重](#加载第三方实现的模型的权重)
 
 
 ## 安装
@@ -40,23 +31,23 @@
 pip install -U transformers-keras
 ```
 
-## 实现的模型
-
-- [x] Transformer[*已删除*]
-  * [Attention Is All You Need](https://arxiv.org/abs/1706.03762). 
-  * TensorFlow官方教程:[Transformer model for language understanding](https://www.tensorflow.org/beta/tutorials/text/transformer)
-- [x] BERT
-  * [BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding](https://arxiv.org/abs/1810.04805)
-- [x] ALBERT
-  * [ALBERT: A Lite BERT for Self-supervised Learning of Language Representations](https://arxiv.org/abs/1909.11942)
-
-
-## BERT
+## 支持加载的预训练权重
 
 支持加载的预训练BERT模型权重:
 
 * 所有使用 [google-research/bert](https://github.com/google-research/bert) 训练的**BERT**模型
 * 所有使用 [ymcui/Chinese-BERT-wwm](https://github.com/ymcui/Chinese-BERT-wwm) 训练的**BERT**和**RoBERTa**模型
+
+支持加载的预训练ALBERT模型权重:
+
+* 所有使用 [google-research/albert](https://github.com/google-research/albert) 训练的模型。
+
+
+## 简单使用示例
+
+这里是基于BERT的模型的使用示例。所有基于ALBERT的模型用法和BERT类似，所以这里只使用BERT为例，不再重复用ALBERT举例。
+
+对这个库的模型使用有任何疑问，首先推荐看源代码中的各个模型实现，它们提供了很好的示例。也欢迎开issue讨论。
 
 ### BERT特征抽取示例
 
@@ -244,212 +235,6 @@ ________________________________________________________________________________
 # 加载预训练模型权重
 model = Bert.from_pretrained(
     '/path/to/pretrained/bert/model', 
-    return_states=True, 
-    return_attention_weights=True)
-model.save('/path/to/save')
-```
-
-接下来，就可以使用 [tensorflow/serving](https://github.com/tensorflow/serving) 来部署模型了。
-
-> 本项目所有的模型，都可以使用这种方式导出成SavedModel格式，然后直接用serving部署。
-
-
-## ALBERT
-
-支持加载的预训练ALBERT模型权重:
-
-* 所有使用 [google-research/albert](https://github.com/google-research/albert) 训练的模型。
-
-### ALBERT特征抽取示例
-
-```python
-from transformers_keras import Albert
-
-# 加载预训练权重
-model = Albert.from_pretrained('/path/to/pretrained/albert/model')
-input_ids = tf.constant([[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]])
-segment_ids = tf.constant([[0, 0, 0, 0, 0, 0, 0, 0, 0, 0]])
-attention_mask = tf.constant([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1]])
-sequence_outputs, pooled_output = model(inputs=[input_ids, segment_ids, attention_mask], training=False)
-```
-
-另外，可以通过构造器参数 `return_states=True` 和 `return_attention_weights=True` 来获取每一层的 `hidden_states` 和 `attention_weights` 输出:
-
-```python
-from transformers_keras import Albert
-
-# 加载预训练模型权重
-model = Albert.from_pretrained(
-    '/path/to/pretrained/albert/model', 
-    return_states=True, 
-    return_attention_weights=True)
-
-input_ids = tf.constant([[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]])
-segment_ids = tf.constant([[0, 0, 0, 0, 0, 0, 0, 0, 0, 0]])
-attention_mask = tf.constant([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1]])
-sequence_outputs, pooled_output, states, attn_weights = model(
-    inputs=[input_ids, segment_ids, attention_mask], training=False)
-```
-
-### ALBERT微调模型示例
-
-
-微调模型有两种风格，一种是使用`keras functional api`构建新的模型，一种是直接`subclassing Model`的方式。
-
-这里提供一个使用`functional api`构建微调模型的例子：
-
-* [使用函数式API构建ALBERT微调模型](#使用函数式API构建ALBERT微调模型)
-
-这里提供两个预制的微调模型，都是使用`subclassing`的方式实现的：
-
-* [使用预制的AlbertForSequenceClassification](#使用预制的AlbertForSequenceClassification)
-* [使用预制的AlbertForQuestionAnswering](#使用预制的AlbertForQuestionAnswering)
-
-#### 使用函数式API构建ALBERT微调模型
-
-以构建一个序列分类网络为例：
-
-```python
-
-input_ids = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name='input_ids')
-segment_ids = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name='segment_ids')
-attention_mask = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name='attention_mask')
-albert = Albert.from_pretrained(os.path.join(BASE_DIR, 'albert_base_zh'))
-_, pooled_output = albert(inputs=[input_ids, segment_ids, attention_mask])
-outputs = tf.keras.layers.Dense(2, name='output')(pooled_output)
-model = tf.keras.Model(inputs=[input_ids, segment_ids, attention_mask], outputs=outputs)
-model.compile(loss='binary_cross_entropy', optimizer='adam')
-model.summary()
-```
-
-可以得到以下网络输出：
-
-```bash
-Model: "model_1"
-__________________________________________________________________________________________________
-Layer (type)                    Output Shape         Param #     Connected to                     
-==================================================================================================
-input_ids (InputLayer)          [(None, None)]       0                                            
-__________________________________________________________________________________________________
-segment_ids (InputLayer)        [(None, None)]       0                                            
-__________________________________________________________________________________________________
-attention_mask (InputLayer)     [(None, None)]       0                                            
-__________________________________________________________________________________________________
-albert_1 (Albert)               [(None, None, 768),  10547968    input_ids[0][0]                  
-                                                                 segment_ids[0][0]                
-                                                                 attention_mask[0][0]             
-__________________________________________________________________________________________________
-output (Dense)                  (None, 2)            1538        albert_1[0][1]                   
-==================================================================================================
-Total params: 10,549,506
-Trainable params: 1,538
-Non-trainable params: 10,547,968
-__________________________________________________________________________________________________
-```
-
-
-#### 使用预制的AlbertForSequenceClassification
-
-你可以使用ALBERT构建序列的二分类网络：
-
-```python
-
-from transformers_keras import AlbertForSequenceClassification
-
-model = AlbertForSequenceClassification.from_pretrained('/path/to/pretrained/model')
-model.summary()
-
-model.compile(
-    loss='binary_crossentropy',
-    optimizer='adam',
-    metrics=['acc']
-)
-model.fit(train_dataset, epoch=10, callbacks=[])
-
-```
-
-可以得到下面的模型输出：
-
-```bash
-Model: "albert_for_sequence_classification"
-__________________________________________________________________________________________________
-Layer (type)                    Output Shape         Param #     Connected to                     
-==================================================================================================
-input_ids (InputLayer)          [(None, None)]       0                                            
-__________________________________________________________________________________________________
-segment_ids (InputLayer)        [(None, None)]       0                                            
-__________________________________________________________________________________________________
-attention_mask (InputLayer)     [(None, None)]       0                                            
-__________________________________________________________________________________________________
-albert (AlbertModel)            ((None, None, 768),  10547968    input_ids[0][0]                  
-                                                                 segment_ids[0][0]                
-                                                                 attention_mask[0][0]             
-__________________________________________________________________________________________________
-dense (Dense)                   (None, 2)            1538        albert[0][1]                     
-==================================================================================================
-Total params: 10,549,506
-Trainable params: 10,549,506
-Non-trainable params: 0
-__________________________________________________________________________________________________
-
-```
-
-#### 使用预制的AlbertForQuestionAnswering
-
-另一个例子，使用BERT来做Question Answering：
-
-```python
-from transformers_keras import AlbertForQuestionAnswering
-
-model = AlbertForQuestionAnswering.from_pretrained('/path/to/pretrained/model')
-model.summary()
-
-model.compile(
-    loss='sparse_categorical_crossentropy',
-    optimizer='adam',
-    metrics=['acc']
-)
-model.fit(train_dataset, epoch=10, callbacks=[])
-```
-
-可以得到下面的模型输出：
-
-```bash
-Model: "albert_for_question_answering"
-__________________________________________________________________________________________________
-Layer (type)                    Output Shape         Param #     Connected to                     
-==================================================================================================
-input_ids (InputLayer)          [(None, None)]       0                                            
-__________________________________________________________________________________________________
-segment_ids (InputLayer)        [(None, None)]       0                                            
-__________________________________________________________________________________________________
-attention_mask (InputLayer)     [(None, None)]       0                                            
-__________________________________________________________________________________________________
-albert (AlbertModel)            ((None, None, 768),  10547968    input_ids[0][0]                  
-                                                                 segment_ids[0][0]                
-                                                                 attention_mask[0][0]             
-__________________________________________________________________________________________________
-dense (Dense)                   (None, None, 2)      1538        albert[0][0]                     
-__________________________________________________________________________________________________
-head (Lambda)                   (None, None)         0           dense[0][0]                      
-__________________________________________________________________________________________________
-tail (Lambda)                   (None, None)         0           dense[0][0]                      
-==================================================================================================
-Total params: 10,549,506
-Trainable params: 10,549,506
-Non-trainable params: 0
-__________________________________________________________________________________________________
-```
-
-
-### ALBERT导出SavedModel格式的模型用Serving部署
-
-你可以很方便地把模型转换成SavedModel格式。这里是一个示例:
-
-```python
-# 加载预训练模型权重
-model = Albert.from_pretrained(
-    '/path/to/pretrained/albert/model', 
     return_states=True, 
     return_attention_weights=True)
 model.save('/path/to/save')
