@@ -381,13 +381,27 @@ class AlbertPretrainedModel(tf.keras.Model):
     def from_pretrained(
         cls,
         pretrained_model_dir,
-        model_params=None,
+        override_params=None,
         adapter=None,
         use_functional_api=True,
         check_weights=True,
         verbose=True,
         **kwargs
     ):
+        """Load pretrained albert weights.
+
+        Args:
+            pretrained_model_dir: A file path to pretrained model dir, including ckpt and config files.
+            override_params: Add extra model params or override pretrained model's params to constructor
+            use_functional_api: Python boolean, default is True.
+                When subclassing BertPretrainedModel, you may construct model using Keras' functional API,
+                then you should set use_functional_api=True, otherwise, you should set use_functional_api=False.
+            adapter: An adpater to adapte pretrained weights to this new created model. Default is `AlbertAdapter`.
+                In most case, you do not need to specify a `adapter`.
+            check_weights: Python boolean. If true, check model weights' value after loading weights from ckpt
+            verbose: Python boolean.If True, logging more detailed informations when loadding pretrained weights
+        """
+
         config_file, ckpt, _ = parse_pretrained_model_files(pretrained_model_dir)
         if not adapter:
             adapter = AlbertAdapter(
@@ -398,8 +412,8 @@ class AlbertPretrainedModel(tf.keras.Model):
                 skip_pooler=kwargs.pop("skip_pooler", False),
             )
         model_config = adapter.adapte_config(config_file, **kwargs)
-        if model_params:
-            model_config.update(model_params)
+        if override_params:
+            model_config.update(override_params)
         logging.info("Load model config: \n%s", json.dumps(model_config, indent=4))
         model = cls(**model_config, **kwargs)
         albert_model = getattr(model, "albert_model", None)
@@ -418,7 +432,7 @@ class AlbertPretrainedModel(tf.keras.Model):
         return model
 
     @classmethod
-    def from_config_file(cls, config_file, model_params=None, adapter=None, **kwargs):
+    def from_config_file(cls, config_file, override_params=None, adapter=None, **kwargs):
         if not adapter:
             adapter = AlbertAdapter(
                 skip_token_embedding=kwargs.pop("skip_token_embedding", False),
@@ -427,8 +441,8 @@ class AlbertPretrainedModel(tf.keras.Model):
                 skip_embedding_layernorm=kwargs.pop("skip_embedding_layernorm", False),
             )
         model_config = adapter.adapte_config(config_file, **kwargs)
-        if model_params:
-            model_config.update(model_params)
+        if override_params:
+            model_config.update(override_params)
         logging.info("Load model config: \n%s", json.dumps(model_config, indent=4))
         model = cls(**model_config, **kwargs)
         albert_model = getattr(model, "albert_model", None)

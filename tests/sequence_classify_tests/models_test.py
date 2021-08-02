@@ -18,7 +18,7 @@ class SequenceClassifyModelsTest(unittest.TestCase):
     def test_bert_for_sequence_classification_from_pretrained(self):
         m = BertForSequenceClassification.from_pretrained(
             os.path.join(CHINESE_BERT_PATH, 'chinese_roberta_wwm_ext_L-12_H-768_A-12'),
-            model_params={'num_labels': 2},
+            override_params={'num_labels': 2},
         )
         m.summary()
         for w in m.trainable_weights:
@@ -35,7 +35,7 @@ class SequenceClassifyModelsTest(unittest.TestCase):
     def test_albert_for_sequence_classification_from_pretrained(self):
         m = AlbertForSequenceClassification.from_pretrained(
             os.path.join(os.environ['PRETRAINED_MODE_PATH'], 'albert_base_zh'),
-            model_params={'num_labels': 2},
+            override_params={'num_labels': 2},
         )
         m.summary()
         for w in m.trainable_weights:

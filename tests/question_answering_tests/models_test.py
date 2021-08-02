@@ -20,7 +20,7 @@ class QuestionAnsweringTest(unittest.TestCase):
     def test_load_bert_for_qa_pretrained_model(self):
         m = BertForQuestionAnswering.from_pretrained(
             os.path.join(CHINESE_BERT_PATH, 'chinese_roberta_wwm_ext_L-12_H-768_A-12'),
-            model_params={'num_labels': 2},
+            override_params={'num_labels': 2},
         )
         m.summary()
         for w in m.trainable_weights:
@@ -39,7 +39,7 @@ class QuestionAnsweringTest(unittest.TestCase):
     def test_load_albert_for_qa_pretrained_model(self):
         m = AlbertForQuestionAnswering.from_pretrained(
             os.path.join(os.environ['PRETRAINED_MODE_PATH'], 'albert_base_zh'),
-            model_params={'num_labels': 2},
+            override_params={'num_labels': 2},
         )
         m.summary()
         for w in m.trainable_weights:

@@ -416,13 +416,27 @@ class BertPretrainedModel(tf.keras.Model):
     def from_pretrained(
         cls,
         pretrained_model_dir,
-        model_params=None,
+        override_params=None,
         use_functional_api=True,
         adapter=None,
         check_weights=True,
         verbose=True,
         **kwargs
     ):
+        """Load pretrained bert weights.
+
+        Args:
+            pretrained_model_dir: A file path to pretrained model dir, including ckpt and config files.
+            override_params: Add extra model params or override pretrained model's params to constructor
+            use_functional_api: Python boolean, default is True.
+                When subclassing BertPretrainedModel, you may construct model using Keras' functional API,
+                then you should set use_functional_api=True, otherwise, you should set use_functional_api=False.
+            adapter: An adpater to adapte pretrained weights to this new created model. Default is `BertAdapter`.
+                In most case, you do not need to specify a `adapter`.
+            check_weights: Python boolean. If true, check model weights' value after loading weights from ckpt
+            verbose: Python boolean.If True, logging more detailed informations when loadding pretrained weights
+        """
+
         config_file, ckpt, _ = parse_pretrained_model_files(pretrained_model_dir)
         if not adapter:
             adapter = BertAdapter(
@@ -431,11 +445,10 @@ class BertPretrainedModel(tf.keras.Model):
                 skip_segment_embedding=kwargs.pop("skip_segment_embedding", False),
                 skip_embedding_layernorm=kwargs.pop("skip_embedding_layernorm", False),
                 skip_pooler=kwargs.pop("skip_pooler", False),
-                verbose=kwargs.pop("verbose", False),
             )
         model_config = adapter.adapte_config(config_file, **kwargs)
-        if model_params:
-            model_config.update(model_params)
+        if override_params:
+            model_config.update(override_params)
         logging.info("Load model config: \n%s", json.dumps(model_config, indent=4))
         model = cls(**model_config, **kwargs)
         assert (
@@ -455,7 +468,7 @@ class BertPretrainedModel(tf.keras.Model):
         return model
 
     @classmethod
-    def from_config_file(cls, config_file, model_params=None, adapter=None, **kwargs):
+    def from_config_file(cls, config_file, override_params=None, adapter=None, **kwargs):
         if not adapter:
             adapter = BertAdapter(
                 skip_token_embedding=kwargs.pop("skip_token_embedding", False),
@@ -465,8 +478,8 @@ class BertPretrainedModel(tf.keras.Model):
                 skip_pooler=kwargs.pop("skip_pooler", False),
             )
         model_config = adapter.adapte_config(config_file, **kwargs)
-        if model_params:
-            model_config.update(model_params)
+        if override_params:
+            model_config.update(override_params)
         logging.info("Load model config: \n%s", json.dumps(model_config, indent=4))
         model = cls(**model_config, **kwargs)
         assert (
