@@ -2,10 +2,7 @@ import logging
 
 import tensorflow as tf
 
-from token_classification.crf_models import AlertCRFForTokenClassification, BertCRFForTokenClassification, CRFModel
-from token_classification.models import AlbertForTokenClassification, BertForTokenClassification
-
-from .modeling_albert import (
+from transformers_keras.modeling_albert import (
     Albert,
     AlbertEmbedding,
     AlbertEncoder,
@@ -14,7 +11,7 @@ from .modeling_albert import (
     AlbertModel,
     AlbertPretrainedModel,
 )
-from .modeling_bert import (
+from transformers_keras.modeling_bert import (
     Bert,
     BertEmbedding,
     BertEncoder,
@@ -23,10 +20,16 @@ from .modeling_bert import (
     BertModel,
     BertPretrainedModel,
 )
-from .modeling_utils import complete_inputs
-from .question_answering.models import AlbertForQuestionAnswering, BertForQuestionAnswering
-from .sentence_embedding.simcse_models import HardNegativeSimCSE, SupervisedSimCSE, UnsupervisedSimCSE
-from .sequence_classify.models import AlbertForSequenceClassification, BertForSequenceClassification
+from transformers_keras.modeling_utils import complete_inputs
+from transformers_keras.question_answering.models import AlbertForQuestionAnswering, BertForQuestionAnswering
+from transformers_keras.sentence_embedding.simcse_models import HardNegativeSimCSE, SupervisedSimCSE, UnsupervisedSimCSE
+from transformers_keras.sequence_classify.models import AlbertForSequenceClassification, BertForSequenceClassification
+from transformers_keras.token_classification.crf_models import (
+    AlertCRFForTokenClassification,
+    BertCRFForTokenClassification,
+    CRFModel,
+)
+from transformers_keras.token_classification.models import AlbertForTokenClassification, BertForTokenClassification
 
 __name__ = "transformers_keras"
 __version__ = "0.4.0"

@@ -2,6 +2,7 @@ import os
 import unittest
 
 import tensorflow as tf
+
 from transformers_keras.token_classification.crf_models import (
     AlertCRFForTokenClassification,
     BertCRFForTokenClassification,
@@ -54,6 +55,21 @@ class CRFModelsTest(unittest.TestCase):
         model = m.signatures["serving_default"]
         print(model.structured_input_signature)
         print(model.structured_outputs)
+
+    def test_bert_predict(self):
+        m = BertCRFForTokenClassification(4)
+        input_ids, segment_ids, attention_mask = m.dummy_inputs()
+        dataset = tf.data.Dataset.zip(
+            (
+                tf.data.Dataset.from_tensor_slices([input_ids]),
+                tf.data.Dataset.from_tensor_slices([segment_ids]),
+                tf.data.Dataset.from_tensor_slices([attention_mask]),
+            )
+        )
+        dataset = dataset.map(lambda a, b, c: ({"input_ids": a, "segment_ids": b, "attention_mask": c}, None))
+        pred = m.predict(dataset)
+        print("\npred: ", pred)
+
 
 if __name__ == "__main__":
     unittest.main()

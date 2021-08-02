@@ -9,8 +9,10 @@ def _unpack_data(data):
     """Support sample_weight"""
     if len(data) == 3:
         x, y, sample_weight = data
-    else:
+    elif len(data) == 2:
         x, y, sample_weight = data[0], data[1], None
+    elif len(data) == 1:
+        x, y, sample_weight = data[0], None, None
     return x, y, sample_weight
 
 
@@ -80,6 +82,11 @@ class CRFModel(tf.keras.Model):
         results.update({"loss": loss})
         return results
 
+    def predict_step(self, data):
+        x, _, _ = _unpack_data(data)
+        decode_sequence, potentials, sequence_length, kernel = self(x, training=False)
+        return decode_sequence
+
 
 class BertCRFForTokenClassification(BertPretrainedModel):
     """BERT+CRF use for token classification."""
@@ -133,7 +140,7 @@ class BertCRFForTokenClassification(BertPretrainedModel):
         self.bert_model = bert_model
         self.crf = crf
 
-    @tf.function(
+    @tf.function( # fmt: skip
         input_signature=[{
             "input_ids": tf.TensorSpec(shape=(None, None,), dtype=tf.int32, name="input_ids"), # fmt: skip
             "segment_ids": tf.TensorSpec(shape=(None, None,), dtype=tf.int32, name="segment_ids"), # fmt: skip
@@ -178,6 +185,11 @@ class BertCRFForTokenClassification(BertPretrainedModel):
         results.update({"loss": loss})
         return results
 
+    def predict_step(self, data):
+        x, _, _ = _unpack_data(data)
+        decode_sequence, potentials, sequence_length, kernel = self(x, training=False)
+        return decode_sequence
+
 
 
 class AlertCRFForTokenClassification(AlbertPretrainedModel):
@@ -196,7 +208,7 @@ class AlertCRFForTokenClassification(AlbertPretrainedModel):
         hidden_size=768,
         num_attention_heads=8,
         intermediate_size=3072,
-        activation='gelu',
+        activation="gelu",
         hidden_dropout_rate=0.2,
         attention_dropout_rate=0.1,
         epsilon=1e-12,
@@ -223,7 +235,8 @@ class AlertCRFForTokenClassification(AlbertPretrainedModel):
             attention_dropout_rate=attention_dropout_rate,
             epsilon=epsilon,
             initializer_range=initializer_range,
-            name='albert')
+            name="albert",
+        )
         crf = tfa.layers.CRF(num_labels)
         sequence_outputs, _, _, _ = albert_model(input_ids, segment_ids, attention_mask)
         decode_sequence, potentials, sequence_length, kernel = crf(sequence_outputs)
@@ -281,3 +294,9 @@ class AlertCRFForTokenClassification(AlbertPretrainedModel):
         results = {m.name: m.result() for m in self.metrics}
         results.update({"loss": loss})
         return results
+        
+    def predict_step(self, data):
+        x, _, _ = _unpack_data(data)
+        decode_sequence, potentials, sequence_length, kernel = self(x, training=False)
+        return decode_sequence
+
