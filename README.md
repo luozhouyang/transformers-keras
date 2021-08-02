@@ -20,6 +20,13 @@
         - [使用预制的BertForSequenceClassification](#使用预制的BertForSequenceClassification)
         - [使用预制的BertForQuestionAnswering](#使用预制的BertForQuestionAnswering)
     - [BERT模型导出和部署](#BERT导出SavedModel格式的模型用Serving部署)
+- [完整解决方案](#完整解决方案)
+    - [使用BertForQuestionAnswering实现抽取式问答](#使用BertForQuestionAnswering实现抽取式问答)
+    - [使用BertForTokenClassification实现序列标注](#使用BertForTokenClassification实现序列标注)
+    - [使用BertCRFForTokenClassification实现序列标注](#使用BertCRFForTokenClassification实现序列标注)
+    - [使用BertForSequenceClassification实现文本分类](#使用BertForSequenceClassification实现文本分类)
+    - [使用BertForSentenceEmbedding实现向量抽取](#使用BertForSentenceEmbedding实现向量抽取)
+    - [使用SimCSE实现向量抽取](#使用SimCSE实现向量抽取)
 - [进阶使用](#进阶使用)
     - [加载时跳过一些参数的权重](#加载预训练模型权重的过程中跳过一些参数的权重)
     - [加载第三方模型实现的权重](#加载第三方实现的模型的权重)
@@ -29,6 +36,12 @@
 
 ```bash
 pip install -U transformers-keras
+```
+
+安装依赖：
+
+```bash
+pip install tensorflow tensorflow-addons
 ```
 
 ## 支持加载的预训练权重
@@ -243,6 +256,19 @@ model.save('/path/to/save')
 接下来，就可以使用 [tensorflow/serving](https://github.com/tensorflow/serving) 来部署模型了。
 
 > 本项目所有的模型，都可以使用这种方式导出成SavedModel格式，然后直接用serving部署。
+
+
+## 完整解决方案
+
+目前上述目录提到的模型都已经实现了。但是具体的使用文档还没有更新。
+
+> 其实使用起来非常简单，等不及的朋友可以可以阅读源码，然后自己实现下游各种任务。
+
+TODO：
+
+- [] 集成各个下游任务的数据预处理
+- [] 增加各个下游任务的训练脚本
+- [] 增加各个下游任务完整的使用文档。
 
 
 ## 进阶使用
