@@ -43,7 +43,7 @@ class BertForSequenceClassification(BertPretrainedModel):
         )
 
         _, pooled_output, _, _ = bert_model(input_ids, segment_ids, attention_mask)
-        logits = tf.keras.layers.Dense(num_labels, name="dense")(pooled_output)
+        logits = tf.keras.layers.Dense(num_labels, name="logits")(pooled_output)
         super().__init__(inputs=[input_ids, segment_ids, attention_mask], outputs=[logits], **kwargs)
 
         self.bert_model = bert_model
@@ -97,7 +97,7 @@ class AlbertForSequenceClassification(AlbertPretrainedModel):
         )
 
         _, pooled_output, _, _ = albert_model(input_ids, segment_ids, attention_mask)
-        logits = tf.keras.layers.Dense(num_labels, name="dense")(pooled_output)
+        logits = tf.keras.layers.Dense(num_labels, name="logits")(pooled_output)
         super().__init__(inputs=[input_ids, segment_ids, attention_mask], outputs=[logits], **kwargs)
 
         self.num_labels = num_labels
