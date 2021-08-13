@@ -23,7 +23,10 @@ from transformers_keras.modeling_bert import (
 from transformers_keras.modeling_utils import complete_inputs
 from transformers_keras.question_answering.models import AlbertForQuestionAnswering, BertForQuestionAnswering
 from transformers_keras.sentence_embedding.simcse_models import HardNegativeSimCSE, SupervisedSimCSE, UnsupervisedSimCSE
-from transformers_keras.sequence_classify.models import AlbertForSequenceClassification, BertForSequenceClassification
+from transformers_keras.sequence_classification.models import (
+    AlbertForSequenceClassification,
+    BertForSequenceClassification,
+)
 from transformers_keras.token_classification.crf_models import (
     AlertCRFForTokenClassification,
     BertCRFForTokenClassification,
