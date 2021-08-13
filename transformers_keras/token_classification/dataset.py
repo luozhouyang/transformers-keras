@@ -188,7 +188,7 @@ class TokenClassificationDataset:
     @classmethod
     def _to_dict(cls, dataset):
         dataset = dataset.map(
-            lambda a, b, c, y: ({"input_ids": a, "segment_ids": b, "attention_mask": c}, {"logits": y}),
+            lambda a, b, c, y: ({"input_ids": a, "segment_ids": b, "attention_mask": c}, y),
             num_parallel_calls=tf.data.AUTOTUNE,
         ).prefetch(tf.data.AUTOTUNE)
         return dataset

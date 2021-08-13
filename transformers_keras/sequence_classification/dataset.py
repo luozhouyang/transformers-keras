@@ -109,7 +109,7 @@ class SequenceClassificationDataset:
         dataset = cls._zip_dataset(examples)
         dataset = dataset.filter(lambda a, b, c, y: tf.size(a) <= max_sequence_length)
         if repeat is not None:
-            dataset = dataset.repeat(dataset)
+            dataset = dataset.repeat(repeat)
         dataset = dataset.shuffle(buffer_size=buffer_size, seed=seed, reshuffle_each_iteration=reshuffle_each_iteration)
         dataset = cls._bucketing(
             dataset,
@@ -186,7 +186,7 @@ class SequenceClassificationDataset:
     @classmethod
     def _to_dict(cls, dataset):
         dataset = dataset.map(
-            lambda a, b, c, y: ({"input_ids": a, "segment_ids": b, "attention_mask": c}, {"logits": y}),
+            lambda a, b, c, y: ({"input_ids": a, "segment_ids": b, "attention_mask": c}, y),
             num_parallel_calls=tf.data.AUTOTUNE,
         ).prefetch(tf.data.AUTOTUNE)
         return dataset
