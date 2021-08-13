@@ -2,6 +2,7 @@
 .vscode/
 log/
 logs/
+testdata
 
 models/
 *.imp
