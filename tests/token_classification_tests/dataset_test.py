@@ -2,10 +2,6 @@ import unittest
 
 from transformers_keras.token_classification.dataset import TokenClassificationDataset
 from transformers_keras.token_classification.parser import TokenClassificationExampleParserForChinese
-from transformers_keras.token_classification.tokenizer import (
-    TokenClassificationLabelTokenizer,
-    TokenClassificationTokenizerForChinese,
-)
 
 
 class DatasetTest(unittest.TestCase):

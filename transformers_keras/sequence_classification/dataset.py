@@ -19,20 +19,31 @@ class SequenceClassificationDataset:
         cls,
         input_files,
         batch_size=64,
+        repeat=None,
         max_sequence_length=512,
         bucket_boundaries=[50, 100, 150, 200, 250, 300, 350, 400, 450, 500],
+        bucket_batch_sizes=None,
         buffer_size=1000000,
         seed=None,
         reshuffle_each_iteration=True,
         pad_id=0,
         auto_shard_policy=None,
+        drop_remainder=False,
         **kwargs
     ):
         dataset = cls._read_tfrecord(input_files, **kwargs)
         dataset = dataset.filter(lambda a, b, c, y: tf.size(a) <= max_sequence_length)
+        if repeat is not None:
+            dataset = dataset.repeat(repeat)
         dataset = dataset.shuffle(buffer_size=buffer_size, seed=seed, reshuffle_each_iteration=reshuffle_each_iteration)
         dataset = cls._bucketing(
-            dataset, batch_size=batch_size, pad_id=pad_id, bucket_boundaries=bucket_boundaries, **kwargs
+            dataset,
+            batch_size=batch_size,
+            pad_id=pad_id,
+            bucket_boundaries=bucket_boundaries,
+            bucket_batch_sizes=bucket_batch_sizes,
+            drop_remainder=drop_remainder,
+            **kwargs
         )
         dataset = cls._to_dict(dataset)
         dataset = cls._auto_shard(dataset, auto_shard_policy=auto_shard_policy)
@@ -44,13 +55,16 @@ class SequenceClassificationDataset:
         input_files,
         fn,
         batch_size=64,
+        repeat=None,
         max_sequence_length=512,
         bucket_boundaries=[50, 100, 150, 200, 250, 300, 350, 400, 450, 500],
+        bucket_batch_sizes=None,
         buffer_size=1000000,
         seed=None,
         reshuffle_each_iteration=True,
         pad_id=0,
         auto_shard_policy=None,
+        drop_remainder=False,
         verbose=True,
         **kwargs
     ):
@@ -58,13 +72,16 @@ class SequenceClassificationDataset:
         return cls.from_examples(
             examples,
             batch_size=batch_size,
+            repeat=repeat,
             max_sequence_length=max_sequence_length,
             bucket_boundaries=bucket_boundaries,
+            bucket_batch_sizes=bucket_batch_sizes,
             buffer_size=buffer_size,
             seed=seed,
             reshuffle_each_iteration=reshuffle_each_iteration,
             pad_id=pad_id,
             auto_shard_policy=auto_shard_policy,
+            drop_remainder=drop_remainder,
             verbose=verbose,
             **kwargs
         )
@@ -74,13 +91,16 @@ class SequenceClassificationDataset:
         cls,
         examples: List[SequenceClassificationExample],
         batch_size=64,
+        repeat=None,
         max_sequence_length=512,
         bucket_boundaries=[50, 100, 150, 200, 250, 300, 350, 400, 450, 500],
+        bucket_batch_sizes=None,
         buffer_size=1000000,
         seed=None,
         reshuffle_each_iteration=True,
         pad_id=0,
         auto_shard_policy=None,
+        drop_remainder=False,
         verbose=True,
         **kwargs
     ):
@@ -88,9 +108,17 @@ class SequenceClassificationDataset:
         cls._show_examples(examples, n=5, verbose=verbose, **kwargs)
         dataset = cls._zip_dataset(examples)
         dataset = dataset.filter(lambda a, b, c, y: tf.size(a) <= max_sequence_length)
+        if repeat is not None:
+            dataset = dataset.repeat(dataset)
         dataset = dataset.shuffle(buffer_size=buffer_size, seed=seed, reshuffle_each_iteration=reshuffle_each_iteration)
         dataset = cls._bucketing(
-            dataset, batch_size=batch_size, pad_id=pad_id, bucket_boundaries=bucket_boundaries, **kwargs
+            dataset,
+            batch_size=batch_size,
+            pad_id=pad_id,
+            bucket_boundaries=bucket_boundaries,
+            bucket_batch_sizes=bucket_batch_sizes,
+            drop_remainder=drop_remainder,
+            **kwargs
         )
         dataset = cls._to_dict(dataset)
         dataset = cls._auto_shard(dataset, auto_shard_policy=auto_shard_policy)
@@ -132,9 +160,16 @@ class SequenceClassificationDataset:
         batch_size=64,
         pad_id=0,
         bucket_boundaries=[50, 100, 150, 200, 250, 300, 350, 400, 450, 500],
+        bucket_batch_sizes=None,
+        drop_remainder=False,
         **kwargs
     ):
-        bucket_batch_sizes = [batch_size] * (len(bucket_boundaries) + 1)
+        if bucket_batch_sizes is None:
+            bucket_batch_sizes = [batch_size] * (len(bucket_boundaries) + 1)
+        assert (
+            len(bucket_batch_sizes) == len(bucket_boundaries) + 1
+        ), "len(bucket_batch_sizes) should equals len(bucket_doundaries) + 1"
+
         pad_id = tf.constant(pad_id, dtype=tf.int32)
         # fmt: off
         dataset = dataset.apply(tf.data.experimental.bucket_by_sequence_length(
@@ -142,7 +177,8 @@ class SequenceClassificationDataset:
             bucket_boundaries=bucket_boundaries,
             bucket_batch_sizes=bucket_batch_sizes,
             padded_shapes=([None, ], [None, ], [None, ], []),
-            padding_values=(pad_id, pad_id, pad_id, None)
+            padding_values=(pad_id, pad_id, pad_id, None),
+            drop_remainder=drop_remainder,
         )).prefetch(tf.data.AUTOTUNE)
         # fmt: on
         return dataset

@@ -34,15 +34,18 @@ class SimCSEDataset:
         cls,
         input_files,
         batch_size=64,
+        repeat=None,
         with_pos_sequence=False,
         with_neg_sequence=False,
         max_sequence_length=512,
         bucket_boundaries=[50, 100, 150, 200, 250, 300, 350, 400, 450, 500],
+        bucket_batch_sizes=None,
         buffer_size=1000000,
         seed=None,
         reshuffle_each_iteration=True,
         pad_id=0,
         auto_shard_policy=None,
+        drop_remainder=True,
         **kwargs
     ):
         dataset = cls._read_tfrecord(
@@ -51,15 +54,18 @@ class SimCSEDataset:
         return cls._build(
             dataset,
             batch_size=batch_size,
+            repeat=repeat,
             with_pos_sequence=with_pos_sequence,
             with_neg_sequence=with_neg_sequence,
             max_sequence_length=max_sequence_length,
             bucket_boundaries=bucket_boundaries,
+            bucket_batch_sizes=bucket_batch_sizes,
             buffer_size=buffer_size,
             seed=seed,
             reshuffle_each_iteration=reshuffle_each_iteration,
             pad_id=pad_id,
             auto_shard_policy=auto_shard_policy,
+            drop_remainder=drop_remainder,
             **kwargs,
         )
 
@@ -69,15 +75,18 @@ class SimCSEDataset:
         input_files,
         fn,
         batch_size=64,
+        repeat=None,
         with_pos_sequence=False,
         with_neg_sequence=False,
         max_sequence_length=512,
         bucket_boundaries=[50, 100, 150, 200, 250, 300, 350, 400, 450, 500],
+        bucket_batch_sizes=None,
         buffer_size=1000000,
         seed=None,
         reshuffle_each_iteration=True,
         pad_id=0,
         auto_shard_policy=None,
+        drop_remainder=True,
         verbose=True,
         **kwargs
     ):
@@ -87,15 +96,18 @@ class SimCSEDataset:
         return cls.from_examples(
             examples,
             batch_size=batch_size,
+            repeat=repeat,
             with_pos_sequence=with_pos_sequence,
             with_neg_sequence=with_neg_sequence,
             max_sequence_length=max_sequence_length,
             bucket_boundaries=bucket_boundaries,
+            bucket_batch_sizes=bucket_batch_sizes,
             buffer_size=buffer_size,
             seed=seed,
             reshuffle_each_iteration=reshuffle_each_iteration,
             pad_id=pad_id,
             auto_shard_policy=auto_shard_policy,
+            drop_remainder=drop_remainder,
             verbose=verbose,
             **kwargs,
         )
@@ -107,13 +119,16 @@ class SimCSEDataset:
         with_pos_sequence=False,
         with_neg_sequence=False,
         batch_size=64,
+        repeat=None,
         max_sequence_length=512,
         bucket_boundaries=[50, 100, 150, 200, 250, 300, 350, 400, 450, 500],
+        bucket_batch_sizes=None,
         buffer_size=1000000,
         seed=None,
         reshuffle_each_iteration=True,
         pad_id=0,
         auto_shard_policy=None,
+        drop_remainder=True,
         verbose=True,
         **kwargs
     ):
@@ -125,15 +140,18 @@ class SimCSEDataset:
         return cls._build(
             dataset,
             batch_size=batch_size,
+            repeat=repeat,
             with_pos_sequence=with_pos_sequence,
             with_neg_sequence=with_neg_sequence,
             max_sequence_length=max_sequence_length,
             bucket_boundaries=bucket_boundaries,
+            bucket_batch_sizes=bucket_batch_sizes,
             buffer_size=buffer_size,
             seed=seed,
             reshuffle_each_iteration=reshuffle_each_iteration,
             pad_id=pad_id,
             auto_shard_policy=auto_shard_policy,
+            drop_remainder=drop_remainder,
             **kwargs,
         )
 
@@ -144,13 +162,16 @@ class SimCSEDataset:
         with_pos_sequence=False,
         with_neg_sequence=False,
         batch_size=64,
+        repeat=None,
         max_sequence_length=512,
         bucket_boundaries=[50, 100, 150, 200, 250, 300, 350, 400, 450, 500],
+        bucket_batch_sizes=None,
         buffer_size=1000000,
         seed=None,
         reshuffle_each_iteration=True,
         pad_id=0,
         auto_shard_policy=None,
+        drop_remainder=True,
         **kwargs
     ):
         dataset = cls._filter_dataset(
@@ -160,6 +181,8 @@ class SimCSEDataset:
             with_neg_sequence=with_neg_sequence,
             **kwargs,
         )
+        if repeat is not None:
+            dataset = dataset.repeat(repeat)
         dataset = dataset.shuffle(
             buffer_size=buffer_size,
             seed=seed,
@@ -172,6 +195,8 @@ class SimCSEDataset:
             batch_size=batch_size,
             pad_id=pad_id,
             bucket_boundaries=bucket_boundaries,
+            bucket_batch_sizes=bucket_batch_sizes,
+            drop_remainder=drop_remainder,
             **kwargs,
         )
         dataset = cls._to_dict(
@@ -264,9 +289,16 @@ class SimCSEDataset:
         batch_size=64,
         pad_id=0,
         bucket_boundaries=[50, 100, 150, 200, 250, 300, 350, 400, 450, 500],
+        bucket_batch_sizes=None,
+        drop_remainder=True,
         **kwargs
     ):
-        bucket_batch_sizes = [batch_size] * (len(bucket_boundaries) + 1)
+        if bucket_batch_sizes is None:
+            bucket_batch_sizes = [batch_size] * (len(bucket_boundaries) + 1)
+        assert (
+            len(bucket_batch_sizes) == len(bucket_boundaries) + 1
+        ), "len(bucket_batch_sizes) should equals len(bucket_doundaries) + 1"
+
         pad = tf.constant(pad_id, dtype=tf.int32)
         # fmt: off
         if with_neg_sequence:
@@ -279,7 +311,7 @@ class SimCSEDataset:
                     bucket_batch_sizes=bucket_batch_sizes,
                     padded_shapes=([None,], [None,], [None,], [None,], [None,], [None,], [None,], [None,], [None,]),
                     padding_values=(pad, pad, pad, pad, pad, pad, pad, pad, pad),
-                    drop_remainder=True,
+                    drop_remainder=drop_remainder,
                 )
             ).prefetch(tf.data.AUTOTUNE)
         elif with_pos_sequence:
@@ -290,7 +322,7 @@ class SimCSEDataset:
                     bucket_batch_sizes=bucket_batch_sizes,
                     padded_shapes=([None,], [None,], [None,], [None,], [None,], [None,]),
                     padding_values=(pad, pad, pad, pad, pad, pad),
-                    drop_remainder=True,
+                    drop_remainder=drop_remainder,
                 )
             ).prefetch(tf.data.AUTOTUNE)
         else:
@@ -301,7 +333,7 @@ class SimCSEDataset:
                     bucket_batch_sizes=bucket_batch_sizes,
                     padded_shapes=([None, ], [None, ], [None, ]),
                     padding_values=(pad, pad, pad),
-                    drop_remainder=True,
+                    drop_remainder=drop_remainder,
                 )
             ).prefetch(tf.data.AUTOTUNE)
         # fmt: on
