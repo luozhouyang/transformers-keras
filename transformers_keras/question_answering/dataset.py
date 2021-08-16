@@ -11,8 +11,51 @@ QuestionAnsweringExample = namedtuple(
 )
 
 
+class _QuestionAnsweringDatasetTransform:
+    """Question answering dataset transformation."""
+
+    @classmethod
+    def examples_to_tfrecord(cls, examples: List[QuestionAnsweringExample], output_files, **kwargs):
+        if isinstance(output_files, str):
+            output_files = [output_files]
+        writers = [tf.io.TFRecordWriter(f) for f in output_files]
+        idx = 0
+        for example in examples:
+            tfrecord_example = cls._example_to_tfrecord(example)
+            writers[idx].write(tfrecord_example.SerializeToString())
+            idx += 1
+            idx = idx % len(writers)
+        for w in writers:
+            w.close()
+        logging.info("Done!")
+
+    @classmethod
+    def _example_to_tfrecord(cls, example, **kwargs):
+        feature = {
+            "input_ids": cls._int64_feature([int(x) for x in example.input_ids]),
+            "segment_ids": cls._int64_feature([int(x) for x in example.segment_ids]),
+            "attention_mask": cls._int64_feature([int(x) for x in example.attention_mask]),
+            "start": cls._int64_feature([int(x) for x in example.start]),
+            "end": cls._int64_feature([int(x) for x in example.end]),
+        }
+        return tf.train.Example(features=tf.train.Features(feature=feature))
+
+    @classmethod
+    def _int64_feature(cls, values):
+        return tf.train.Feature(int64_list=tf.train.Int64List(value=values))
+
+
 class QuestionAnsweringDataset:
     """Dataset builder for question answering models."""
+
+    @classmethod
+    def jsonl_to_tfrecord(cls, input_files, fn, output_files, max_sequence_length=512, **kwargs):
+        examples = cls._read_jsonl_examples(input_files, fn, max_sequence_length=max_sequence_length, **kwargs)
+        _QuestionAnsweringDatasetTransform.examples_to_tfrecord(examples, output_files, **kwargs)
+
+    @classmethod
+    def examples_to_tfrecord(cls, examples: List[QuestionAnsweringExample], output_files, **kwargs):
+        _QuestionAnsweringDatasetTransform.examples_to_tfrecord(examples, output_files, **kwargs)
 
     @classmethod
     def from_tfrecord_files(
@@ -26,6 +69,7 @@ class QuestionAnsweringDataset:
         buffer_size=1000000,
         seed=None,
         reshuffle_each_iteration=True,
+        pad_id=0,
         drop_remainder=False,
         auto_shard_policy=None,
         **kwargs
@@ -38,7 +82,7 @@ class QuestionAnsweringDataset:
         dataset = cls._bucketing(
             dataset,
             batch_size=batch_size,
-            pad_id=0,
+            pad_id=pad_id,
             bucket_boundaries=bucket_boundaries,
             bucket_batch_sizes=bucket_batch_sizes,
             drop_remainder=drop_remainder,
@@ -64,6 +108,7 @@ class QuestionAnsweringDataset:
         drop_remainder=False,
         pad_id=0,
         auto_shard_policy=None,
+        verbose=True,
         **kwargs
     ):
         """Build dataset from jsonl files.
@@ -101,6 +146,7 @@ class QuestionAnsweringDataset:
             pad_id=pad_id,
             auto_shard_policy=auto_shard_policy,
             drop_remainder=drop_remainder,
+            verbose=verbose,
             **kwargs,
         )
 
@@ -119,9 +165,12 @@ class QuestionAnsweringDataset:
         pad_id=0,
         auto_shard_policy=None,
         drop_remainder=False,
+        verbose=True,
         **kwargs
     ):
         logging.info("Load %d examples in total.", len(examples))
+        if verbose:
+            cls._show_examples(examples, n=5, **kwargs)
         dataset = cls._zip_dataset(examples)
         dataset = dataset.filter(
             lambda a, b, c, x, y: tf.size(a) <= max_sequence_length,
@@ -141,6 +190,13 @@ class QuestionAnsweringDataset:
         dataset = cls._to_dict(dataset)
         dataset = cls._auto_shard(dataset, auto_shard_policy=auto_shard_policy)
         return dataset
+
+    @classmethod
+    def _show_examples(cls, examples, n=5, **kwargs):
+        n = min(n, len(examples))
+        logging.info("Showing %d examples.", n)
+        for i in range(n):
+            logging.info("NO.%d example: %s", i, examples[i])
 
     @classmethod
     def _zip_dataset(cls, examples: List[QuestionAnsweringExample]):
@@ -254,7 +310,7 @@ class QuestionAnsweringDataset:
                 tf.cast(tf.sparse.to_dense(x["segment_ids"]), tf.int32),
                 tf.cast(tf.sparse.to_dense(x["attention_mask"]), tf.int32),
                 tf.cast(tf.squeeze(tf.sparse.to_dense(x["start"])), tf.int32),
-                tf.cast(tf.squeeze(tf.sparse.to_dense(x["end"])) - 1, tf.int32),
+                tf.cast(tf.squeeze(tf.sparse.to_dense(x["end"])), tf.int32),
             ),
             num_parallel_calls=tf.data.AUTOTUNE,
         ).prefetch(tf.data.AUTOTUNE)

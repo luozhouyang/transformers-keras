@@ -9,7 +9,22 @@ class DatasetTest(unittest.TestCase):
 
     def test_question_answering_dataset_for_chinese(self):
         parse_examples_fn = QuestionAnsweringExampleParserForChinese(
-            vocab_file="testdata/vocab.bert.txt", context_key="passage"
+            vocab_file="testdata/vocab.bert.txt",
+            context_key="passage",
+            context_first=True,
+        )
+        d = QuestionAnsweringDataset.from_jsonl_files(
+            input_files="testdata/qa.sogouqa.jsonl",
+            fn=parse_examples_fn,
+            batch_size=4,
+        )
+        print()
+        print(next(iter(d)))
+
+        parse_examples_fn = QuestionAnsweringExampleParserForChinese(
+            vocab_file="testdata/vocab.bert.txt",
+            context_key="passage",
+            context_first=False,
         )
         d = QuestionAnsweringDataset.from_jsonl_files(
             input_files="testdata/qa.sogouqa.jsonl",

@@ -1,5 +1,4 @@
 import abc
-import json
 import re
 from typing import List
 
@@ -21,7 +20,14 @@ class QuestionAnsweringExampleParserForChinese(AbstractQustionAnsweringExamplePa
     """Question answering example composer for Chinese."""
 
     def __init__(
-        self, vocab_file, question_key="question", context_key="context", answer_key="answer", sep_chars=None, **kwargs
+        self,
+        vocab_file,
+        question_key="question",
+        context_key="context",
+        answer_key="answer",
+        sep_chars=None,
+        context_first=True,
+        **kwargs
     ) -> None:
         super().__init__()
         self.tokenizer = QuestionAnsweringTokenizerForChinese.from_file(vocab_file=vocab_file, **kwargs)
@@ -29,8 +35,45 @@ class QuestionAnsweringExampleParserForChinese(AbstractQustionAnsweringExamplePa
         self.context_key = context_key
         self.answer_key = answer_key
         self.sep_chars = sep_chars or CHINESE_SEP_CHARACTERS
+        self.context_first = context_first
 
     def __call__(self, instance, max_sequence_length=512, **kwargs) -> List[QuestionAnsweringExample]:
+        if self.context_first:
+            return self._parse_examples_context_first(instance, max_sequence_length=max_sequence_length, **kwargs)
+        return self._parse_examples_question_first(instance, max_sequence_length=max_sequence_length, **kwargs)
+
+    def _parse_examples_context_first(self, instance, max_sequence_length=512, **kwargs):
+        question = instance[self.question_key]
+        question_encoding = self.tokenizer.encode(question, add_cls=False, add_sep=True)
+        max_context_length = max_sequence_length - len(question) - 3
+        context_examples = self._process_context_examples(
+            instance[self.context_key], max_context_length=max_context_length, **kwargs
+        )
+        examples = []
+        for context_example in context_examples:
+            context, offset = context_example["context"], 1  # insert [CLS], so offset=1
+            context_encoding = self.tokenizer.encode(context, add_cls=True, add_sep=True)
+            start, end = self._find_answer(instance[self.answer_key], context)
+            if end > 0:
+                assert str(context[start:end]).lower() == str(instance[self.answer_key]).lower()
+            start += offset
+            end += offset
+            if end <= start:
+                start, end = 0, 0
+            examples.append(
+                QuestionAnsweringExample(
+                    text="[CLS]" + context + "[SEP]" + question + "[SEP]",
+                    tokens=context_encoding.tokens + question_encoding.tokens,
+                    input_ids=context_encoding.ids + question_encoding.ids,
+                    segment_ids=[0] * len(context_encoding.ids) + [1] * len(question_encoding.ids),
+                    attention_mask=[1] * (len(context_encoding.ids) + len(question_encoding.ids)),
+                    start=start,
+                    end=max(end - 1, 0),  # avoid end < 0
+                )
+            )
+        return examples
+
+    def _parse_examples_question_first(self, instance, max_sequence_length=512, **kwargs):
         question = instance[self.question_key]
         question_encoding = self.tokenizer.encode(question, add_cls=True, add_sep=True)
         max_context_length = max_sequence_length - len(question) - 3
