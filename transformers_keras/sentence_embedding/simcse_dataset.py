@@ -26,8 +26,67 @@ SimCSEExample = namedtuple(
 )
 
 
+class _SimCSEDatasetTransform:
+    """Dataset transformation for SimCSE"""
+
+    @classmethod
+    def examples_to_tfrecord(cls, examples, output_files, with_pos_sequence=False, with_neg_sequence=False, **kwargs):
+        if isinstance(output_files, str):
+            output_files = [output_files]
+        writers = [tf.io.TFRecordWriter(f) for f in output_files]
+        idx = 0
+        for example in examples:
+            tfrecord_example = cls._example_to_tfrecord(
+                example, with_pos_sequence=with_pos_sequence, with_neg_sequence=with_neg_sequence, **kwargs
+            )
+            writers[idx].write(tfrecord_example.SerializeToString())
+            idx += 1
+            idx = idx % len(writers)
+        for w in writers:
+            w.close()
+
+    @classmethod
+    def _example_to_tfrecord(cls, example: SimCSEExample, with_pos_sequence=False, with_neg_sequence=False, **kwargs):
+        feature = {
+            "input_ids": cls._int64_feature([int(x) for x in example.input_ids]),
+            "segment_ids": cls._int64_feature([int(x) for x in example.segment_ids]),
+            "attention_mask": cls._int64_feature([int(x) for x in example.attention_mask]),
+        }
+        if with_neg_sequence:
+            feature.update(
+                {
+                    "pos_input_ids": cls._int64_feature([int(x) for x in example.pos_input_ids]),
+                    "pos_segment_ids": cls._int64_feature([int(x) for x in example.pos_segment_ids]),
+                    "pos_attention_mask": cls._int64_feature([int(x) for x in example.pos_attention_mask]),
+                    "neg_input_ids": cls._int64_feature([int(x) for x in example.neg_input_ids]),
+                    "neg_segment_ids": cls._int64_feature([int(x) for x in example.neg_segment_ids]),
+                    "neg_attention_mask": cls._int64_feature([int(x) for x in example.neg_attention_mask]),
+                }
+            )
+        elif with_pos_sequence:
+            feature.update(
+                {
+                    "pos_input_ids": cls._int64_feature([int(x) for x in example.pos_input_ids]),
+                    "pos_segment_ids": cls._int64_feature([int(x) for x in example.pos_segment_ids]),
+                    "pos_attention_mask": cls._int64_feature([int(x) for x in example.pos_attention_mask]),
+                }
+            )
+        return tf.train.Example(features=tf.train.Features(feature=feature))
+
+    @classmethod
+    def _int64_feature(cls, values):
+        return tf.train.Feature(int64_list=tf.train.Int64List(value=values))
+
+
 class SimCSEDataset:
     """Dataset builder for SimCSE models."""
+
+    @classmethod
+    def examples_to_tfrecord(cls, examples, output_files, with_pos_sequence=False, with_neg_sequence=False, **kwargs):
+        _SimCSEDatasetTransform.examples_to_tfrecord(
+            examples, output_files, with_pos_sequence=with_pos_sequence, with_neg_sequence=with_neg_sequence, **kwargs
+        )
+        logging.info("Done!")
 
     @classmethod
     def from_tfrecord_files(
@@ -66,49 +125,6 @@ class SimCSEDataset:
             pad_id=pad_id,
             auto_shard_policy=auto_shard_policy,
             drop_remainder=drop_remainder,
-            **kwargs,
-        )
-
-    @classmethod
-    def from_jsonl_files(
-        cls,
-        input_files,
-        fn,
-        batch_size=64,
-        repeat=None,
-        with_pos_sequence=False,
-        with_neg_sequence=False,
-        max_sequence_length=512,
-        bucket_boundaries=[50, 100, 150, 200, 250, 300, 350, 400, 450, 500],
-        bucket_batch_sizes=None,
-        buffer_size=1000000,
-        seed=None,
-        reshuffle_each_iteration=True,
-        pad_id=0,
-        auto_shard_policy=None,
-        drop_remainder=True,
-        verbose=True,
-        **kwargs
-    ):
-        examples = cls._read_jsonl_examples(
-            input_files, fn=fn, with_pos_sequence=with_pos_sequence, with_neg_sequence=with_neg_sequence, **kwargs
-        )
-        return cls.from_examples(
-            examples,
-            batch_size=batch_size,
-            repeat=repeat,
-            with_pos_sequence=with_pos_sequence,
-            with_neg_sequence=with_neg_sequence,
-            max_sequence_length=max_sequence_length,
-            bucket_boundaries=bucket_boundaries,
-            bucket_batch_sizes=bucket_batch_sizes,
-            buffer_size=buffer_size,
-            seed=seed,
-            reshuffle_each_iteration=reshuffle_each_iteration,
-            pad_id=pad_id,
-            auto_shard_policy=auto_shard_policy,
-            drop_remainder=drop_remainder,
-            verbose=verbose,
             **kwargs,
         )
 
@@ -391,29 +407,6 @@ class SimCSEDataset:
         return dataset
 
     @classmethod
-    def _read_jsonl_examples(
-        cls, input_files, fn, with_pos_sequence=False, with_neg_sequence=False, **kwargs
-    ) -> List[SimCSEExample]:
-        all_examples = []
-        if isinstance(input_files, str):
-            input_files = [input_files]
-        for f in input_files:
-            if not os.path.exists(f):
-                logging.warning("File: %s does not exist, skipped.", f)
-                continue
-            with open(f, mode="rt", encoding="utf-8") as fin:
-                for line in fin:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    instance = json.loads(line)
-                    examples = fn(
-                        instance, with_pos_sequence=with_pos_sequence, with_neg_sequence=with_neg_sequence, **kwargs
-                    )
-                    all_examples.extend(examples)
-        return all_examples
-
-    @classmethod
     def _read_tfrecord(cls, input_files, with_pos_sequence=False, with_neg_sequence=False, **kwargs):
         dataset = tf.data.Dataset.from_tensor_slices(input_files)
         dataset = dataset.interleave(
@@ -426,20 +419,23 @@ class SimCSEDataset:
             "segment_ids": tf.io.VarLenFeature(tf.int64),
             "attention_mask": tf.io.VarLenFeature(tf.int64),
         }
-        if with_pos_sequence:
-            features.update(
-                {
-                    "pos_input_ids": tf.io.VarLenFeature(tf.int64),
-                    "pos_segment_ids": tf.io.VarLenFeature(tf.int64),
-                    "pos_attention_mask": tf.io.VarLenFeature(tf.int64),
-                }
-            )
         if with_neg_sequence:
             features.update(
                 {
                     "neg_input_ids": tf.io.VarLenFeature(tf.int64),
                     "neg_segment_ids": tf.io.VarLenFeature(tf.int64),
                     "neg_attention_mask": tf.io.VarLenFeature(tf.int64),
+                    "pos_input_ids": tf.io.VarLenFeature(tf.int64),
+                    "pos_segment_ids": tf.io.VarLenFeature(tf.int64),
+                    "pos_attention_mask": tf.io.VarLenFeature(tf.int64),
+                }
+            )
+        elif with_pos_sequence:
+            features.update(
+                {
+                    "pos_input_ids": tf.io.VarLenFeature(tf.int64),
+                    "pos_segment_ids": tf.io.VarLenFeature(tf.int64),
+                    "pos_attention_mask": tf.io.VarLenFeature(tf.int64),
                 }
             )
         dataset = dataset.map(

@@ -11,8 +11,45 @@ SequenceClassificationExample = namedtuple(
 )
 
 
+class _SequenceClassificationDatasetTransform:
+    """Dataset transformation for sequence classification"""
+
+    @classmethod
+    def examples_to_tfrecord(cls, examples, output_files, **kwargs):
+        if isinstance(output_files, str):
+            output_files = [output_files]
+        writers = [tf.io.TFRecordWriter(f) for f in output_files]
+        idx = 0
+        for example in examples:
+            tfrecord_example = cls._example_to_tfrecord(example)
+            writers[idx].write(tfrecord_example.SerializeToString())
+            idx += 1
+            idx = idx % len(writers)
+        for w in writers:
+            w.close()
+
+    @classmethod
+    def _example_to_tfrecord(cls, example: SequenceClassificationExample, **kwargs):
+        feature = {
+            "input_ids": cls._int64_feature([int(x) for x in example.input_ids]),
+            "segment_ids": cls._int64_feature([int(x) for x in example.segment_ids]),
+            "attention_mask": cls._int64_feature([int(x) for x in example.attention_mask]),
+            "label": cls._int64_feature([int(example.label)]),
+        }
+        return tf.train.Example(features=tf.train.Features(feature=feature))
+
+    @classmethod
+    def _int64_feature(cls, values):
+        return tf.train.Feature(int64_list=tf.train.Int64List(value=values))
+
+
 class SequenceClassificationDataset:
     """Dataset builder for sequence classification."""
+
+    @classmethod
+    def examples_to_tfrecord(cls, examples, output_files, **kwargs):
+        _SequenceClassificationDatasetTransform.examples_to_tfrecord(examples, output_files, **kwargs)
+        logging.info("Done!")
 
     @classmethod
     def from_tfrecord_files(
@@ -48,43 +85,6 @@ class SequenceClassificationDataset:
         dataset = cls._to_dict(dataset)
         dataset = cls._auto_shard(dataset, auto_shard_policy=auto_shard_policy)
         return dataset
-
-    @classmethod
-    def from_jsonl_files(
-        cls,
-        input_files,
-        fn,
-        batch_size=64,
-        repeat=None,
-        max_sequence_length=512,
-        bucket_boundaries=[50, 100, 150, 200, 250, 300, 350, 400, 450, 500],
-        bucket_batch_sizes=None,
-        buffer_size=1000000,
-        seed=None,
-        reshuffle_each_iteration=True,
-        pad_id=0,
-        auto_shard_policy=None,
-        drop_remainder=False,
-        verbose=True,
-        **kwargs
-    ):
-        examples = cls._read_jsonl_examples(input_files=input_files, fn=fn, **kwargs)
-        return cls.from_examples(
-            examples,
-            batch_size=batch_size,
-            repeat=repeat,
-            max_sequence_length=max_sequence_length,
-            bucket_boundaries=bucket_boundaries,
-            bucket_batch_sizes=bucket_batch_sizes,
-            buffer_size=buffer_size,
-            seed=seed,
-            reshuffle_each_iteration=reshuffle_each_iteration,
-            pad_id=pad_id,
-            auto_shard_policy=auto_shard_policy,
-            drop_remainder=drop_remainder,
-            verbose=verbose,
-            **kwargs
-        )
 
     @classmethod
     def from_examples(
@@ -201,25 +201,6 @@ class SequenceClassificationDataset:
         return dataset
 
     @classmethod
-    def _read_jsonl_examples(cls, input_files, fn, **kwargs) -> List[SequenceClassificationExample]:
-        all_examples = []
-        if isinstance(input_files, str):
-            input_files = [input_files]
-        for f in input_files:
-            if not os.path.exists(f):
-                logging.warning("File: %s does not exist, skipped.", f)
-                continue
-            with open(f, mode="rt", encoding="utf-8") as fin:
-                for line in fin:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    instance = json.loads(line)
-                    examples = fn(instance, **kwargs)
-                    all_examples.extend(examples)
-        return all_examples
-
-    @classmethod
     def _read_tfrecord(cls, input_files, **kwargs):
         dataset = tf.data.Dataset.from_tensor_slices(input_files)
         dataset = dataset.interleave(
@@ -242,7 +223,7 @@ class SequenceClassificationDataset:
                 tf.cast(tf.sparse.to_dense(x["input_ids"]), tf.int32),
                 tf.cast(tf.sparse.to_dense(x["segment_ids"]), tf.int32),
                 tf.cast(tf.sparse.to_dense(x["attention_mask"]), tf.int32),
-                tf.cast(tf.sparse.to_dense(x["label"]), tf.int32),
+                tf.cast(tf.squeeze(tf.sparse.to_dense(x["label"])), tf.int32),
             ),
             num_parallel_calls=tf.data.AUTOTUNE,
         ).prefetch(tf.data.AUTOTUNE)

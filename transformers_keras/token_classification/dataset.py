@@ -1,19 +1,53 @@
-import json
 import logging
-import os
-import re
 from collections import namedtuple
 from typing import List
 
 import tensorflow as tf
 
 TokenClassificationExample = namedtuple(
-    "TokenClassificationExample", ["tokens", "labels", "label_ids", "input_ids", "segment_ids", "attention_mask"]
+    "TokenClassificationExample", ["tokens", "labels", "input_ids", "segment_ids", "attention_mask", "label_ids"]
 )
+
+
+class _TokenClassificationDatasetTransform:
+    """Dataset transformation for token classification."""
+
+    @classmethod
+    def examples_to_tfrecord(cls, examples, output_files, **kwargs):
+        if isinstance(output_files, str):
+            output_files = [output_files]
+        writers = [tf.io.TFRecordWriter(f) for f in output_files]
+        idx = 0
+        for example in examples:
+            tfrecord_example = cls._example_to_tfrecord(example)
+            writers[idx].write(tfrecord_example.SerializeToString())
+            idx += 1
+            idx = idx % len(writers)
+        for w in writers:
+            w.close()
+
+    @classmethod
+    def _example_to_tfrecord(cls, example: TokenClassificationExample, **kwargs):
+        feature = {
+            "input_ids": cls._int64_feature([int(x) for x in example.input_ids]),
+            "segment_ids": cls._int64_feature([int(x) for x in example.segment_ids]),
+            "attention_mask": cls._int64_feature([int(x) for x in example.attention_mask]),
+            "label_ids": cls._int64_feature([int(x) for x in example.label_ids]),
+        }
+        return tf.train.Example(features=tf.train.Features(feature=feature))
+
+    @classmethod
+    def _int64_feature(cls, values):
+        return tf.train.Feature(int64_list=tf.train.Int64List(value=values))
 
 
 class TokenClassificationDataset:
     """Dataset for token classification."""
+
+    @classmethod
+    def examples_to_tfrecord(cls, examples, output_file, **kwargs):
+        _TokenClassificationDatasetTransform.examples_to_tfrecord(examples, output_file, **kwargs)
+        logging.info("Done!")
 
     @classmethod
     def from_tfrecord_files(
@@ -49,44 +83,6 @@ class TokenClassificationDataset:
         dataset = cls._to_dict(dataset)
         dataset = cls._auto_shard(dataset, auto_shard_policy=auto_shard_policy)
         return dataset
-
-    @classmethod
-    def from_conll_files(
-        cls,
-        input_files,
-        fn,
-        sep="\t",
-        batch_size=64,
-        repeat=None,
-        max_sequence_length=512,
-        bucket_boundaries=[50, 100, 150, 200, 250, 300, 350, 400, 450, 500],
-        bucket_batch_sizes=None,
-        buffer_size=1000000,
-        seed=None,
-        reshuffle_each_iteration=True,
-        pad_id=0,
-        auto_shard_policy=None,
-        drop_remainder=False,
-        verbose=True,
-        **kwargs
-    ):
-        examples = cls._read_conll_examples(input_files=input_files, fn=fn, sep=sep, **kwargs)
-        return cls.from_examples(
-            examples,
-            batch_size=batch_size,
-            repeat=repeat,
-            max_sequence_length=max_sequence_length,
-            bucket_boundaries=bucket_boundaries,
-            bucket_batch_sizes=bucket_batch_sizes,
-            buffer_size=buffer_size,
-            seed=seed,
-            reshuffle_each_iteration=reshuffle_each_iteration,
-            pad_id=pad_id,
-            auto_shard_policy=auto_shard_policy,
-            drop_remainder=drop_remainder,
-            verbose=verbose,
-            **kwargs
-        )
 
     @classmethod
     def from_examples(
@@ -201,35 +197,6 @@ class TokenClassificationDataset:
             options.experimental_distribute.auto_shard_policy = auto_shard_policy
             dataset = dataset.with_options(options)
         return dataset
-
-    @classmethod
-    def _read_conll_examples(cls, input_files, fn, sep="\t", **kwargs) -> List[TokenClassificationExample]:
-        all_examples = []
-        if isinstance(input_files, str):
-            input_files = [input_files]
-        for f in input_files:
-            if not os.path.exists(f):
-                logging.warning("File: %s does not exist, skipped.", f)
-                continue
-            features, labels = [], []
-            with open(f, mode="rt", encoding="utf-8") as fin:
-                for line in fin:
-                    line = line.strip()
-                    if not line:
-                        examples = fn(features, labels, **kwargs)
-                        all_examples.extend(examples)
-                        features, labels = [], []
-                        continue
-                    parts = re.split(sep, line)
-                    if len(parts) < 2:
-                        continue
-                    features.append(parts[0])
-                    labels.append(parts[1])
-            if features and labels:
-                examples = fn(features, labels, **kwargs)
-                all_examples.extend(examples)
-
-        return all_examples
 
     @classmethod
     def _read_tfrecord(cls, input_files, **kwargs):

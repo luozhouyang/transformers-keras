@@ -28,7 +28,6 @@ from transformers_keras.question_answering.tokenizer import (
     QuestionAnsweringTokenizerForChinese,
 )
 from transformers_keras.sentence_embedding.bert_embedding import BertForSentenceEmbedding
-from transformers_keras.sentence_embedding.parser import AbstractSimCSEExampleParser, SimCSEExampleParser
 from transformers_keras.sentence_embedding.simcse_dataset import SimCSEDataset, SimCSEExample
 from transformers_keras.sentence_embedding.simcse_models import HardNegativeSimCSE, SupervisedSimCSE, UnsupervisedSimCSE
 from transformers_keras.sequence_classification.dataset import (
@@ -39,10 +38,6 @@ from transformers_keras.sequence_classification.models import (
     AlbertForSequenceClassification,
     BertForSequenceClassification,
 )
-from transformers_keras.sequence_classification.parser import (
-    AbstractSequenceClassificationExampleParser,
-    SequenceClassificationExampleParser,
-)
 from transformers_keras.token_classification.crf_models import (
     AlertCRFForTokenClassification,
     BertCRFForTokenClassification,
@@ -50,10 +45,6 @@ from transformers_keras.token_classification.crf_models import (
 )
 from transformers_keras.token_classification.dataset import TokenClassificationDataset, TokenClassificationExample
 from transformers_keras.token_classification.models import AlbertForTokenClassification, BertForTokenClassification
-from transformers_keras.token_classification.parser import (
-    AbstractTokenClassificationExampleParser,
-    TokenClassificationExampleParserForChinese,
-)
 from transformers_keras.token_classification.tokenizer import QuestionAnsweringTokenizerForChinese
 
 __name__ = "transformers_keras"
