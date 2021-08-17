@@ -48,6 +48,6 @@ from transformers_keras.token_classification.models import AlbertForTokenClassif
 from transformers_keras.token_classification.tokenizer import QuestionAnsweringTokenizerForChinese
 
 __name__ = "transformers_keras"
-__version__ = "0.4.2"
+__version__ = "0.4.3"
 
 logging.basicConfig(format="%(asctime)s %(levelname)7s %(filename)20s %(lineno)4d] %(message)s", level=logging.INFO)

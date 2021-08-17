@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="transformers_keras",
-    version="0.4.2",
+    version="0.4.3",
     description="Transformer-based models implemented in tensorflow 2.x(Keras)",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -16,7 +16,7 @@ setuptools.setup(
     include_package_data=True,
     install_requires=[
         "tokenizers",
-        "tensorflow>=2.0.0",
+        "tensorflow-addons[tensorflow]",
     ],
     extras_require={
 
