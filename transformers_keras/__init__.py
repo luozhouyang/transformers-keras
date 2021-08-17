@@ -23,10 +23,6 @@ from transformers_keras.modeling_bert import (
 from transformers_keras.modeling_utils import complete_inputs
 from transformers_keras.question_answering.dataset import QuestionAnsweringDataset, QuestionAnsweringExample
 from transformers_keras.question_answering.models import AlbertForQuestionAnswering, BertForQuestionAnswering
-from transformers_keras.question_answering.parser import (
-    AbstractQustionAnsweringExampleParser,
-    QuestionAnsweringExampleParserForChinese,
-)
 from transformers_keras.question_answering.tokenizer import (
     QuestionAnsweringTokenizer,
     QuestionAnsweringTokenizerForChinese,
