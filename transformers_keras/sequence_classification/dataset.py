@@ -5,51 +5,15 @@ from collections import namedtuple
 from typing import List
 
 import tensorflow as tf
+from tokenizers import BertWordPieceTokenizer
 
 SequenceClassificationExample = namedtuple(
     "SequenceClassificationExample", ["tokens", "input_ids", "segment_ids", "attention_mask", "label"]
 )
 
 
-class _SequenceClassificationDatasetTransform:
-    """Dataset transformation for sequence classification"""
-
-    @classmethod
-    def examples_to_tfrecord(cls, examples, output_files, **kwargs):
-        if isinstance(output_files, str):
-            output_files = [output_files]
-        writers = [tf.io.TFRecordWriter(f) for f in output_files]
-        idx = 0
-        for example in examples:
-            tfrecord_example = cls._example_to_tfrecord(example)
-            writers[idx].write(tfrecord_example.SerializeToString())
-            idx += 1
-            idx = idx % len(writers)
-        for w in writers:
-            w.close()
-
-    @classmethod
-    def _example_to_tfrecord(cls, example: SequenceClassificationExample, **kwargs):
-        feature = {
-            "input_ids": cls._int64_feature([int(x) for x in example.input_ids]),
-            "segment_ids": cls._int64_feature([int(x) for x in example.segment_ids]),
-            "attention_mask": cls._int64_feature([int(x) for x in example.attention_mask]),
-            "label": cls._int64_feature([int(example.label)]),
-        }
-        return tf.train.Example(features=tf.train.Features(feature=feature))
-
-    @classmethod
-    def _int64_feature(cls, values):
-        return tf.train.Feature(int64_list=tf.train.Int64List(value=values))
-
-
 class SequenceClassificationDataset:
     """Dataset builder for sequence classification."""
-
-    @classmethod
-    def examples_to_tfrecord(cls, examples, output_files, **kwargs):
-        _SequenceClassificationDatasetTransform.examples_to_tfrecord(examples, output_files, **kwargs)
-        logging.info("Done!")
 
     @classmethod
     def from_tfrecord_files(
@@ -85,6 +49,11 @@ class SequenceClassificationDataset:
         dataset = cls._to_dict(dataset)
         dataset = cls._auto_shard(dataset, auto_shard_policy=auto_shard_policy)
         return dataset
+
+    @classmethod
+    def from_jsonl_files(cls, input_files, vocab_file, **kwargs):
+        examples = cls.jsonl_to_examples(input_files, vocab_file, **kwargs)
+        return cls.from_examples(examples, **kwargs)
 
     @classmethod
     def from_examples(
@@ -202,12 +171,17 @@ class SequenceClassificationDataset:
 
     @classmethod
     def _read_tfrecord(cls, input_files, **kwargs):
-        dataset = tf.data.Dataset.from_tensor_slices(input_files)
-        dataset = dataset.interleave(
-            lambda x: tf.data.TFRecordDataset(x),
-            cycle_length=len(input_files),
-            num_parallel_calls=tf.data.AUTOTUNE,
-        )
+        if isinstance(input_files, str):
+            input_files = [input_files]
+        if len(input_files) == 1:
+            dataset = tf.data.TFRecordDataset(input_files)
+        else:
+            dataset = tf.data.Dataset.from_tensor_slices(input_files)
+            dataset = dataset.interleave(
+                lambda x: tf.data.TFRecordDataset(x),
+                cycle_length=len(input_files),
+                num_parallel_calls=tf.data.AUTOTUNE,
+            )
         features = {
             "input_ids": tf.io.VarLenFeature(tf.int64),
             "segment_ids": tf.io.VarLenFeature(tf.int64),
@@ -228,3 +202,65 @@ class SequenceClassificationDataset:
             num_parallel_calls=tf.data.AUTOTUNE,
         ).prefetch(tf.data.AUTOTUNE)
         return dataset
+
+    @classmethod
+    def jsonl_to_tfrecord(cls, input_files, vocab_file, output_files, **kwargs):
+        examples = cls.jsonl_to_examples(input_files, vocab_file, **kwargs)
+        cls.examples_to_tfrecord(examples, output_files, **kwargs)
+        logging.info("Convert data from jsonl to tfrecord finished.")
+
+    @classmethod
+    def jsonl_to_examples(cls, input_files, vocab_file, **kwargs):
+        if isinstance(input_files, str):
+            input_files = [input_files]
+        examples = []
+        tokenizer = BertWordPieceTokenizer.from_file(vocab_file, lowercase=kwargs.get("do_lower_case", True))
+        for f in input_files:
+            with open(f, mode="rt", encoding="utf-8") as fin:
+                for line in fin:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    instance = json.loads(line)
+                    sequence = instance[kwargs.get("sequence_key", "sequence")]
+                    label = instance[kwargs.get("label_key", "label")]
+                    encoding = tokenizer.encode(sequence)
+                    examples.append(
+                        SequenceClassificationExample(
+                            tokens=encoding.tokens,
+                            input_ids=encoding.ids,
+                            segment_ids=encoding.type_ids,
+                            attention_mask=encoding.attention_mask,
+                            label=int(label),
+                        )
+                    )
+        logging.info("Collected %d examples in total.", len(examples))
+        return examples
+
+    @classmethod
+    def examples_to_tfrecord(cls, examples, output_files, **kwargs):
+        if isinstance(output_files, str):
+            output_files = [output_files]
+        writers = [tf.io.TFRecordWriter(f) for f in output_files]
+        idx = 0
+        for example in examples:
+            tfrecord_example = cls._example_to_tfrecord(example)
+            writers[idx].write(tfrecord_example.SerializeToString())
+            idx += 1
+            idx = idx % len(writers)
+        for w in writers:
+            w.close()
+
+    @classmethod
+    def _example_to_tfrecord(cls, example: SequenceClassificationExample, **kwargs):
+        feature = {
+            "input_ids": cls._int64_feature([int(x) for x in example.input_ids]),
+            "segment_ids": cls._int64_feature([int(x) for x in example.segment_ids]),
+            "attention_mask": cls._int64_feature([int(x) for x in example.attention_mask]),
+            "label": cls._int64_feature([int(example.label)]),
+        }
+        return tf.train.Example(features=tf.train.Features(feature=feature))
+
+    @classmethod
+    def _int64_feature(cls, values):
+        return tf.train.Feature(int64_list=tf.train.Int64List(value=values))

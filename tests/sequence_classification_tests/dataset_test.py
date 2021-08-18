@@ -32,7 +32,7 @@ class DatasetTest(unittest.TestCase):
                     )
         return examples
 
-    def test_sequence_classification_dataset(self):
+    def test_sequence_classification_dataset_examples(self):
         examples = self._read_examples(["testdata/sequence_classify.jsonl"])
         dataset = SequenceClassificationDataset.from_examples(
             examples,
@@ -42,6 +42,27 @@ class DatasetTest(unittest.TestCase):
         print(next(iter(dataset)))
 
         SequenceClassificationDataset.examples_to_tfrecord(examples, ["testdata/sequence_classify.tfrecord"])
+        dataset = SequenceClassificationDataset.from_tfrecord_files(
+            ["testdata/sequence_classify.tfrecord"] * 4,
+            batch_size=4,
+        )
+        print()
+        print(next(iter(dataset)))
+
+    def test_sequence_classification_dataset_jsonl(self):
+        dataset = SequenceClassificationDataset.from_jsonl_files(
+            "testdata/sequence_classify.jsonl",
+            "testdata/vocab.bert.txt",
+            batch_size=4,
+        )
+        print()
+        print(next(iter(dataset)))
+
+        SequenceClassificationDataset.jsonl_to_tfrecord(
+            "testdata/sequence_classify.jsonl",
+            "testdata/vocab.bert.txt",
+            "testdata/sequence_classify.tfrecord",
+        )
         dataset = SequenceClassificationDataset.from_tfrecord_files(
             ["testdata/sequence_classify.tfrecord"] * 4,
             batch_size=4,
