@@ -6,6 +6,7 @@ from collections import namedtuple
 from typing import List
 
 import tensorflow as tf
+from tokenizers import BertWordPieceTokenizer
 
 SimCSEExample = namedtuple(
     "SimCSEExample",
@@ -26,67 +27,8 @@ SimCSEExample = namedtuple(
 )
 
 
-class _SimCSEDatasetTransform:
-    """Dataset transformation for SimCSE"""
-
-    @classmethod
-    def examples_to_tfrecord(cls, examples, output_files, with_pos_sequence=False, with_neg_sequence=False, **kwargs):
-        if isinstance(output_files, str):
-            output_files = [output_files]
-        writers = [tf.io.TFRecordWriter(f) for f in output_files]
-        idx = 0
-        for example in examples:
-            tfrecord_example = cls._example_to_tfrecord(
-                example, with_pos_sequence=with_pos_sequence, with_neg_sequence=with_neg_sequence, **kwargs
-            )
-            writers[idx].write(tfrecord_example.SerializeToString())
-            idx += 1
-            idx = idx % len(writers)
-        for w in writers:
-            w.close()
-
-    @classmethod
-    def _example_to_tfrecord(cls, example: SimCSEExample, with_pos_sequence=False, with_neg_sequence=False, **kwargs):
-        feature = {
-            "input_ids": cls._int64_feature([int(x) for x in example.input_ids]),
-            "segment_ids": cls._int64_feature([int(x) for x in example.segment_ids]),
-            "attention_mask": cls._int64_feature([int(x) for x in example.attention_mask]),
-        }
-        if with_neg_sequence:
-            feature.update(
-                {
-                    "pos_input_ids": cls._int64_feature([int(x) for x in example.pos_input_ids]),
-                    "pos_segment_ids": cls._int64_feature([int(x) for x in example.pos_segment_ids]),
-                    "pos_attention_mask": cls._int64_feature([int(x) for x in example.pos_attention_mask]),
-                    "neg_input_ids": cls._int64_feature([int(x) for x in example.neg_input_ids]),
-                    "neg_segment_ids": cls._int64_feature([int(x) for x in example.neg_segment_ids]),
-                    "neg_attention_mask": cls._int64_feature([int(x) for x in example.neg_attention_mask]),
-                }
-            )
-        elif with_pos_sequence:
-            feature.update(
-                {
-                    "pos_input_ids": cls._int64_feature([int(x) for x in example.pos_input_ids]),
-                    "pos_segment_ids": cls._int64_feature([int(x) for x in example.pos_segment_ids]),
-                    "pos_attention_mask": cls._int64_feature([int(x) for x in example.pos_attention_mask]),
-                }
-            )
-        return tf.train.Example(features=tf.train.Features(feature=feature))
-
-    @classmethod
-    def _int64_feature(cls, values):
-        return tf.train.Feature(int64_list=tf.train.Int64List(value=values))
-
-
 class SimCSEDataset:
     """Dataset builder for SimCSE models."""
-
-    @classmethod
-    def examples_to_tfrecord(cls, examples, output_files, with_pos_sequence=False, with_neg_sequence=False, **kwargs):
-        _SimCSEDatasetTransform.examples_to_tfrecord(
-            examples, output_files, with_pos_sequence=with_pos_sequence, with_neg_sequence=with_neg_sequence, **kwargs
-        )
-        logging.info("Done!")
 
     @classmethod
     def from_tfrecord_files(
@@ -127,6 +69,11 @@ class SimCSEDataset:
             drop_remainder=drop_remainder,
             **kwargs,
         )
+
+    @classmethod
+    def from_jsonl_files(cls, input_file, vocab_file, **kwargs):
+        examples = cls.jsonl_to_examples(input_file, vocab_file, **kwargs)
+        return cls.from_examples(examples, **kwargs)
 
     @classmethod
     def from_examples(
@@ -408,12 +355,17 @@ class SimCSEDataset:
 
     @classmethod
     def _read_tfrecord(cls, input_files, with_pos_sequence=False, with_neg_sequence=False, **kwargs):
-        dataset = tf.data.Dataset.from_tensor_slices(input_files)
-        dataset = dataset.interleave(
-            lambda x: tf.data.TFRecordDataset(x),
-            cycle_length=len(input_files),
-            num_parallel_calls=tf.data.AUTOTUNE,
-        )
+        if isinstance(input_files, str):
+            input_files = [input_files]
+        if len(input_files) == 1:
+            dataset = tf.data.TFRecordDataset(input_files)
+        else:
+            dataset = tf.data.Dataset.from_tensor_slices(input_files)
+            dataset = dataset.interleave(
+                lambda x: tf.data.TFRecordDataset(x),
+                cycle_length=len(input_files),
+                num_parallel_calls=tf.data.AUTOTUNE,
+            )
         features = {
             "input_ids": tf.io.VarLenFeature(tf.int64),
             "segment_ids": tf.io.VarLenFeature(tf.int64),
@@ -480,3 +432,147 @@ class SimCSEDataset:
                 num_parallel_calls=tf.data.AUTOTUNE,
             ).prefetch(tf.data.AUTOTUNE)
         return dataset
+
+    @classmethod
+    def jsonl_to_tfrecord(
+        cls, input_files, vocab_file, output_files, with_pos_sequence=False, with_neg_sequence=False, **kwargs
+    ):
+        examples = cls.jsonl_to_examples(
+            input_files, vocab_file, with_pos_sequence=with_pos_sequence, with_neg_sequence=with_neg_sequence, **kwargs
+        )
+        cls.examples_to_tfrecord(
+            examples, output_files, with_pos_sequence=with_pos_sequence, with_neg_sequence=with_neg_sequence, **kwargs
+        )
+        logging.info("Convert data from jsonl to tfrecord finished.")
+
+    @classmethod
+    def jsonl_to_examples(cls, input_files, vocab_file, with_pos_sequence=False, with_neg_sequence=False, **kwargs):
+        if isinstance(input_files, str):
+            input_files = [input_files]
+        examples = []
+        tokenizer = BertWordPieceTokenizer.from_file(vocab_file, lowercase=kwargs.get("do_lower_case", True))
+        for f in input_files:
+            with open(f, mode="rt", encoding="utf-8") as fin:
+                for line in fin:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    instance = json.loads(line)
+                    example = cls._instance_to_example(
+                        instance,
+                        tokenizer,
+                        with_pos_sequence=with_pos_sequence,
+                        with_neg_sequence=with_neg_sequence,
+                        **kwargs,
+                    )
+                    examples.append(example)
+        logging.info("Collected %d examples in total.", len(examples))
+        return examples
+
+    @classmethod
+    def _instance_to_example(
+        cls, instance, tokenizer: BertWordPieceTokenizer, with_pos_sequence=False, with_neg_sequence=False, **kwargs
+    ):
+        sequence = instance[kwargs.get("sequence_key", "sequence")]
+        seq_encoding = tokenizer.encode(sequence)
+        if with_neg_sequence:
+            pos_sequence = instance[kwargs.get("pos_sequence_key", "pos_sequence")]
+            pos_encoding = tokenizer.encode(pos_sequence)
+            neg_sequence = instance[kwargs.get("neg_sequence_key", "neg_sequence")]
+            neg_encoding = tokenizer.encode(neg_sequence)
+            example = SimCSEExample(
+                sequence=sequence,
+                input_ids=seq_encoding.ids,
+                segment_ids=seq_encoding.type_ids,
+                attention_mask=seq_encoding.attention_mask,
+                pos_sequence=pos_sequence,
+                pos_input_ids=pos_encoding.ids,
+                pos_segment_ids=pos_encoding.type_ids,
+                pos_attention_mask=pos_encoding.attention_mask,
+                neg_sequence=neg_sequence,
+                neg_input_ids=neg_encoding.ids,
+                neg_segment_ids=neg_encoding.type_ids,
+                neg_attention_mask=neg_encoding.attention_mask,
+            )
+            return example
+        if with_pos_sequence:
+            pos_sequence = instance[kwargs.get("pos_sequence_key", "pos_sequence")]
+            pos_encoding = tokenizer.encode(pos_sequence)
+            example = SimCSEExample(
+                sequence=sequence,
+                input_ids=seq_encoding.ids,
+                segment_ids=seq_encoding.type_ids,
+                attention_mask=seq_encoding.attention_mask,
+                pos_sequence=pos_sequence,
+                pos_input_ids=pos_encoding.ids,
+                pos_segment_ids=pos_encoding.type_ids,
+                pos_attention_mask=pos_encoding.attention_mask,
+                neg_sequence=None,
+                neg_input_ids=None,
+                neg_segment_ids=None,
+                neg_attention_mask=None,
+            )
+            return example
+        example = SimCSEExample(
+            sequence=sequence,
+            input_ids=seq_encoding.ids,
+            segment_ids=seq_encoding.type_ids,
+            attention_mask=seq_encoding.attention_mask,
+            pos_sequence=None,
+            pos_input_ids=None,
+            pos_segment_ids=None,
+            pos_attention_mask=None,
+            neg_sequence=None,
+            neg_input_ids=None,
+            neg_segment_ids=None,
+            neg_attention_mask=None,
+        )
+        return example
+
+    @classmethod
+    def examples_to_tfrecord(cls, examples, output_files, with_pos_sequence=False, with_neg_sequence=False, **kwargs):
+        if isinstance(output_files, str):
+            output_files = [output_files]
+        writers = [tf.io.TFRecordWriter(f) for f in output_files]
+        idx = 0
+        for example in examples:
+            tfrecord_example = cls._example_to_tfrecord(
+                example, with_pos_sequence=with_pos_sequence, with_neg_sequence=with_neg_sequence, **kwargs
+            )
+            writers[idx].write(tfrecord_example.SerializeToString())
+            idx += 1
+            idx = idx % len(writers)
+        for w in writers:
+            w.close()
+
+    @classmethod
+    def _example_to_tfrecord(cls, example: SimCSEExample, with_pos_sequence=False, with_neg_sequence=False, **kwargs):
+        feature = {
+            "input_ids": cls._int64_feature([int(x) for x in example.input_ids]),
+            "segment_ids": cls._int64_feature([int(x) for x in example.segment_ids]),
+            "attention_mask": cls._int64_feature([int(x) for x in example.attention_mask]),
+        }
+        if with_neg_sequence:
+            feature.update(
+                {
+                    "pos_input_ids": cls._int64_feature([int(x) for x in example.pos_input_ids]),
+                    "pos_segment_ids": cls._int64_feature([int(x) for x in example.pos_segment_ids]),
+                    "pos_attention_mask": cls._int64_feature([int(x) for x in example.pos_attention_mask]),
+                    "neg_input_ids": cls._int64_feature([int(x) for x in example.neg_input_ids]),
+                    "neg_segment_ids": cls._int64_feature([int(x) for x in example.neg_segment_ids]),
+                    "neg_attention_mask": cls._int64_feature([int(x) for x in example.neg_attention_mask]),
+                }
+            )
+        elif with_pos_sequence:
+            feature.update(
+                {
+                    "pos_input_ids": cls._int64_feature([int(x) for x in example.pos_input_ids]),
+                    "pos_segment_ids": cls._int64_feature([int(x) for x in example.pos_segment_ids]),
+                    "pos_attention_mask": cls._int64_feature([int(x) for x in example.pos_attention_mask]),
+                }
+            )
+        return tf.train.Example(features=tf.train.Features(feature=feature))
+
+    @classmethod
+    def _int64_feature(cls, values):
+        return tf.train.Feature(int64_list=tf.train.Int64List(value=values))

@@ -38,7 +38,7 @@ class SimCSEDatasetTest(unittest.TestCase):
                     )
         return examples
 
-    def test_unsup_dataset(self):
+    def test_unsup_dataset_examples(self):
         examples = self._read_examples(["testdata/simcse.jsonl"])
         dataset = SimCSEDataset.from_examples(
             examples,
@@ -57,6 +57,35 @@ class SimCSEDatasetTest(unittest.TestCase):
         )
         dataset = SimCSEDataset.from_tfrecord_files(
             ["testdata/simcse.unsup.tfrecord"] * 4,
+            batch_size=2,
+            with_pos_sequence=False,
+            with_neg_sequence=False,
+        )
+        print()
+        print(next(iter(dataset)))
+
+    def test_unsup_dataset_jsonl(self):
+        # test from jsonl
+        dataset = SimCSEDataset.from_jsonl_files(
+            "testdata/simcse.jsonl",
+            "testdata/vocab.bert.txt",
+            batch_size=2,
+            with_pos_sequence=False,
+            with_neg_sequence=False,
+        )
+        print()
+        print(next(iter(dataset)))
+
+        # test jsonl to tfrecord
+        SimCSEDataset.jsonl_to_tfrecord(
+            "testdata/simcse.jsonl",
+            "testdata/vocab.bert.txt",
+            ["testdata/simcse.unsup.tfrecord"],
+            with_pos_sequence=False,
+            with_neg_sequence=False,
+        )
+        dataset = SimCSEDataset.from_tfrecord_files(
+            ["testdata/simcse.unsup.tfrecord"] * 4,
             batch_size=4,
             with_pos_sequence=False,
             with_neg_sequence=False,
@@ -64,7 +93,7 @@ class SimCSEDatasetTest(unittest.TestCase):
         print()
         print(next(iter(dataset)))
 
-    def test_supervised_dataset(self):
+    def test_supervised_dataset_examples(self):
         examples = self._read_examples(["testdata/simcse.jsonl"])
         dataset = SimCSEDataset.from_examples(
             examples,
@@ -90,7 +119,36 @@ class SimCSEDatasetTest(unittest.TestCase):
         print()
         print(next(iter(dataset)))
 
-    def test_hardneg_dataset(self):
+    def test_supervised_dataset_jsonl(self):
+        # test from jsonl
+        dataset = SimCSEDataset.from_jsonl_files(
+            "testdata/simcse.jsonl",
+            "testdata/vocab.bert.txt",
+            batch_size=2,
+            with_pos_sequence=True,
+            with_neg_sequence=False,
+        )
+        print()
+        print(next(iter(dataset)))
+
+        # test jsonl to tfrecord
+        SimCSEDataset.jsonl_to_tfrecord(
+            "testdata/simcse.jsonl",
+            "testdata/vocab.bert.txt",
+            ["testdata/simcse.sup.tfrecord"],
+            with_pos_sequence=True,
+            with_neg_sequence=False,
+        )
+        dataset = SimCSEDataset.from_tfrecord_files(
+            ["testdata/simcse.sup.tfrecord"] * 4,
+            batch_size=4,
+            with_pos_sequence=True,
+            with_neg_sequence=False,
+        )
+        print()
+        print(next(iter(dataset)))
+
+    def test_hardneg_dataset_examples(self):
         examples = self._read_examples(["testdata/simcse.jsonl"])
         dataset = SimCSEDataset.from_examples(
             examples,
@@ -103,6 +161,35 @@ class SimCSEDatasetTest(unittest.TestCase):
 
         SimCSEDataset.examples_to_tfrecord(
             examples,
+            ["testdata/simcse.hardneg.tfrecord"],
+            with_pos_sequence=False,
+            with_neg_sequence=True,
+        )
+        dataset = SimCSEDataset.from_tfrecord_files(
+            ["testdata/simcse.hardneg.tfrecord"] * 4,
+            batch_size=4,
+            with_pos_sequence=False,
+            with_neg_sequence=True,
+        )
+        print()
+        print(next(iter(dataset)))
+
+    def test_hardneg_dataset_jsonl(self):
+        # test from jsonl
+        dataset = SimCSEDataset.from_jsonl_files(
+            "testdata/simcse.jsonl",
+            "testdata/vocab.bert.txt",
+            batch_size=2,
+            with_pos_sequence=False,
+            with_neg_sequence=True,
+        )
+        print()
+        print(next(iter(dataset)))
+
+        # test jsonl to tfrecord
+        SimCSEDataset.jsonl_to_tfrecord(
+            "testdata/simcse.jsonl",
+            "testdata/vocab.bert.txt",
             ["testdata/simcse.hardneg.tfrecord"],
             with_pos_sequence=False,
             with_neg_sequence=True,
