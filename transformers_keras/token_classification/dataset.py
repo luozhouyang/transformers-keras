@@ -1,53 +1,21 @@
+import json
 import logging
+import re
 from collections import namedtuple
 from typing import List
 
 import tensorflow as tf
+from tokenizers import BertWordPieceTokenizer
+
+from .tokenizer import TokenClassificationLabelTokenizer
 
 TokenClassificationExample = namedtuple(
     "TokenClassificationExample", ["tokens", "labels", "input_ids", "segment_ids", "attention_mask", "label_ids"]
 )
 
 
-class _TokenClassificationDatasetTransform:
-    """Dataset transformation for token classification."""
-
-    @classmethod
-    def examples_to_tfrecord(cls, examples, output_files, **kwargs):
-        if isinstance(output_files, str):
-            output_files = [output_files]
-        writers = [tf.io.TFRecordWriter(f) for f in output_files]
-        idx = 0
-        for example in examples:
-            tfrecord_example = cls._example_to_tfrecord(example)
-            writers[idx].write(tfrecord_example.SerializeToString())
-            idx += 1
-            idx = idx % len(writers)
-        for w in writers:
-            w.close()
-
-    @classmethod
-    def _example_to_tfrecord(cls, example: TokenClassificationExample, **kwargs):
-        feature = {
-            "input_ids": cls._int64_feature([int(x) for x in example.input_ids]),
-            "segment_ids": cls._int64_feature([int(x) for x in example.segment_ids]),
-            "attention_mask": cls._int64_feature([int(x) for x in example.attention_mask]),
-            "label_ids": cls._int64_feature([int(x) for x in example.label_ids]),
-        }
-        return tf.train.Example(features=tf.train.Features(feature=feature))
-
-    @classmethod
-    def _int64_feature(cls, values):
-        return tf.train.Feature(int64_list=tf.train.Int64List(value=values))
-
-
 class TokenClassificationDataset:
     """Dataset for token classification."""
-
-    @classmethod
-    def examples_to_tfrecord(cls, examples, output_file, **kwargs):
-        _TokenClassificationDatasetTransform.examples_to_tfrecord(examples, output_file, **kwargs)
-        logging.info("Done!")
 
     @classmethod
     def from_tfrecord_files(
@@ -78,11 +46,21 @@ class TokenClassificationDataset:
             bucket_boundaries=bucket_boundaries,
             bucket_batch_sizes=bucket_batch_sizes,
             drop_remainder=drop_remainder,
-            **kwargs
+            **kwargs,
         )
         dataset = cls._to_dict(dataset)
         dataset = cls._auto_shard(dataset, auto_shard_policy=auto_shard_policy)
         return dataset
+
+    @classmethod
+    def from_conll_files(cls, input_files, vocab_file, label_vocab_file, **kwargs):
+        examples = cls.conll_to_examples(input_files, vocab_file, label_vocab_file, **kwargs)
+        return cls.from_examples(examples, **kwargs)
+
+    @classmethod
+    def from_jsonl_files(cls, input_files, vocab_file, label_vocab_file, **kwargs):
+        examples = cls.jsonl_to_examples(input_files, vocab_file, label_vocab_file, **kwargs)
+        return cls.from_examples(examples, **kwargs)
 
     @classmethod
     def from_examples(
@@ -116,7 +94,7 @@ class TokenClassificationDataset:
             bucket_boundaries=bucket_boundaries,
             bucket_batch_sizes=bucket_batch_sizes,
             dorp_remainder=drop_remainder,
-            **kwargs
+            **kwargs,
         )
         dataset = cls._to_dict(dataset)
         dataset = cls._auto_shard(dataset, auto_shard_policy=auto_shard_policy)
@@ -226,3 +204,123 @@ class TokenClassificationDataset:
             num_parallel_calls=tf.data.AUTOTUNE,
         ).prefetch(tf.data.AUTOTUNE)
         return dataset
+
+    @classmethod
+    def conll_to_tfrecord(cls, input_files, vocab_file, label_vocab_file, output_files, **kwargs):
+        examples = cls.conll_to_examples(input_files, vocab_file, label_vocab_file, **kwargs)
+        cls.examples_to_tfrecord(examples, output_files, **kwargs)
+
+    @classmethod
+    def conll_to_examples(cls, input_files, vocab_file, label_vocab_file, sep="\t", **kwargs):
+        if isinstance(input_files, str):
+            input_files = [input_files]
+        instances = []
+        for f in input_files:
+            features, labels = [], []
+            with open(f, mode="rt", encoding="utf-8") as fin:
+                for line in fin:
+                    line = line.strip()
+                    if not line:
+                        instances.append({"features": features, "labels": labels})
+                        features, labels = [], []
+                        continue
+                    parts = re.split(sep, line)
+                    if len(parts) != 2:
+                        continue
+                    features.append(parts[0])
+                    labels.append(parts[1])
+            if features and labels:
+                instances.append({"features": features, "labels": labels})
+        examples = []
+        tokenizer = BertWordPieceTokenizer.from_file(vocab_file, lowercase=kwargs.pop("do_lower_case", True))
+        label_tokenizer = TokenClassificationLabelTokenizer.from_file(
+            label_vocab_file, o_token=kwargs.pop("o_token", "O")
+        )
+        for instance in instances:
+            example = cls._instance_to_example(instance, tokenizer, label_tokenizer, **kwargs)
+            if not example:
+                continue
+            examples.append(example)
+        logging.info("Collected %d examples in total.", len(examples))
+        return examples
+
+    @classmethod
+    def jsonl_to_tfrecord(cls, input_files, vocab_file, lable_vocab_file, output_files, **kwargs):
+        examples = cls.jsonl_to_examples(input_files, vocab_file, lable_vocab_file, **kwargs)
+        cls.examples_to_tfrecord(examples, output_files, **kwargs)
+
+    @classmethod
+    def jsonl_to_examples(cls, input_files, vocab_file, label_vocab_file, **kwargs):
+        if isinstance(input_files, str):
+            input_files = [input_files]
+        instances = []
+        for f in input_files:
+            with open(f, mode="rt", encoding="utf-8") as fin:
+                for line in fin:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    instance = json.loads(line)
+                    instances.append(instance)
+        logging.info("Collected %d instances in total.", len(instances))
+        examples = []
+        tokenizer = BertWordPieceTokenizer.from_file(vocab_file, lowercase=kwargs.pop("do_lower_case", True))
+        label_tokenizer = TokenClassificationLabelTokenizer.from_file(
+            label_vocab_file, o_token=kwargs.pop("o_token", "O")
+        )
+        for instance in instances:
+            example = cls._instance_to_example(instance, tokenizer, label_tokenizer, **kwargs)
+            if not example:
+                continue
+            examples.append(example)
+        logging.info("Collected %d examples in total.", len(examples))
+        return examples
+
+    @classmethod
+    def examples_to_tfrecord(cls, examples, output_files, **kwargs):
+        if isinstance(output_files, str):
+            output_files = [output_files]
+        writers = [tf.io.TFRecordWriter(f) for f in output_files]
+        idx = 0
+        for example in examples:
+            tfrecord_example = cls._example_to_tfrecord(example)
+            writers[idx].write(tfrecord_example.SerializeToString())
+            idx += 1
+            idx = idx % len(writers)
+        for w in writers:
+            w.close()
+        logging.info("Finished to write %d examples to tfrecords.", len(examples))
+
+    @classmethod
+    def _int64_feature(cls, values):
+        return tf.train.Feature(int64_list=tf.train.Int64List(value=values))
+
+    @classmethod
+    def _instance_to_example(
+        cls, instance, tokenizer: BertWordPieceTokenizer, label_tokenizer: TokenClassificationLabelTokenizer, **kwargs
+    ):
+        features = instance[kwargs.get("features_key", "features")]
+        tokens = ["[CLS]"] + features + ["[SEP]"]
+        cls_id, sep_id = tokenizer.token_to_id("[CLS]"), tokenizer.token_to_id("[SEP]")
+        input_ids = [cls_id] + [tokenizer.token_to_id(token) for token in features] + [sep_id]
+        labels = instance[kwargs.get("labels_key", "labels")]
+        label_ids = label_tokenizer.labels_to_ids(labels, add_cls=True, add_sep=True)
+        example = TokenClassificationExample(
+            tokens=tokens,
+            labels=labels,
+            input_ids=input_ids,
+            segment_ids=[0] * len(input_ids),
+            attention_mask=[1] * len(input_ids),
+            label_ids=label_ids,
+        )
+        return example
+
+    @classmethod
+    def _example_to_tfrecord(cls, example: TokenClassificationExample, **kwargs):
+        feature = {
+            "input_ids": cls._int64_feature([int(x) for x in example.input_ids]),
+            "segment_ids": cls._int64_feature([int(x) for x in example.segment_ids]),
+            "attention_mask": cls._int64_feature([int(x) for x in example.attention_mask]),
+            "label_ids": cls._int64_feature([int(x) for x in example.label_ids]),
+        }
+        return tf.train.Example(features=tf.train.Features(feature=feature))
