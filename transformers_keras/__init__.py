@@ -21,11 +21,17 @@ from transformers_keras.modeling_bert import (
     BertPretrainedModel,
 )
 from transformers_keras.modeling_utils import complete_inputs
-from transformers_keras.question_answering.dataset import QuestionAnsweringDataset, QuestionAnsweringExample
-from transformers_keras.question_answering.models import AlbertForQuestionAnswering, BertForQuestionAnswering
-from transformers_keras.question_answering.tokenizer import (
-    QuestionAnsweringTokenizer,
-    QuestionAnsweringTokenizerForChinese,
+from transformers_keras.question_answering.dataset import (
+    QuestionAnsweringDataset,
+    QuestionAnsweringExample,
+    QuestionAnsweringXDataset,
+    QuestionAnsweringXExample,
+)
+from transformers_keras.question_answering.models import (
+    AlbertForQuestionAnswering,
+    AlbertForQuestionAnsweringX,
+    BertForQuestionAnswering,
+    BertForQuestionAnsweringX,
 )
 from transformers_keras.sentence_embedding.bert_embedding import BertForSentenceEmbedding
 from transformers_keras.sentence_embedding.simcse_dataset import SimCSEDataset, SimCSEExample
@@ -45,7 +51,6 @@ from transformers_keras.token_classification.crf_models import (
 )
 from transformers_keras.token_classification.dataset import TokenClassificationDataset, TokenClassificationExample
 from transformers_keras.token_classification.models import AlbertForTokenClassification, BertForTokenClassification
-from transformers_keras.token_classification.tokenizer import QuestionAnsweringTokenizerForChinese
 
 __name__ = "transformers_keras"
 __version__ = "0.4.3"
