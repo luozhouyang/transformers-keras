@@ -14,8 +14,10 @@ class BaseMetricForQuestionAnswering(tf.keras.callbacks.Callback):
     """Base metric for qa."""
 
     @classmethod
-    def from_jsonl_files(cls, input_files, vocab_file, **kwargs):
+    def from_jsonl_files(cls, input_files, vocab_file, limit=None, **kwargs):
         examples = QuestionAnsweringDataset.jsonl_to_examples(input_files, vocab_file, **kwargs)
+        if limit is not None and limit > 0:
+            examples = examples[:limit]
         return cls(examples=examples, **kwargs)
 
     def __init__(self, examples: List[QuestionAnsweringExample], batch_size=32, **kwargs):
@@ -32,14 +34,17 @@ class BaseMetricForQuestionAnswering(tf.keras.callbacks.Callback):
                 tf.data.Dataset.from_tensor_slices(attention_mask),
             )
         ).batch(self.batch_size)
+        dataset = dataset.map(lambda a, b, c: {"input_ids": a, "segment_ids": b, "attention_mask": c})
         outputs = self.model.predict(dataset)
+        heads, tails = outputs[0], outputs[1]
         pred_answers, gold_answers = [], []
-        for head, tail, example in zip(outputs["head"], outputs["tail"], self.examples):
+        for head, tail, example in zip(heads, tails, self.examples):
             head, tail = np.argmax(head), np.argmax(tail)
             pred_tokens = example.tokens[head : tail + 1]
             pred_text = "".join([str(x).lstrip("##") for x in pred_tokens])
+            gold_text = "".join([str(x).lstrip("##") for x in example.tokens[example.start : example.end + 1]])
             pred_answers.append(self._normalize_answer(pred_text))
-            gold_answers.append(self._normalize_answer(example.answer))
+            gold_answers.append(self._normalize_answer(gold_text))
         self._compute_metric(epoch, pred_answers, gold_answers)
 
     def _compute_metric(self, epoch, pred_answers, gold_answers):
@@ -47,7 +52,7 @@ class BaseMetricForQuestionAnswering(tf.keras.callbacks.Callback):
 
     def _build_inputs(self):
         input_ids, segment_ids, attention_mask = [], [], []
-        maxlen = max([len(e.tokens) for e in self.examples])
+        maxlen = max([len(e.input_ids) for e in self.examples])
         for e in self.examples:
             _input_ids = e.input_ids + [0] * (maxlen - len(e.input_ids))
             _segment_ids = e.segment_ids + [0] * (maxlen - len(e.segment_ids))
@@ -90,7 +95,7 @@ class ExactMatchForQuestionAnswering(BaseMetricForQuestionAnswering):
             num_matchs += pred == gold
         acc = num_matchs * 1.0 / len(pred_answers)
         tf.summary.scalar("EM", acc, step=epoch, description="Exact Match Score")
-        logging.info(f"No.{epoch + 1: 4d} EM: {acc:.4f}")
+        logging.info(f"No.{epoch + 1: 4d} epoch EM: {acc:.4f}")
 
 
 class F1ForQuestionAnswering(BaseMetricForQuestionAnswering):
@@ -103,7 +108,7 @@ class F1ForQuestionAnswering(BaseMetricForQuestionAnswering):
             f1_scores.append(self._compute_f1(pred, gold))
         f1 = sum(f1_scores) / len(f1_scores)
         tf.summary.scalar("F1", f1, step=epoch, description="F1 Score")
-        logging.info(f"No.{epoch + 1: 4d} F1: {f1:.4f}")
+        logging.info(f"No.{epoch + 1: 4d} epoch F1: {f1:.4f}")
 
     def _compute_f1(self, pred, gold):
         pred_toks = pred.split()

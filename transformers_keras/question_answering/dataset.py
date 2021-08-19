@@ -363,12 +363,22 @@ class QuestionAnsweringDataset(_BaseQuestionAnsweringDataset):
             return None
         start_token_idx, end_token_idx = ans_token_idx[0], ans_token_idx[-1]
         question_encoding = tokenizer.encode(question)
+        input_ids = context_encoding.ids + question_encoding.ids[1:]
+        segment_ids = [0] * len(context_encoding.type_ids) + [1] * len(question_encoding.type_ids[1:])
+        attention_mask = [1] * len(context_encoding.attention_mask + question_encoding.attention_mask[1:])
+        assert len(input_ids) == len(segment_ids), "input_ids length:{} VS segment_ids length: {}".format(
+            len(input_ids), len(segment_ids)
+        )
+        assert len(input_ids) == len(attention_mask), "input_ids length:{} VS attention_mask length: {}".format(
+            len(input_ids), len(attention_mask)
+        )
+
         example = QuestionAnsweringExample(
             text=context + question,
             tokens=context_encoding.tokens + question_encoding.tokens[1:],
-            input_ids=context_encoding.ids + question_encoding.ids[1:],
-            segment_ids=[0] * len(context_encoding.type_ids) + [1] * len(context_encoding.type_ids[1:]),
-            attention_mask=[1] * len(context_encoding.attention_mask + question_encoding.attention_mask[1:]),
+            input_ids=input_ids,
+            segment_ids=segment_ids,
+            attention_mask=attention_mask,
             start=start_token_idx,
             end=end_token_idx,
         )
@@ -622,7 +632,7 @@ class QuestionAnsweringXDataset(_BaseQuestionAnsweringDataset):
         # build inputs
         tokens = context_encoding.tokens + question_encoding.tokens[1:]
         input_ids = context_encoding.ids + question_encoding.ids[1:]
-        segment_ids = [0] * len(context_encoding.type_ids) + [1] * len(context_encoding.type_ids[1:])
+        segment_ids = [0] * len(context_encoding.type_ids) + [1] * len(question_encoding.type_ids[1:])
         attention_mask = [1] * len(context_encoding.attention_mask + question_encoding.attention_mask[1:])
         return QuestionAnsweringXExample(
             text=context + question,
