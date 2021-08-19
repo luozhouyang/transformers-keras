@@ -95,7 +95,7 @@ class ExactMatchForQuestionAnswering(BaseMetricForQuestionAnswering):
             num_matchs += pred == gold
         acc = num_matchs * 1.0 / len(pred_answers)
         tf.summary.scalar("EM", acc, step=epoch, description="Exact Match Score")
-        logging.info(f"No.{epoch + 1: 4d} epoch EM: {acc:.4f}")
+        logging.info("No.%4d epoch EM: %.4f", epoch + 1, acc)
 
 
 class F1ForQuestionAnswering(BaseMetricForQuestionAnswering):
@@ -108,7 +108,7 @@ class F1ForQuestionAnswering(BaseMetricForQuestionAnswering):
             f1_scores.append(self._compute_f1(pred, gold))
         f1 = sum(f1_scores) / len(f1_scores)
         tf.summary.scalar("F1", f1, step=epoch, description="F1 Score")
-        logging.info(f"No.{epoch + 1: 4d} epoch F1: {f1:.4f}")
+        logging.info("No.%4d epoch F1: %.4f", epoch + 1, f1)
 
     def _compute_f1(self, pred, gold):
         pred_toks = pred.split()

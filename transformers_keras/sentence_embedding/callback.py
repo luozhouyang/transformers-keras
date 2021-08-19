@@ -54,7 +54,7 @@ class SpearmanForSentenceEmbedding(tf.keras.callbacks.Callback):
         a_embeddings = self.model.predict(a_dataset)
         b_embeddings = self.model.predict(b_dataset)
         correlation = self._report(a_embeddings, b_embeddings, labels)
-        logging.info(f"No.{epoch + 1: 04d} epoch Spearman Correlation: {correlation: .4f}")
+        logging.info("No.%4d epoch Spearman Correlation: %.4f", epoch + 1, correlation)
         tf.summary.scalar("SpearmanCorrelation", correlation, step=epoch)
 
     def _report(self, a_embeddings, b_embeddings, labels):
