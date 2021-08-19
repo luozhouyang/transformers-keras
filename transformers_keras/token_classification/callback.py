@@ -1,6 +1,7 @@
 import logging
 from typing import List
 
+import numpy as np
 import tensorflow as tf
 from seqeval.metrics import classification_report
 from transformers_keras.token_classification.dataset import TokenClassificationDataset, TokenClassificationExample
@@ -41,10 +42,12 @@ class SeqEvalForTokenClassification(tf.keras.callbacks.Callback):
                 tf.data.Dataset.from_tensor_slices(attention_mask),
             )
         ).batch(self.batch_size)
+        dataset = dataset.map(lambda a, b, c: {"input_ids": a, "segment_ids": b, "attention_mask": c})
         pred_ids = self.model.predict(dataset)
         y_preds, y_trues = [], []
         for y_pred, y_true in zip(pred_ids, labels):
-            y_pred = self.label_tokenizer.ids_to_labels(y_pred[: len(y_true)].tolist())
+            y_pred = np.argmax(y_pred[: len(y_true)], axis=-1)
+            y_pred = self.label_tokenizer.ids_to_labels(y_pred.tolist())
             y_preds.append(y_pred)
             y_trues.append(y_true)
         report = classification_report(y_trues, y_preds)
