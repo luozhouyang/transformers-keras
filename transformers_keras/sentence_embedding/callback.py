@@ -3,9 +3,10 @@ import logging
 from collections import namedtuple
 from typing import List
 
-import scipy
+import scipy.stats
 import tensorflow as tf
 from tensorflow import keras
+from tokenizers import BertWordPieceTokenizer
 
 ExampleForSpearman = namedtuple("ExampleForSpearman", ["sentence_a", "sentence_b", "label"])
 
@@ -14,7 +15,7 @@ class SpearmanForSentenceEmbedding(tf.keras.callbacks.Callback):
     """Spearman correlation for sentence embedding."""
 
     @classmethod
-    def from_jsonl_files(cls, input_files, **kwargs):
+    def from_jsonl_files(cls, input_files, vocab_file, **kwargs):
         if isinstance(input_files, str):
             input_files = [input_files]
         examples = []
@@ -35,11 +36,13 @@ class SpearmanForSentenceEmbedding(tf.keras.callbacks.Callback):
                             label=label,
                         )
                     )
-        return cls(examples=examples, **kwargs)
+        tokenizer = BertWordPieceTokenizer.from_file(vocab_file, lowercase=kwargs.pop("do_lower_case", True))
+        return cls(examples=examples, tokenzer=tokenizer, **kwargs)
 
-    def __init__(self, examples: List[ExampleForSpearman], batch_size=32, **kwargs):
+    def __init__(self, examples: List[ExampleForSpearman], tokenizer: BertWordPieceTokenizer, batch_size=32, **kwargs):
         super().__init__()
         self.examples = examples
+        self.tokenizer = tokenizer
         self.batch_size = batch_size
 
     def on_epoch_end(self, epoch, logs):
@@ -51,7 +54,7 @@ class SpearmanForSentenceEmbedding(tf.keras.callbacks.Callback):
         a_embeddings = self.model.predict(a_dataset)
         b_embeddings = self.model.predict(b_dataset)
         correlation = self._report(a_embeddings, b_embeddings, labels)
-        logging.info(f"No.{epoch + 1: 4d} Spearman Correlation: {correlation: .4f}")
+        logging.info(f"No.{epoch + 1: 04d} epoch Spearman Correlation: {correlation: .4f}")
         tf.summary.scalar("SpearmanCorrelation", correlation, step=epoch)
 
     def _report(self, a_embeddings, b_embeddings, labels):
@@ -89,5 +92,7 @@ class SpearmanForSentenceEmbedding(tf.keras.callbacks.Callback):
                 tf.data.Dataset.from_tensor_slices(segment_ids),
                 tf.data.Dataset.from_tensor_slices(attention_mask),
             )
-        ).batch(self.batch_size)
+        )
+        dataset = dataset.batch(self.batch_size)
+        dataset = dataset.map(lambda a, b, c: {"input_ids": a, "segment_ids": b, "attention_mask": c})
         return dataset
