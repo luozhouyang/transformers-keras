@@ -1,3 +1,4 @@
 tensorflow>=2.0.0
 tensorflow-addons
 tokenizers
+seqeval
