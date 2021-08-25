@@ -101,6 +101,10 @@ class ExactMatchForQuestionAnswering(BaseMetricForQuestionAnswering):
 class F1ForQuestionAnswering(BaseMetricForQuestionAnswering):
     """F1 metric for question answering."""
 
+    def __init__(self, examples: List[QuestionAnsweringExample], batch_size=32, split_whitespace=False, **kwargs):
+        super().__init__(examples, batch_size, **kwargs)
+        self.split_whitespace = split_whitespace
+
     def _compute_metric(self, epoch, pred_answers, gold_answers):
         f1_scores = []
         for pred, gold in zip(pred_answers, gold_answers):
@@ -113,6 +117,9 @@ class F1ForQuestionAnswering(BaseMetricForQuestionAnswering):
     def _compute_f1(self, pred, gold):
         pred_toks = pred.split()
         gold_toks = gold.split()
+        if not self.split_whitespace:
+            pred_toks = pred_toks[0] if pred_toks else ""
+            gold_toks = gold_toks[0] if gold_toks else ""
         common = collections.Counter(gold_toks) & collections.Counter(pred_toks)
         num_same = sum(common.values())
         if len(gold_toks) == 0 or len(pred_toks) == 0:
