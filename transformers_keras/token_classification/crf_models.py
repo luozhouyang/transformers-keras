@@ -153,13 +153,15 @@ class BertCRFForTokenClassification(BertPretrainedModel):
         return {"decode_sequence": sequence}
 
     def train_step(self, data):
-        x, y = data
+        x, y, sample_weight = _unpack_data(data)
         input_ids, segment_ids, attention_mask = x["input_ids"], x["segment_ids"], x["attention_mask"]
         with tf.GradientTape() as tape:
             decode_sequence, potentials, sequence_length, kernel = self(
                 inputs=[input_ids, segment_ids, attention_mask], training=True
             )
             crf_loss = -tfa.text.crf_log_likelihood(potentials, y, sequence_length, kernel)[0]
+            if sample_weight is not None:
+                crf_loss = crf_loss * sample_weight
             crf_loss = tf.reduce_mean(crf_loss)
             loss = crf_loss + sum(self.losses)
 
@@ -172,12 +174,15 @@ class BertCRFForTokenClassification(BertPretrainedModel):
         return results
 
     def test_step(self, data):
-        x, y = data
+        x, y, sample_weight = _unpack_data(data)
         input_ids, segment_ids, attention_mask = x["input_ids"], x["segment_ids"], x["attention_mask"]
         decode_sequence, potentials, sequence_length, kernel = self(
             inputs=[input_ids, segment_ids, attention_mask], training=False
         )
-        crf_loss = tf.reduce_mean(-tfa.text.crf_log_likelihood(potentials, y, sequence_length, kernel))
+        crf_loss = -tfa.text.crf_log_likelihood(potentials, y, sequence_length, kernel)[0]
+        if sample_weight is not None:
+            crf_loss = crf_loss * sample_weight
+        crf_loss = tf.reduce_mean(crf_loss)
         loss = crf_loss + sum(self.losses)
         self.compiled_metrics.update_state(y, potentials)
         # Return a dict mapping metric names to current value
@@ -187,7 +192,9 @@ class BertCRFForTokenClassification(BertPretrainedModel):
 
     def predict_step(self, data):
         x, _, _ = _unpack_data(data)
-        decode_sequence, potentials, sequence_length, kernel = self(x, training=False)
+        input_ids, segment_ids, attention_mask = x["input_ids"], x["segment_ids"], x["attention_mask"]
+        decode_sequence, potentials, sequence_length, kernel = self(
+            inputs=[input_ids, segment_ids, attention_mask], training=False)
         return decode_sequence
 
 
@@ -263,13 +270,15 @@ class AlertCRFForTokenClassification(AlbertPretrainedModel):
         return {"decode_sequence": sequence}
 
     def train_step(self, data):
-        x, y = data
+        x, y, sample_weight = _unpack_data(data)
         input_ids, segment_ids, attention_mask = x["input_ids"], x["segment_ids"], x["attention_mask"]
         with tf.GradientTape() as tape:
             decode_sequence, potentials, sequence_length, kernel = self(
                 inputs=[input_ids, segment_ids, attention_mask], training=True
             )
             crf_loss = -tfa.text.crf_log_likelihood(potentials, y, sequence_length, kernel)[0]
+            if sample_weight is not None:
+                crf_loss = crf_loss * sample_weight
             crf_loss = tf.reduce_mean(crf_loss)
             loss = crf_loss + sum(self.losses)
 
@@ -282,12 +291,15 @@ class AlertCRFForTokenClassification(AlbertPretrainedModel):
         return results
 
     def test_step(self, data):
-        x, y = data
+        x, y, sample_weight = _unpack_data(data)
         input_ids, segment_ids, attention_mask = x["input_ids"], x["segment_ids"], x["attention_mask"]
         decode_sequence, potentials, sequence_length, kernel = self(
             inputs=[input_ids, segment_ids, attention_mask], training=False
         )
-        crf_loss = tf.reduce_mean(-tfa.text.crf_log_likelihood(potentials, y, sequence_length, kernel))
+        crf_loss = -tfa.text.crf_log_likelihood(potentials, y, sequence_length, kernel)[0]
+        if sample_weight is not None:
+            crf_loss = crf_loss * sample_weight
+        crf_loss = tf.reduce_mean(crf_loss)
         loss = crf_loss + sum(self.losses)
         self.compiled_metrics.update_state(y, potentials)
         # Return a dict mapping metric names to current value
@@ -297,6 +309,8 @@ class AlertCRFForTokenClassification(AlbertPretrainedModel):
         
     def predict_step(self, data):
         x, _, _ = _unpack_data(data)
-        decode_sequence, potentials, sequence_length, kernel = self(x, training=False)
+        input_ids, segment_ids, attention_mask = x["input_ids"], x["segment_ids"], x["attention_mask"]
+        decode_sequence, potentials, sequence_length, kernel = self(
+            inputs=[input_ids, segment_ids, attention_mask], training=False)
         return decode_sequence
 
