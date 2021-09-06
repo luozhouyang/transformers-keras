@@ -43,4 +43,5 @@ jobs:
           --ignore tests/question_answering_tests \
           --ignore tests/sequence_classification_tests \
           --ignore tests/token_classification_tests \
-          --ignore tests/sentence_embedding_tests
+          --ignore tests/sentence_embedding_tests \
+          --ignore tests/sentiment_analysis_tests
