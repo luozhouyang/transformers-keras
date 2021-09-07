@@ -4,6 +4,7 @@ from typing import List
 
 import tensorflow as tf
 from transformers_keras.dataset_utils import AbstractDataset
+from transformers_keras.question_answering.dataset import QuestionAnsweringXDataset
 from transformers_keras.tokenizers.char_tokenizer import BertCharTokenizer
 
 AspectTermExtractionExample = namedtuple(
@@ -12,7 +13,7 @@ AspectTermExtractionExample = namedtuple(
 )
 
 
-class BertForAspectTermExtractionDataset(AbstractDataset):
+class AspectTermExtractionDataset(AbstractDataset):
     """Build dataset for aspect term extraction models."""
 
     @classmethod
@@ -155,3 +156,9 @@ class BertForAspectTermExtractionDataset(AbstractDataset):
             "end": cls._int64_feature([int(x) for x in example.end_ids]),
         }
         return tf.train.Example(features=tf.train.Features(feature=feature))
+
+
+class OpinionTermExtractionAndClassificationDataset(QuestionAnsweringXDataset):
+    """Dataset builder for Opinion Term Extraction and Classification"""
+
+    pass
