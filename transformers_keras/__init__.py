@@ -40,7 +40,22 @@ from transformers_keras.question_answering.models import (
 )
 from transformers_keras.sentence_embedding.bert_embedding import BertForSentenceEmbedding
 from transformers_keras.sentence_embedding.callback import SpearmanForSentenceEmbedding
+from transformers_keras.sentence_embedding.simcse_dataset import (
+    HardNegativeSimCSEDataset,
+    HardNegativeSimCSEExample,
+    SupervisedSimCSEDataset,
+    SupervisedSimCSEExample,
+    UnsupervisedSimCSEDataset,
+    UnsupervisedSimCSEExample,
+)
 from transformers_keras.sentence_embedding.simcse_models import HardNegativeSimCSE, SupervisedSimCSE, UnsupervisedSimCSE
+from transformers_keras.sentiment_analysis.ate import BertForAspectTermExtraction
+from transformers_keras.sentiment_analysis.dataset import (
+    AspectTermExtractionDataset,
+    AspectTermExtractionExample,
+    OpinionTermExtractionAndClassificationDataset,
+)
+from transformers_keras.sentiment_analysis.otec import BertForOpinionTermExtractionAndClassification
 from transformers_keras.sequence_classification.dataset import SequenceClassificationDataset, SequenceClassificationExample
 from transformers_keras.sequence_classification.models import AlbertForSequenceClassification, BertForSequenceClassification
 from transformers_keras.token_classification.callback import SeqEvalForTokenClassification
@@ -53,6 +68,6 @@ from transformers_keras.token_classification.dataset import TokenClassificationD
 from transformers_keras.token_classification.models import AlbertForTokenClassification, BertForTokenClassification
 
 __name__ = "transformers_keras"
-__version__ = "0.4.4"
+__version__ = "0.4.5"
 
 logging.basicConfig(format="%(asctime)s %(levelname)7s %(filename)20s %(lineno)4d] %(message)s", level=logging.INFO)
