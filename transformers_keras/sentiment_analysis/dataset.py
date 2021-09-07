@@ -38,8 +38,12 @@ class BertForAspectTermExtractionDataset(AbstractDataset):
         if repeat is not None:
             dataset = dataset.repeat(repeat)
         dataset = dataset.shuffle(buffer_size=buffer_size, seed=seed, reshuffle_each_iteration=reshuffle_each_iteration)
+        # fmt: off
         dataset = cls._bucketing(
             dataset,
+            element_length_func=lambda a, b, c, x, y: tf.size(a),
+            padded_shapes=([None, ], [None, ], [None, ], [None, ], [None, ]),
+            padding_values=(pad_id, pad_id, pad_id, pad_id, pad_id),
             batch_size=batch_size,
             pad_id=pad_id,
             bucket_boundaries=bucket_boundaries,
@@ -47,38 +51,9 @@ class BertForAspectTermExtractionDataset(AbstractDataset):
             drop_remainder=drop_remainder,
             **kwargs,
         )
+        # fmt: on
         dataset = cls._to_dict(dataset)
         dataset = cls._auto_shard(dataset, auto_shard_policy=auto_shard_policy)
-        return dataset
-
-    @classmethod
-    def _bucketing(
-        cls,
-        dataset,
-        batch_size=64,
-        pad_id=0,
-        bucket_boundaries=[50, 100, 150, 200, 250, 300, 350, 400, 450, 500],
-        bucket_batch_sizes=None,
-        drop_remainder=False,
-        **kwargs
-    ):
-        if bucket_batch_sizes is None:
-            bucket_batch_sizes = [batch_size] * (len(bucket_boundaries) + 1)
-        assert (
-            len(bucket_batch_sizes) == len(bucket_boundaries) + 1
-        ), "len(bucket_batch_sizes) should equals len(bucket_doundaries) + 1"
-
-        pad_id = tf.constant(pad_id, dtype=tf.int32)
-        # fmt: off
-        dataset = dataset.apply(cls.bucket_by_sequence_length(
-            element_length_func=lambda a, b, c, x, y: tf.size(a),
-            bucket_boundaries=bucket_boundaries,
-            bucket_batch_sizes=bucket_batch_sizes,
-            padded_shapes=([None, ], [None, ], [None, ], [None, ], [None, ]),
-            padding_values=(pad_id, pad_id, pad_id, pad_id, pad_id),
-            drop_remainder=drop_remainder,
-        )).prefetch(cls.AUTOTUNE)
-        # fmt: on
         return dataset
 
     @classmethod

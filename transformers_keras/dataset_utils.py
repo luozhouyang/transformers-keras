@@ -96,6 +96,39 @@ class AbstractDataset(abc.ABC):
         pass
 
     @classmethod
+    def _bucketing(
+        cls,
+        dataset,
+        element_length_func,
+        padded_shapes,
+        padding_values,
+        batch_size=64,
+        pad_id=0,
+        bucket_boundaries=[50, 100, 150, 200, 250, 300, 350, 400, 450, 500],
+        bucket_batch_sizes=None,
+        drop_remainder=False,
+        **kwargs
+    ):
+        if bucket_batch_sizes is None:
+            bucket_batch_sizes = [batch_size] * (len(bucket_boundaries) + 1)
+        assert (
+            len(bucket_batch_sizes) == len(bucket_boundaries) + 1
+        ), "len(bucket_batch_sizes) should equals len(bucket_doundaries) + 1"
+
+        pad_id = tf.constant(pad_id, dtype=tf.int32)
+        # fmt: off
+        dataset = dataset.apply(cls.bucket_by_sequence_length(
+            element_length_func=element_length_func,
+            bucket_boundaries=bucket_boundaries,
+            bucket_batch_sizes=bucket_batch_sizes,
+            padded_shapes=padded_shapes,
+            padding_values=padding_values,
+            drop_remainder=drop_remainder,
+        )).prefetch(cls.AUTOTUNE)
+        # fmt: on
+        return dataset
+
+    @classmethod
     def _read_jsonl(cls, input_files, **kwargs):
         if isinstance(input_files, str):
             input_files = [input_files]

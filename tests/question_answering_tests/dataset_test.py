@@ -40,7 +40,7 @@ class DatasetTest(unittest.TestCase):
         instances = self._read_qa_instances("testdata/qa.sogouqa.jsonl")
         # test jsonl to examples
         examples = QuestionAnsweringDataset.jsonl_to_examples(
-            ["testdata/qa.sogouqa.jsonl"], "testdata/vocab.bert.txt", context_key="passage"
+            ["testdata/qa.sogouqa.jsonl"], vocab_file="testdata/vocab.bert.txt", context_key="passage"
         )
         for idx, e in enumerate(examples):
             print("{} -> {}".format(instances[idx]["answer"], " ".join(e.tokens[e.start : e.end + 1])))
@@ -57,8 +57,8 @@ class DatasetTest(unittest.TestCase):
         # test jsonl to tfrecord
         QuestionAnsweringDataset.jsonl_to_tfrecord(
             "testdata/qa.sogouqa.jsonl",
-            "testdata/vocab.bert.txt",
-            "testdata/qa.sogouqa.tfrecord",
+            vocab_file="testdata/vocab.bert.txt",
+            output_files="testdata/qa.sogouqa.tfrecord",
             context_key="passage",
         )
 
@@ -69,7 +69,7 @@ class DatasetTest(unittest.TestCase):
 
         # test from jsonl
         d = QuestionAnsweringDataset.from_jsonl_files(
-            "testdata/qa.sogouqa.jsonl", "testdata/vocab.bert.txt", context_key="passage", batch_size=4
+            "testdata/qa.sogouqa.jsonl", vocab_file="testdata/vocab.bert.txt", context_key="passage", batch_size=4
         )
         print()
         print(next(iter(d)))
@@ -78,7 +78,7 @@ class DatasetTest(unittest.TestCase):
         instances = self._read_qax_instances("testdata/qax.sogouqa.jsonl")
         # test jsonl to examples
         examples = QuestionAnsweringXDataset.jsonl_to_examples(
-            ["testdata/qax.sogouqa.jsonl"], "testdata/vocab.bert.txt", context_key="passage"
+            ["testdata/qax.sogouqa.jsonl"], vocab_file="testdata/vocab.bert.txt", context_key="passage"
         )
         for idx, e in enumerate(examples):
             print("{} -> {}".format(instances[idx]["answer"], " ".join(e.tokens[e.start : e.end + 1])))
@@ -95,8 +95,8 @@ class DatasetTest(unittest.TestCase):
         # test jsonl to tfrecord
         QuestionAnsweringXDataset.jsonl_to_tfrecord(
             "testdata/qax.sogouqa.jsonl",
-            "testdata/vocab.bert.txt",
-            "testdata/qax.sogouqa.tfrecord",
+            vocab_file="testdata/vocab.bert.txt",
+            output_files="testdata/qax.sogouqa.tfrecord",
             context_key="passage",
         )
 
@@ -107,7 +107,7 @@ class DatasetTest(unittest.TestCase):
 
         # test from jsonl
         d = QuestionAnsweringXDataset.from_jsonl_files(
-            "testdata/qax.sogouqa.jsonl", "testdata/vocab.bert.txt", context_key="passage", batch_size=4
+            "testdata/qax.sogouqa.jsonl", vocab_file="testdata/vocab.bert.txt", context_key="passage", batch_size=4
         )
         print()
         print(next(iter(d)))

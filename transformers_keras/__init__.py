@@ -40,16 +40,9 @@ from transformers_keras.question_answering.models import (
 )
 from transformers_keras.sentence_embedding.bert_embedding import BertForSentenceEmbedding
 from transformers_keras.sentence_embedding.callback import SpearmanForSentenceEmbedding
-from transformers_keras.sentence_embedding.simcse_dataset import SimCSEDataset, SimCSEExample
 from transformers_keras.sentence_embedding.simcse_models import HardNegativeSimCSE, SupervisedSimCSE, UnsupervisedSimCSE
-from transformers_keras.sequence_classification.dataset import (
-    SequenceClassificationDataset,
-    SequenceClassificationExample,
-)
-from transformers_keras.sequence_classification.models import (
-    AlbertForSequenceClassification,
-    BertForSequenceClassification,
-)
+from transformers_keras.sequence_classification.dataset import SequenceClassificationDataset, SequenceClassificationExample
+from transformers_keras.sequence_classification.models import AlbertForSequenceClassification, BertForSequenceClassification
 from transformers_keras.token_classification.callback import SeqEvalForTokenClassification
 from transformers_keras.token_classification.crf_models import (
     AlertCRFForTokenClassification,

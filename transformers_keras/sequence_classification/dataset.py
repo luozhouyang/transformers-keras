@@ -6,19 +6,20 @@ from typing import List
 
 import tensorflow as tf
 from tokenizers import BertWordPieceTokenizer
+from transformers_keras.dataset_utils import AbstractDataset
 
 SequenceClassificationExample = namedtuple(
     "SequenceClassificationExample", ["tokens", "input_ids", "segment_ids", "attention_mask", "label"]
 )
 
 
-class SequenceClassificationDataset:
+class SequenceClassificationDataset(AbstractDataset):
     """Dataset builder for sequence classification."""
 
     @classmethod
-    def from_tfrecord_files(
+    def _build_dataset(
         cls,
-        input_files,
+        dataset,
         batch_size=64,
         repeat=None,
         max_sequence_length=512,
@@ -32,13 +33,16 @@ class SequenceClassificationDataset:
         drop_remainder=False,
         **kwargs
     ):
-        dataset = cls._read_tfrecord(input_files, **kwargs)
         dataset = dataset.filter(lambda a, b, c, y: tf.size(a) <= max_sequence_length)
         if repeat is not None:
             dataset = dataset.repeat(repeat)
         dataset = dataset.shuffle(buffer_size=buffer_size, seed=seed, reshuffle_each_iteration=reshuffle_each_iteration)
+        # fmt: off
         dataset = cls._bucketing(
             dataset,
+            element_length_func=lambda a, b, c, y: tf.size(a),
+            padded_shapes=([None, ], [None, ], [None, ], []),
+            padding_values=(pad_id, pad_id, pad_id, None),
             batch_size=batch_size,
             pad_id=pad_id,
             bucket_boundaries=bucket_boundaries,
@@ -46,61 +50,10 @@ class SequenceClassificationDataset:
             drop_remainder=drop_remainder,
             **kwargs
         )
+        # fmt: on
         dataset = cls._to_dict(dataset)
         dataset = cls._auto_shard(dataset, auto_shard_policy=auto_shard_policy)
         return dataset
-
-    @classmethod
-    def from_jsonl_files(cls, input_files, vocab_file, **kwargs):
-        examples = cls.jsonl_to_examples(input_files, vocab_file, **kwargs)
-        return cls.from_examples(examples, **kwargs)
-
-    @classmethod
-    def from_examples(
-        cls,
-        examples: List[SequenceClassificationExample],
-        batch_size=64,
-        repeat=None,
-        max_sequence_length=512,
-        bucket_boundaries=[50, 100, 150, 200, 250, 300, 350, 400, 450, 500],
-        bucket_batch_sizes=None,
-        buffer_size=1000000,
-        seed=None,
-        reshuffle_each_iteration=True,
-        pad_id=0,
-        auto_shard_policy=None,
-        drop_remainder=False,
-        verbose=True,
-        **kwargs
-    ):
-        logging.info("Number of examples: %d", len(examples))
-        cls._show_examples(examples, n=5, verbose=verbose, **kwargs)
-        dataset = cls._zip_dataset(examples)
-        dataset = dataset.filter(lambda a, b, c, y: tf.size(a) <= max_sequence_length)
-        if repeat is not None:
-            dataset = dataset.repeat(repeat)
-        dataset = dataset.shuffle(buffer_size=buffer_size, seed=seed, reshuffle_each_iteration=reshuffle_each_iteration)
-        dataset = cls._bucketing(
-            dataset,
-            batch_size=batch_size,
-            pad_id=pad_id,
-            bucket_boundaries=bucket_boundaries,
-            bucket_batch_sizes=bucket_batch_sizes,
-            drop_remainder=drop_remainder,
-            **kwargs
-        )
-        dataset = cls._to_dict(dataset)
-        dataset = cls._auto_shard(dataset, auto_shard_policy=auto_shard_policy)
-        return dataset
-
-    @classmethod
-    def _show_examples(cls, examples, n=5, verbose=True, **kwargs):
-        if not verbose:
-            return
-        n = min(n, len(examples))
-        logging.info("Showing %d examples.", n)
-        for i in range(n):
-            logging.info("No.%d example: %s", i, examples[i])
 
     @classmethod
     def _zip_dataset(cls, examples, **kwargs):
@@ -123,65 +76,15 @@ class SequenceClassificationDataset:
         return dataset
 
     @classmethod
-    def _bucketing(
-        cls,
-        dataset,
-        batch_size=64,
-        pad_id=0,
-        bucket_boundaries=[50, 100, 150, 200, 250, 300, 350, 400, 450, 500],
-        bucket_batch_sizes=None,
-        drop_remainder=False,
-        **kwargs
-    ):
-        if bucket_batch_sizes is None:
-            bucket_batch_sizes = [batch_size] * (len(bucket_boundaries) + 1)
-        assert (
-            len(bucket_batch_sizes) == len(bucket_boundaries) + 1
-        ), "len(bucket_batch_sizes) should equals len(bucket_doundaries) + 1"
-
-        pad_id = tf.constant(pad_id, dtype=tf.int32)
-        # fmt: off
-        dataset = dataset.apply(tf.data.experimental.bucket_by_sequence_length(
-            element_length_func=lambda a, b, c, y: tf.size(a),
-            bucket_boundaries=bucket_boundaries,
-            bucket_batch_sizes=bucket_batch_sizes,
-            padded_shapes=([None, ], [None, ], [None, ], []),
-            padding_values=(pad_id, pad_id, pad_id, None),
-            drop_remainder=drop_remainder,
-        )).prefetch(tf.data.AUTOTUNE)
-        # fmt: on
-        return dataset
-
-    @classmethod
     def _to_dict(cls, dataset):
         dataset = dataset.map(
             lambda a, b, c, y: ({"input_ids": a, "segment_ids": b, "attention_mask": c}, y),
-            num_parallel_calls=tf.data.AUTOTUNE,
-        ).prefetch(tf.data.AUTOTUNE)
+            num_parallel_calls=cls.AUTOTUNE,
+        ).prefetch(cls.AUTOTUNE)
         return dataset
 
     @classmethod
-    def _auto_shard(cls, dataset, auto_shard_policy=None):
-        if auto_shard_policy is not None:
-            options = tf.data.Options()
-            # options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.DATA
-            options.experimental_distribute.auto_shard_policy = auto_shard_policy
-            dataset = dataset.with_options(options)
-        return dataset
-
-    @classmethod
-    def _read_tfrecord(cls, input_files, **kwargs):
-        if isinstance(input_files, str):
-            input_files = [input_files]
-        if len(input_files) == 1:
-            dataset = tf.data.TFRecordDataset(input_files)
-        else:
-            dataset = tf.data.Dataset.from_tensor_slices(input_files)
-            dataset = dataset.interleave(
-                lambda x: tf.data.TFRecordDataset(x),
-                cycle_length=len(input_files),
-                num_parallel_calls=tf.data.AUTOTUNE,
-            )
+    def _parse_tfrecord(cls, dataset, **kwargs):
         features = {
             "input_ids": tf.io.VarLenFeature(tf.int64),
             "segment_ids": tf.io.VarLenFeature(tf.int64),
@@ -190,8 +93,8 @@ class SequenceClassificationDataset:
         }
         dataset = dataset.map(
             lambda x: tf.io.parse_example(x, features),
-            num_parallel_calls=tf.data.AUTOTUNE,
-        ).prefetch(tf.data.AUTOTUNE)
+            num_parallel_calls=cls.AUTOTUNE,
+        ).prefetch(cls.AUTOTUNE)
         dataset = dataset.map(
             lambda x: (
                 tf.cast(tf.sparse.to_dense(x["input_ids"]), tf.int32),
@@ -199,57 +102,9 @@ class SequenceClassificationDataset:
                 tf.cast(tf.sparse.to_dense(x["attention_mask"]), tf.int32),
                 tf.cast(tf.squeeze(tf.sparse.to_dense(x["label"])), tf.int32),
             ),
-            num_parallel_calls=tf.data.AUTOTUNE,
-        ).prefetch(tf.data.AUTOTUNE)
+            num_parallel_calls=cls.AUTOTUNE,
+        ).prefetch(cls.AUTOTUNE)
         return dataset
-
-    @classmethod
-    def jsonl_to_tfrecord(cls, input_files, vocab_file, output_files, **kwargs):
-        examples = cls.jsonl_to_examples(input_files, vocab_file, **kwargs)
-        cls.examples_to_tfrecord(examples, output_files, **kwargs)
-        logging.info("Convert data from jsonl to tfrecord finished.")
-
-    @classmethod
-    def jsonl_to_examples(cls, input_files, vocab_file, **kwargs):
-        if isinstance(input_files, str):
-            input_files = [input_files]
-        examples = []
-        tokenizer = BertWordPieceTokenizer.from_file(vocab_file, lowercase=kwargs.get("do_lower_case", True))
-        for f in input_files:
-            with open(f, mode="rt", encoding="utf-8") as fin:
-                for line in fin:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    instance = json.loads(line)
-                    sequence = instance[kwargs.get("sequence_key", "sequence")]
-                    label = instance[kwargs.get("label_key", "label")]
-                    encoding = tokenizer.encode(sequence)
-                    examples.append(
-                        SequenceClassificationExample(
-                            tokens=encoding.tokens,
-                            input_ids=encoding.ids,
-                            segment_ids=encoding.type_ids,
-                            attention_mask=encoding.attention_mask,
-                            label=int(label),
-                        )
-                    )
-        logging.info("Collected %d examples in total.", len(examples))
-        return examples
-
-    @classmethod
-    def examples_to_tfrecord(cls, examples, output_files, **kwargs):
-        if isinstance(output_files, str):
-            output_files = [output_files]
-        writers = [tf.io.TFRecordWriter(f) for f in output_files]
-        idx = 0
-        for example in examples:
-            tfrecord_example = cls._example_to_tfrecord(example)
-            writers[idx].write(tfrecord_example.SerializeToString())
-            idx += 1
-            idx = idx % len(writers)
-        for w in writers:
-            w.close()
 
     @classmethod
     def _example_to_tfrecord(cls, example: SequenceClassificationExample, **kwargs):
@@ -262,5 +117,25 @@ class SequenceClassificationDataset:
         return tf.train.Example(features=tf.train.Features(feature=feature))
 
     @classmethod
-    def _int64_feature(cls, values):
-        return tf.train.Feature(int64_list=tf.train.Int64List(value=values))
+    def _parse_jsonl(cls, instances, tokenizer: BertWordPieceTokenizer = None, vocab_file=None, **kwargs):
+        assert tokenizer or vocab_file, "`tokenizer` or `vocab_file` must be provided."
+        if tokenizer is None:
+            tokenizer = BertWordPieceTokenizer.from_file(
+                vocab_file,
+                lowercase=kwargs.get("do_lower_case", True),
+            )
+        examples = []
+        for instance in instances:
+            sequence = instance[kwargs.get("sequence_key", "sequence")]
+            label = instance[kwargs.get("label_key", "label")]
+            encoding = tokenizer.encode(sequence)
+            examples.append(
+                SequenceClassificationExample(
+                    tokens=encoding.tokens,
+                    input_ids=encoding.ids,
+                    segment_ids=encoding.type_ids,
+                    attention_mask=encoding.attention_mask,
+                    label=int(label),
+                )
+            )
+        return examples
