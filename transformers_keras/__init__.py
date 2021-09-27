@@ -2,6 +2,7 @@ import logging
 
 import tensorflow as tf
 
+from transformers_keras.distiller import Distiller
 from transformers_keras.modeling_albert import (
     Albert,
     AlbertEmbedding,
