@@ -15,6 +15,8 @@ class CallbackTest(unittest.TestCase):
         callback = ExactMatchForQuestionAnswering.from_jsonl_files(
             input_files=[os.path.join(os.environ["SOGOUQA_PATH"], "sogouqa.test.jsonl")],
             vocab_file=VOCAB_PATH,
+            padding="fixed",
+            max_sequence_length=128,
             limit=32,
             context_key="passage",
         )
@@ -26,6 +28,8 @@ class CallbackTest(unittest.TestCase):
         callback = F1ForQuestionAnswering.from_jsonl_files(
             input_files=[os.path.join(os.environ["SOGOUQA_PATH"], "sogouqa.test.jsonl")],
             vocab_file=VOCAB_PATH,
+            padding="fixed",
+            max_sequence_length=128,
             limit=32,
             context_key="passage",
         )
