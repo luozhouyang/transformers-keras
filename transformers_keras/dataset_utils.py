@@ -92,8 +92,106 @@ class AbstractDataset(abc.ABC):
         raise NotImplementedError()
 
     @abc.abstractclassmethod
-    def _build_dataset(cls, dataset, **kwargs):
-        pass
+    def _build_dataset(
+        cls,
+        dataset,
+        batch_size=64,
+        max_sequence_length=512,
+        padding="bucket",
+        bucket_boundaries=[50, 100, 150, 200, 250, 300, 350, 400, 450, 500],
+        bucket_batch_sizes=None,
+        repeat=None,
+        shuffle=True,
+        buffer_size=1000000,
+        seed=None,
+        reshuffle_each_iteration=True,
+        pad_id=0,
+        auto_shard_policy=None,
+        drop_remainder=False,
+        **kwargs,
+    ):
+        dataset = cls._filter(dataset, max_sequence_length=max_sequence_length, **kwargs)
+        if shuffle is True:
+            dataset = cls._shuffle(
+                dataset,
+                buffer_size=buffer_size,
+                seed=seed,
+                reshuffle_each_iteration=reshuffle_each_iteration,
+                **kwargs,
+            )
+        dataset = cls._repeat(dataset, repeat=repeat, **kwargs)
+        assert padding in ["bucket", "batch", "fixed"], "Invalid padding: " + str(padding)
+        if padding == "bucket":
+            dataset = cls._bucket_padding(
+                dataset,
+                pad_id=pad_id,
+                batch_size=batch_size,
+                bucket_boundaries=bucket_boundaries,
+                bucket_batch_sizes=bucket_batch_sizes,
+                drop_remainder=drop_remainder,
+                **kwargs,
+            )
+        elif padding == "batch":
+            dataset = cls._batch_padding(
+                dataset,
+                batch_size=batch_size,
+                pad_id=pad_id,
+                drop_remainder=drop_remainder,
+                **kwargs,
+            )
+        elif padding == "fixed":
+            dataset = cls._fixed_padding(
+                dataset,
+                batch_size=batch_size,
+                pad_id=pad_id,
+                max_sequence_length=max_sequence_length,
+                drop_remainder=drop_remainder,
+                **kwargs,
+            )
+        dataset = cls._to_dict(dataset, **kwargs)
+        dataset = cls._auto_shard(dataset, auto_shard_policy=auto_shard_policy, **kwargs)
+        return dataset
+
+    @classmethod
+    def _filter(cls, dataset, max_sequence_length=512, **kwargs):
+        raise NotImplementedError()
+
+    @classmethod
+    def _shuffle(cls, dataset, buffer_size, seed=None, reshuffle_each_iteration=True, **kwargs):
+        dataset = dataset.shuffle(buffer_size=buffer_size, seed=seed, reshuffle_each_iteration=reshuffle_each_iteration)
+        return dataset
+
+    @classmethod
+    def _repeat(cls, dataset, repeat=None, **kwargs):
+        if repeat is None:
+            return dataset
+        dataset = dataset.repeat(repeat)
+        return dataset
+
+    @classmethod
+    def _bucket_padding(
+        cls,
+        dataset,
+        batch_size=32,
+        pad_id=0,
+        bucket_boundaries=[50, 100, 150, 200, 250, 300, 350, 400, 450, 500],
+        bucket_batch_sizes=None,
+        drop_remainder=False,
+        **kwargs,
+    ):
+        raise NotImplementedError()
+
+    @classmethod
+    def _batch_padding(cls, dataset, batch_size=32, pad_id=0, drop_remainder=False, **kwargs):
+        raise NotImplementedError()
+
+    @classmethod
+    def _fixed_padding(cls, dataset, batch_size=32, pad_id=0, max_sequence_length=512, drop_remainder=False, **kwargs):
+        raise NotImplementedError()
+
+    @classmethod
+    def _to_dict(cls, dataset, **kwargs):
+        raise NotImplementedError()
 
     @classmethod
     def _bucketing(
@@ -103,11 +201,10 @@ class AbstractDataset(abc.ABC):
         padded_shapes,
         padding_values,
         batch_size=64,
-        pad_id=0,
         bucket_boundaries=[50, 100, 150, 200, 250, 300, 350, 400, 450, 500],
         bucket_batch_sizes=None,
         drop_remainder=False,
-        **kwargs
+        **kwargs,
     ):
         if bucket_batch_sizes is None:
             bucket_batch_sizes = [batch_size] * (len(bucket_boundaries) + 1)
@@ -115,7 +212,6 @@ class AbstractDataset(abc.ABC):
             len(bucket_batch_sizes) == len(bucket_boundaries) + 1
         ), "len(bucket_batch_sizes) should equals len(bucket_doundaries) + 1"
 
-        pad_id = tf.constant(pad_id, dtype=tf.int32)
         # fmt: off
         dataset = dataset.apply(cls.bucket_by_sequence_length(
             element_length_func=element_length_func,
@@ -159,7 +255,7 @@ class AbstractDataset(abc.ABC):
             dataset = dataset.interleave(
                 lambda x: tf.data.TFRecordDataset(x),
                 cycle_length=len(input_files),
-                num_parallel_calls=tf.data.AUTOTUNE,
+                num_parallel_calls=cls.AUTOTUNE,
             )
         dataset = cls._parse_tfrecord(dataset, **kwargs)
         return dataset
@@ -169,7 +265,7 @@ class AbstractDataset(abc.ABC):
         raise NotImplementedError()
 
     @classmethod
-    def _auto_shard(cls, dataset, auto_shard_policy=None):
+    def _auto_shard(cls, dataset, auto_shard_policy=None, **kwargs):
         if auto_shard_policy is not None:
             options = tf.data.Options()
             # options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.DATA
