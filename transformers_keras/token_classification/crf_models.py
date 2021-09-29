@@ -1,7 +1,6 @@
 import tensorflow as tf
 import tensorflow_addons as tfa
-from transformers_keras.modeling_albert import (AlbertModel,
-                                                AlbertPretrainedModel)
+from transformers_keras.modeling_albert import AlbertModel, AlbertPretrainedModel
 from transformers_keras.modeling_bert import BertModel, BertPretrainedModel
 
 
@@ -46,7 +45,6 @@ class CRFModel(tf.keras.Model):
         sequence_length = tf.keras.layers.Lambda(lambda x: x, name="sequence_length")(sequence_length)
         kernel = tf.keras.layers.Lambda(lambda x: x, name="kernel")(kernel)
         super().__init__(inputs=model.inputs, outputs=[decode_sequence, potentials, sequence_length, kernel], **kwargs)
-        self.crf = crf
 
     def train_step(self, data):
         x, y, sample_weight = _unpack_data(data)
@@ -136,17 +134,15 @@ class BertCRFForTokenClassification(BertPretrainedModel):
             **kwargs
         )
 
-        self.num_labels = num_labels
-        self.bert_model = bert_model
-        self.crf = crf
-
-    @tf.function( # fmt: skip
+    # fmt: off
+    @tf.function(
         input_signature=[{
-            "input_ids": tf.TensorSpec(shape=(None, None,), dtype=tf.int32, name="input_ids"), # fmt: skip
-            "segment_ids": tf.TensorSpec(shape=(None, None,), dtype=tf.int32, name="segment_ids"), # fmt: skip
-            "attention_mask": tf.TensorSpec(shape=(None, None,), dtype=tf.int32, name="attention_mask"), # fmt: skip
+            "input_ids": tf.TensorSpec(shape=(None, None,), dtype=tf.int32, name="input_ids"), 
+            "segment_ids": tf.TensorSpec(shape=(None, None,), dtype=tf.int32, name="segment_ids"),
+            "attention_mask": tf.TensorSpec(shape=(None, None,), dtype=tf.int32, name="attention_mask"), 
         }]
     )
+    # fmt: on
     def forward(self, inputs):
         input_ids, segment_ids, attention_mask = inputs["input_ids"], inputs["segment_ids"], inputs["attention_mask"]
         sequence, _, _, _ = self(inputs=[input_ids, segment_ids, attention_mask], training=False)
@@ -194,9 +190,9 @@ class BertCRFForTokenClassification(BertPretrainedModel):
         x, _, _ = _unpack_data(data)
         input_ids, segment_ids, attention_mask = x["input_ids"], x["segment_ids"], x["attention_mask"]
         decode_sequence, potentials, sequence_length, kernel = self(
-            inputs=[input_ids, segment_ids, attention_mask], training=False)
+            inputs=[input_ids, segment_ids, attention_mask], training=False
+        )
         return decode_sequence
-
 
 
 class AlertCRFForTokenClassification(AlbertPretrainedModel):
@@ -253,17 +249,15 @@ class AlertCRFForTokenClassification(AlbertPretrainedModel):
             **kwargs
         )
 
-        self.num_labels = num_labels
-        self.albert_model = albert_model
-        self.crf = crf
-
+    # fmt: off
     @tf.function(
         input_signature=[{
-            "input_ids": tf.TensorSpec(shape=(None, None,), dtype=tf.int32, name="input_ids"), # fmt: skip
-            "segment_ids": tf.TensorSpec(shape=(None, None,), dtype=tf.int32, name="segment_ids"), # fmt: skip
-            "attention_mask": tf.TensorSpec(shape=(None, None,), dtype=tf.int32, name="attention_mask"), # fmt: skip
+            "input_ids": tf.TensorSpec(shape=(None, None,), dtype=tf.int32, name="input_ids"), 
+            "segment_ids": tf.TensorSpec(shape=(None, None,), dtype=tf.int32, name="segment_ids"), 
+            "attention_mask": tf.TensorSpec(shape=(None, None,), dtype=tf.int32, name="attention_mask"), 
         }]
     )
+    # fmt: on
     def forward(self, inputs):
         input_ids, segment_ids, attention_mask = inputs["input_ids"], inputs["segment_ids"], inputs["attention_mask"]
         sequence, _, _, _ = self(inputs=[input_ids, segment_ids, attention_mask], training=False)
@@ -306,11 +300,11 @@ class AlertCRFForTokenClassification(AlbertPretrainedModel):
         results = {m.name: m.result() for m in self.metrics}
         results.update({"loss": loss})
         return results
-        
+
     def predict_step(self, data):
         x, _, _ = _unpack_data(data)
         input_ids, segment_ids, attention_mask = x["input_ids"], x["segment_ids"], x["attention_mask"]
         decode_sequence, potentials, sequence_length, kernel = self(
-            inputs=[input_ids, segment_ids, attention_mask], training=False)
+            inputs=[input_ids, segment_ids, attention_mask], training=False
+        )
         return decode_sequence
-

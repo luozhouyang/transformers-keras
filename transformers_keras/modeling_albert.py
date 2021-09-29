@@ -416,8 +416,7 @@ class AlbertPretrainedModel(tf.keras.Model):
             model_config.update(override_params)
         logging.info("Load model config: \n%s", json.dumps(model_config, indent=4))
         model = cls(**model_config, **kwargs)
-        albert_model = getattr(model, "albert_model", None)
-        assert albert_model is not None, "AlbertPretrainedModel must have an attribute named albert_model!"
+        assert model.albert_model is not None, "AlbertPretrainedModel must have an attribute: `albert_model`!"
         inputs = model.dummy_inputs()
         model(inputs=list(inputs), training=False)
         adapter.adapte_weights(
@@ -445,11 +444,17 @@ class AlbertPretrainedModel(tf.keras.Model):
             model_config.update(override_params)
         logging.info("Load model config: \n%s", json.dumps(model_config, indent=4))
         model = cls(**model_config, **kwargs)
-        albert_model = getattr(model, "albert_model", None)
-        assert albert_model is not None, "AlbertPretrainedModel must have an attribute named albert_model!"
+        assert model.albert_model is not None, "AlbertPretrainedModel must have an attribute: `albert_model`!"
         inputs = model.dummy_inputs()
         model(inputs=list(inputs), training=False)
         return model
+
+    @property
+    def albert_model(self):
+        for l in self.layers:
+            if isinstance(l, AlbertModel):
+                return l
+        return None
 
     def dummy_inputs(self):
         input_ids = tf.constant([0] * 128, dtype=tf.int64, shape=(1, 128))

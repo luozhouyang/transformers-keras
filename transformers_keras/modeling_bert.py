@@ -77,15 +77,7 @@ class BertEmbedding(tf.keras.layers.Layer):
 class BertMultiHeadAtttetion(tf.keras.layers.Layer):
     """Multi head attention."""
 
-    def __init__(
-        self,
-        hidden_size=768,
-        num_attention_heads=8,
-        attention_dropout_rate=0.1,
-        initializer_range=0.02,
-        epsilon=1e-8,
-        **kwargs
-    ):
+    def __init__(self, hidden_size=768, num_attention_heads=8, attention_dropout_rate=0.1, initializer_range=0.02, **kwargs):
         super().__init__(**kwargs)
         self.num_attention_heads = num_attention_heads
         self.hidden_size = hidden_size
@@ -176,7 +168,6 @@ class BertAttention(tf.keras.layers.Layer):
             num_attention_heads=num_attention_heads,
             attention_dropout_rate=attention_dropout_rate,
             initializer_range=initializer_range,
-            epsilon=epsilon,
             name="self",
         )
         self.attention_output = BertAttentionOutput(
@@ -402,9 +393,7 @@ class BertModel(tf.keras.layers.Layer):
         embedding = self.bert_embedding(input_ids, segment_ids, training=training)
         # (batch_size, seq_len) -> (batch_size, 1, 1, seq_len)
         attention_mask = attention_mask[:, tf.newaxis, tf.newaxis, :]
-        output, all_hidden_states, all_attention_scores = self.bert_encoder(
-            embedding, attention_mask, training=training
-        )
+        output, all_hidden_states, all_attention_scores = self.bert_encoder(embedding, attention_mask, training=training)
         pooled_output = self.bert_pooler(output)
         return output, pooled_output, all_hidden_states, all_attention_scores
 
@@ -451,9 +440,7 @@ class BertPretrainedModel(tf.keras.Model):
             model_config.update(override_params)
         logging.info("Load model config: \n%s", json.dumps(model_config, indent=4))
         model = cls(**model_config, **kwargs)
-        assert (
-            getattr(model, "bert_model", None) is not None
-        ), "BertPretrainedModel must have an attribute named bert_model!"
+        assert model.bert_model is not None, "bert_model is None!"
         inputs = model.dummy_inputs()
         model(inputs=list(inputs), training=False)
         adapter.adapte_weights(
@@ -482,12 +469,17 @@ class BertPretrainedModel(tf.keras.Model):
             model_config.update(override_params)
         logging.info("Load model config: \n%s", json.dumps(model_config, indent=4))
         model = cls(**model_config, **kwargs)
-        assert (
-            getattr(model, "bert_model", None) is not None
-        ), "BertPretrainedModel must have an attribute named bert_model!"
+        assert model.bert_model is not None, "bert_model is None!"
         inputs = model.dummy_inputs()
         model(inputs=list(inputs), training=False)
         return model
+
+    @property
+    def bert_model(self):
+        for l in self.layers:
+            if isinstance(l, BertModel):
+                return l
+        return None
 
     def dummy_inputs(self):
         input_ids = tf.constant([0] * 128, dtype=tf.int32, shape=(1, 128))
@@ -535,9 +527,7 @@ class Bert(BertPretrainedModel):
             epsilon=epsilon,
             name="bert",
         )
-        sequence_output, pooled_output, hidden_states, attention_weights = bert_model(
-            input_ids, segment_ids, attention_mask
-        )
+        sequence_output, pooled_output, hidden_states, attention_weights = bert_model(input_ids, segment_ids, attention_mask)
         outputs = [
             tf.keras.layers.Lambda(lambda x: x, name="sequence_output")(sequence_output),
             tf.keras.layers.Lambda(lambda x: x, name="pooled_output")(pooled_output),
@@ -549,7 +539,7 @@ class Bert(BertPretrainedModel):
 
         super().__init__(inputs=[input_ids, segment_ids, attention_mask], outputs=outputs, **kwargs)
 
-        self.bert_model = bert_model
+        # self.bert_model = bert_model
         self.vocab_size = vocab_size
         self.type_vocab_size = type_vocab_size
         self.max_positions = max_positions

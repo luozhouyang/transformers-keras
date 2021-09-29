@@ -38,7 +38,7 @@ class QuestionAnsweringTest(unittest.TestCase):
 
     def test_load_albert_for_qa_pretrained_model(self):
         m = AlbertForQuestionAnswering.from_pretrained(
-            os.path.join(os.environ['PRETRAINED_MODE_PATH'], 'albert_base_zh'),
+            os.path.join(os.environ['ALBERT_MODEL_PATH'], 'albert-base-zh'),
             override_params={'num_labels': 2},
         )
         m.summary()

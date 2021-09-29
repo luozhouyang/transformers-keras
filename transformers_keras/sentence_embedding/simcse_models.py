@@ -3,25 +3,30 @@ from transformers_keras.modeling_bert import BertModel, BertPretrainedModel
 
 
 class AbstractSimCSE(BertPretrainedModel):
+    """Abstract SimCSE model"""
 
-    def __init__(self,
-                 vocab_size=21128,
-                 max_positions=512,
-                 hidden_size=768,
-                 type_vocab_size=2,
-                 num_layers=6,
-                 num_attention_heads=8,
-                 intermediate_size=3072,
-                 activation='gelu',
-                 hidden_dropout_rate=0.2,
-                 attention_dropout_rate=0.1,
-                 initializer_range=0.02,
-                 epsilon=1e-12,
-                 **kwargs):
+    def __init__(
+        self,
+        vocab_size=21128,
+        max_positions=512,
+        hidden_size=768,
+        type_vocab_size=2,
+        num_layers=6,
+        num_attention_heads=8,
+        intermediate_size=3072,
+        activation="gelu",
+        hidden_dropout_rate=0.2,
+        attention_dropout_rate=0.1,
+        initializer_range=0.02,
+        epsilon=1e-12,
+        temperature=0.05,
+        negative_weight=0.2,
+        **kwargs
+    ):
         # build functional model
-        input_ids = tf.keras.layers.Input(shape=(None, ), dtype=tf.int32, name='input_ids')
-        segment_ids = tf.keras.layers.Input(shape=(None, ), dtype=tf.int32, name='segment_ids')
-        attention_mask = tf.keras.layers.Input(shape=(None, ), dtype=tf.int32, name='attention_mask')
+        input_ids = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name="input_ids")
+        segment_ids = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name="segment_ids")
+        attention_mask = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name="attention_mask")
         bert_model = BertModel(
             vocab_size=vocab_size,
             max_positions=max_positions,
@@ -35,18 +40,21 @@ class AbstractSimCSE(BertPretrainedModel):
             attention_dropout_rate=attention_dropout_rate,
             initializer_range=initializer_range,
             epsilon=epsilon,
-            name='bert')
+            name="bert",
+        )
         sequence_output, _, _, _ = bert_model(input_ids, segment_ids, attention_mask)
-        embedding = tf.keras.layers.Dense(hidden_size, name='embedding')(sequence_output[:, 0, :])
+        embedding = tf.keras.layers.Dense(hidden_size, name="embedding")(sequence_output[:, 0, :])
         super().__init__(inputs=[input_ids, segment_ids, attention_mask], outputs=[embedding])
-        self.bert_model = bert_model
+
+        self.temperature = temperature
+        self.negative_weight = negative_weight
 
     def forward(self, x, y, training=False):
         raise NotImplementedError()
 
     def train_step(self, data):
         x = data
-        batch_size = tf.shape(x['input_ids'])[0]
+        batch_size = tf.shape(x["input_ids"])[0]
         y_true = tf.range(0, batch_size)
         with tf.GradientTape() as tape:
             y_pred, loss = self.forward(x, y_true, training=True)
@@ -61,24 +69,25 @@ class AbstractSimCSE(BertPretrainedModel):
         self.compiled_metrics.update_state(y_true, y_pred)
         # Return a dict mapping metric names to current value
         results = {m.name: m.result() for m in self.metrics}
-        results.update({'loss': loss})
+        results.update({"loss": loss})
         return results
 
     def test_step(self, data):
         x = data
-        batch_size = tf.shape(x['input_ids'])[0]
+        batch_size = tf.shape(x["input_ids"])[0]
         y_true = tf.range(0, batch_size)
         y_pred, loss = self.forward(x, y_true, training=False)
         self.compiled_metrics.update_state(y_true, y_pred)
         results = {m.name: m.result() for m in self.metrics}
-        results.update({'loss': loss})
+        results.update({"loss": loss})
         return results
 
 
 class UnsupervisedSimCSE(AbstractSimCSE):
+    """Unsupervised SimCSE model."""
 
     def forward(self, x, y, training=False):
-        input_ids, segment_ids, attn_mask = x['input_ids'], x['segment_ids'], x['attention_mask']
+        input_ids, segment_ids, attn_mask = x["input_ids"], x["segment_ids"], x["attention_mask"]
         embedding_a = self(inputs=[input_ids, segment_ids, attn_mask], training=training)
         embedding_b = self(inputs=[input_ids, segment_ids, attn_mask], training=training)
         loss, y_pred = self._compute_contrastive_loss(embedding_a, embedding_b, y)
@@ -96,10 +105,11 @@ class UnsupervisedSimCSE(AbstractSimCSE):
 
 
 class SupervisedSimCSE(AbstractSimCSE):
+    """Supervised SimCSE model."""
 
     def forward(self, x, y, training=False):
-        input_ids, segment_ids, attention_mask = x['input_ids'], x['segment_ids'], x['attention_mask']
-        pos_input_ids, pos_segment_ids, pos_attention_mask = x['pos_input_ids'], x['pos_segment_ids'], x['pos_attention_mask']
+        input_ids, segment_ids, attention_mask = x["input_ids"], x["segment_ids"], x["attention_mask"]
+        pos_input_ids, pos_segment_ids, pos_attention_mask = x["pos_input_ids"], x["pos_segment_ids"], x["pos_attention_mask"]
         embedding = self(inputs=[input_ids, segment_ids, attention_mask], training=training)
         pos_embedding = self(inputs=[pos_input_ids, pos_segment_ids, pos_attention_mask], training=training)
         loss, y_pred = self._compute_contrastive_loss(embedding, pos_embedding, y)
@@ -110,17 +120,18 @@ class SupervisedSimCSE(AbstractSimCSE):
         norm_pos_embedding = tf.linalg.normalize(pos_embedding, axis=-1)[0]
         cosine = tf.matmul(norm_embedding, norm_pos_embedding, transpose_b=True)
         # softmax temperature
-        cosine = cosine / 0.05
+        cosine = cosine / self.temperature
         loss = tf.keras.losses.sparse_categorical_crossentropy(labels, cosine, from_logits=True)
         return loss, cosine
 
 
 class HardNegativeSimCSE(AbstractSimCSE):
+    """Supervised SimCSE model with hard negatives."""
 
     def forward(self, x, y, training=False):
-        input_ids, segment_ids, attention_mask = x['input_ids'], x['segment_ids'], x['attention_mask']
-        pos_input_ids, pos_segment_ids, pos_attention_mask = x['pos_input_ids'], x['pos_segment_ids'], x['pos_attention_mask']
-        neg_input_ids, neg_segment_ids, neg_attention_mask = x['neg_input_ids'], x['neg_segment_ids'], x['neg_attention_mask']
+        input_ids, segment_ids, attention_mask = x["input_ids"], x["segment_ids"], x["attention_mask"]
+        pos_input_ids, pos_segment_ids, pos_attention_mask = x["pos_input_ids"], x["pos_segment_ids"], x["pos_attention_mask"]
+        neg_input_ids, neg_segment_ids, neg_attention_mask = x["neg_input_ids"], x["neg_segment_ids"], x["neg_attention_mask"]
         embedding = self(inputs=[input_ids, segment_ids, attention_mask], training=training)
         pos_embedding = self(inputs=[pos_input_ids, pos_segment_ids, pos_attention_mask], training=training)
         neg_embedding = self(inputs=[neg_input_ids, neg_segment_ids, neg_attention_mask], training=training)
@@ -139,9 +150,9 @@ class HardNegativeSimCSE(AbstractSimCSE):
         cosine = tf.concat([pos_sim, neg_sim], axis=1)
         pos_weight = tf.zeros_like(pos_sim)
         # negative weight = 0.2
-        neg_weight = tf.linalg.diag(tf.ones(tf.shape(neg_sim)[0])) * 0.2
+        neg_weight = tf.linalg.diag(tf.ones(tf.shape(neg_sim)[0])) * self.negative_weight
         cosine_weight = tf.concat([pos_weight, neg_weight], axis=1)
         # softmax temperature
-        cosine = (cosine + cosine_weight) / 0.05
+        cosine = (cosine + cosine_weight) / self.temperature
         loss = tf.keras.losses.sparse_categorical_crossentropy(labels, cosine, from_logits=True)
         return loss, cosine

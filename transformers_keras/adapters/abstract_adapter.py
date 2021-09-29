@@ -32,7 +32,7 @@ def parse_pretrained_model_files(pretrained_model_dir):
         logging.info('pretrain model dir: {} is not exists.'.format(pretrained_model_dir))
         return config_file, ckpt, vocab
     for f in os.listdir(pretrained_model_dir):
-        if str(f).endswith('config.json'):
+        if 'config' in str(f) and str(f).endswith('.json'):
             config_file = os.path.join(pretrained_model_dir, f)
         if 'vocab' in str(f):
             vocab = os.path.join(pretrained_model_dir, f)

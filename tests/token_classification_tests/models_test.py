@@ -22,7 +22,7 @@ class ModelsTest(unittest.TestCase):
         m.summary()
         m.save("models/albert-for-token-classification/1")
 
-        albert_path = os.path.join(os.environ["GOOGLE_ALBERT_PATH"], "albert-base-zh")
+        albert_path = os.path.join(os.environ["ALBERT_MODEL_PATH"], "albert-base-zh")
         m = AlbertForTokenClassification.from_pretrained(albert_path, override_params={"num_labels": 4})
         m.summary()
         m.save("models/albert-for-token-classification/2")

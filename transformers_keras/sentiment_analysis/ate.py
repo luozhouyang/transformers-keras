@@ -46,4 +46,3 @@ class BertForAspectTermExtraction(BertPretrainedModel):
         start_logits = tf.keras.layers.Dense(num_labels, name="start")(sequence_output)
         end_logits = tf.keras.layers.Dense(num_labels, name="end")(sequence_output)
         super().__init__(inputs=[input_ids, segment_ids, attention_mask], outputs=[start_logits, end_logits])
-        self.bert_model = bert_model

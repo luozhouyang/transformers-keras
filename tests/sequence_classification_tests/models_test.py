@@ -37,7 +37,7 @@ class SequenceClassificationModelsTest(unittest.TestCase):
 
     def test_albert_for_sequence_classification_from_pretrained(self):
         m = AlbertForSequenceClassification.from_pretrained(
-            os.path.join(os.environ["PRETRAINED_MODE_PATH"], "albert_base_zh"),
+            os.path.join(os.environ["ALBERT_MODEL_PATH"], "albert-base-zh"),
             override_params={"num_labels": 2},
         )
         m.summary()

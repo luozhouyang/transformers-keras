@@ -47,11 +47,7 @@ class BertForQuestionAnswering(BertPretrainedModel):
         logits = tf.keras.layers.Dense(num_labels, name="dense")(sequence_output)
         head_logits = tf.keras.layers.Lambda(lambda x: x[:, :, 0], name="head")(logits)
         tail_logits = tf.keras.layers.Lambda(lambda x: x[:, :, 1], name="tail")(logits)
-
         super().__init__(inputs=[input_ids, segment_ids, attention_mask], outputs=[head_logits, tail_logits], **kwargs)
-
-        self.num_labels = num_labels
-        self.bert_model = bert_model
 
 
 class AlbertForQuestionAnswering(AlbertPretrainedModel):
@@ -104,12 +100,7 @@ class AlbertForQuestionAnswering(AlbertPretrainedModel):
         logits = tf.keras.layers.Dense(num_labels, name="dense")(sequence_output)
         head_logits = tf.keras.layers.Lambda(lambda x: x[:, :, 0], name="head")(logits)
         tail_logits = tf.keras.layers.Lambda(lambda x: x[:, :, 1], name="tail")(logits)
-
         super().__init__(inputs=[input_ids, segment_ids, attention_mask], outputs=[head_logits, tail_logits], **kwargs)
-
-        self.num_labels = num_labels
-        self.albert_model = albert_model
-
 
 class BertForQuestionAnsweringX(BertPretrainedModel):
     """Bert for question asnwering, with classification head."""
@@ -161,10 +152,6 @@ class BertForQuestionAnsweringX(BertPretrainedModel):
         super().__init__(
             inputs=[input_ids, segment_ids, attention_mask], outputs=[head_logits, tail_logits, class_logits], **kwargs
         )
-
-        self.num_labels = num_labels
-        self.num_classes = num_classes
-        self.bert_model = bert_model
 
 
 class AlbertForQuestionAnsweringX(BertPretrainedModel):
@@ -219,11 +206,6 @@ class AlbertForQuestionAnsweringX(BertPretrainedModel):
         head_logits = tf.keras.layers.Lambda(lambda x: x[:, :, 0], name="head")(logits)
         tail_logits = tf.keras.layers.Lambda(lambda x: x[:, :, 1], name="tail")(logits)
         class_logits = tf.keras.layers.Dense(num_classes, name="class")(pooled_output)
-
         super().__init__(
             inputs=[input_ids, segment_ids, attention_mask], outputs=[head_logits, tail_logits, class_logits], **kwargs
         )
-
-        self.num_labels = num_labels
-        self.num_classes = num_classes
-        self.albert_model = albert_model

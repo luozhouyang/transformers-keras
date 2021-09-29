@@ -8,7 +8,7 @@ class BertForTokenClassification(BertPretrainedModel):
 
     def __init__(
         self,
-        num_labels,
+        num_labels=2,
         vocab_size=21128,
         max_positions=512,
         hidden_size=768,
@@ -45,9 +45,6 @@ class BertForTokenClassification(BertPretrainedModel):
         sequence_output, _, _, _ = bert_model(input_ids, segment_ids, attention_mask)
         logits = tf.keras.layers.Dense(num_labels, name="logits")(sequence_output)
         super().__init__(inputs=[input_ids, segment_ids, attention_mask], outputs=[logits], **kwargs)
-
-        self.bert_model = bert_model
-        self.num_labels = num_labels
 
 
 class AlbertForTokenClassification(AlbertPretrainedModel):
@@ -99,6 +96,3 @@ class AlbertForTokenClassification(AlbertPretrainedModel):
         sequence_output, _, _, _ = albert_model(input_ids, segment_ids, attention_mask)
         logits = tf.keras.layers.Dense(num_labels, name="logits")(sequence_output)
         super().__init__(inputs=[input_ids, segment_ids, attention_mask], outputs=[logits], **kwargs)
-
-        self.num_labels = num_labels
-        self.albert_model = albert_model

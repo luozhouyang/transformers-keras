@@ -54,5 +54,3 @@ class BertForSentenceEmbedding(BertPretrainedModel):
             outputs=[cls_embedding, pooler_embedding, avg_embedding, all_hidden_states, all_attention_weights],
             **kwargs
         )
-
-        self.bert_model = bert_model
