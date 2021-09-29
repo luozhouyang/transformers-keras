@@ -2,7 +2,7 @@ from collections import namedtuple
 
 import tensorflow as tf
 from tokenizers import BertWordPieceTokenizer
-from transformers_keras.dataset_utils import AbstractDataset
+from transformers_keras.common.abc_dataset import AbstractDataset
 
 SequenceClassificationExample = namedtuple(
     "SequenceClassificationExample", ["tokens", "input_ids", "segment_ids", "attention_mask", "label"]

@@ -2,6 +2,9 @@ import logging
 
 import tensorflow as tf
 
+from transformers_keras.common.abc_dataset import AbstractDataset
+from transformers_keras.common.char_tokenizer import BertCharTokenizer, TokenizerEncoding
+from transformers_keras.common.metrics import ExactMatch, F1ForSequence
 from transformers_keras.distiller import Distiller
 from transformers_keras.modeling_albert import (
     Albert,

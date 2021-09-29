@@ -5,7 +5,7 @@ from typing import List
 
 import tensorflow as tf
 from tokenizers import BertWordPieceTokenizer
-from transformers_keras.dataset_utils import AbstractDataset
+from transformers_keras.common.abc_dataset import AbstractDataset
 
 QuestionAnsweringExample = namedtuple(
     "QuestionAnsweringExample", ["tokens", "input_ids", "segment_ids", "attention_mask", "start", "end"]

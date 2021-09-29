@@ -2,9 +2,8 @@ from collections import namedtuple
 from typing import List
 
 import tensorflow as tf
-from tensorflow._api.v2 import data
 from tokenizers import BertWordPieceTokenizer
-from transformers_keras.dataset_utils import AbstractDataset
+from transformers_keras.common.abc_dataset import AbstractDataset
 
 UnsupervisedSimCSEExample = namedtuple(
     "UnsupervisedSimCSEExample",

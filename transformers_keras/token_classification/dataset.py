@@ -1,8 +1,8 @@
 from collections import namedtuple
 
 import tensorflow as tf
-from transformers_keras.dataset_utils import AbstractDataset
-from transformers_keras.tokenizers.char_tokenizer import BertCharTokenizer
+from transformers_keras.common.abc_dataset import AbstractDataset
+from transformers_keras.common.char_tokenizer import BertCharTokenizer
 
 from .tokenizer import TokenClassificationLabelTokenizer
 

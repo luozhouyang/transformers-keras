@@ -3,9 +3,9 @@ from collections import namedtuple
 from typing import List
 
 import tensorflow as tf
-from transformers_keras.dataset_utils import AbstractDataset
+from transformers_keras.common.abc_dataset import AbstractDataset
+from transformers_keras.common.char_tokenizer import BertCharTokenizer
 from transformers_keras.question_answering.dataset import QuestionAnsweringXDataset
-from transformers_keras.tokenizers.char_tokenizer import BertCharTokenizer
 
 AspectTermExtractionExample = namedtuple(
     "AspectTermExtractionExample",
