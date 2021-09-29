@@ -7,9 +7,10 @@ import numpy as np
 import tensorflow as tf
 
 
-def zip_weights(model, ckpt, variables_mapping, **kwargs):
+def zip_weights(model, ckpt, variables_mapping, self_weight_names, **kwargs):
     weights, values = [], []
-    for w in model.trainable_weights:
+    used_weights = [w for w in model.trainable_weights if w.name in self_weight_names]
+    for w in used_weights:
         var = variables_mapping.get(w.name, None)
         if var is None:
             logging.warning("Model weight: %s not collected in weights mapping.", w.name)

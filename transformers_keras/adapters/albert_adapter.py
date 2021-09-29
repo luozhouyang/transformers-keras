@@ -42,20 +42,16 @@ class AlbertAdapter(AbstractAdapter):
         )
         weight_mapping.update(albert_weight_mapping)
 
-        mlm_weight_mapping = self._adapte_mlm_weights(
-            model, ckpt, self_weight_names, ckpt_weight_names, use_functional_api=use_functional_api, **kwargs
-        )
+        mlm_weight_mapping = self._adapte_mlm_weights(model, ckpt, use_functional_api=use_functional_api, **kwargs)
         weight_mapping.update(mlm_weight_mapping)
 
-        sop_weight_mapping = self._adapte_sop_weights(
-            model, ckpt, self_weight_names, ckpt_weight_names, use_functional_api=use_functional_api, **kwargs
-        )
+        sop_weight_mapping = self._adapte_sop_weights(model, ckpt, use_functional_api=use_functional_api, **kwargs)
         weight_mapping.update(sop_weight_mapping)
 
         if kwargs.get("check_weights", False):
             self._check_weights(weight_mapping, model, ckpt)
 
-    def _adapte_mlm_weights(self, model, ckpt, self_weight_names, ckpt_weight_names, use_functional_api=True, **kwargs):
+    def _adapte_mlm_weights(self, model, ckpt, use_functional_api=True, **kwargs):
         with_mlm = kwargs.get("with_mlm", False)
         if not with_mlm:
             logging.info("Skipping to adapte weights for MLM due to option `with_mlm` set to `False`")
@@ -64,23 +60,25 @@ class AlbertAdapter(AbstractAdapter):
         ckpt_mlm_prefix = kwargs.get("ckpt_mlm_prefix", "cls/predictions")
         logging.info("Adapting MLM weights, using model weight prefix: %s", self_mlm_prefix)
         logging.info("Adapting MLM weights, using  ckpt weight prefix: %s", ckpt_mlm_prefix)
+        ckpt_weight_names = [x for (x, _) in tf.train.list_variables(ckpt) if str(x).startswith(ckpt_mlm_prefix)]
+        self_weight_names = set([x.name for x in model.trainable_weights if str(x.name).startswith(self_mlm_prefix)])
         mapping = {}
         for w in ckpt_weight_names:
             if str(w).startswith(ckpt_mlm_prefix):
-                mw = self_mlm_prefix + w.lstrip(ckpt_mlm_prefix) + ":0"
+                mw = self_mlm_prefix + w[len(ckpt_mlm_prefix) :] + ":0"
                 if mw not in self_weight_names:
                     logging.warning("weight: %s not in model weights", mw)
                     continue
                 mapping[mw] = w
 
         # zip weight names and values
-        zipped_weights = zip_weights(model, ckpt, mapping, **kwargs)
+        zipped_weights = zip_weights(model, ckpt, mapping, self_weight_names, **kwargs)
         # set values to weights
         tf.keras.backend.batch_set_value(zipped_weights)
 
         return mapping
 
-    def _adapte_sop_weights(self, model, ckpt, self_weight_names, ckpt_weight_names, use_functional_api=True, **kwargs):
+    def _adapte_sop_weights(self, model, ckpt, use_functional_api=True, **kwargs):
         with_sop = kwargs.get("with_sop", False)
         if not with_sop:
             logging.info("Skipping to adapte weights for SOP due to option `with_sop` set to `False`")
@@ -89,8 +87,11 @@ class AlbertAdapter(AbstractAdapter):
         ckpt_sop_prefix = kwargs.get("ckpt_sop_prefix", "cls/seq_relationship")
         logging.info("Adapting SOP weights, using model weight prefix: %s", self_sop_prefix)
         logging.info("Adapting SOP weights, using  ckpt weight prefix: %s", ckpt_sop_prefix)
+        ckpt_weight_names = [x for (x, _) in tf.train.list_variables(ckpt) if str(x).startswith(ckpt_sop_prefix)]
+        self_weight_names = set([x.name for x in model.trainable_weights if str(x.name).startswith(self_sop_prefix)])
         mapping = {}
         for w in ckpt_weight_names:
+            # TODO skip unused variables
             if str(w).startswith(ckpt_sop_prefix):
                 mw = self_sop_prefix + w.lstrip(ckpt_sop_prefix) + ":0"
                 if mw not in self_weight_names:
@@ -98,7 +99,7 @@ class AlbertAdapter(AbstractAdapter):
                     continue
                 mapping[mw] = w
         # zip weight names and values
-        zipped_weights = zip_weights(model, ckpt, mapping, **kwargs)
+        zipped_weights = zip_weights(model, ckpt, mapping, self_weight_names, **kwargs)
         # set values to weights
         tf.keras.backend.batch_set_value(zipped_weights)
 
@@ -106,8 +107,12 @@ class AlbertAdapter(AbstractAdapter):
 
     def _adapte_albert_weights(self, model, ckpt, model_config, use_functional_api=True, **kwargs):
         mapping = {}
-        self_weight_names = set([x.name for x in model.trainable_weights])
-        ckpt_weight_names = [x[0] for x in tf.train.list_variables(ckpt)]
+        self_albert_prefix = model.albert_model.name if use_functional_api else model.name + "/" + model.albert_model.name
+        ckpt_albert_prefix = kwargs.get("ckpt_albert_prefix", "bert")
+        logging.info("Adapting albert weights, using model weight prefix: %s", self_albert_prefix)
+        logging.info("Adapting albert weights, using  ckpt weight prefix: %s", ckpt_albert_prefix)
+        self_weight_names = set([x.name for x in model.trainable_weights if str(x.name).startswith(self_albert_prefix)])
+        ckpt_weight_names = [x for (x, _) in tf.train.list_variables(ckpt) if str(x).startswith(ckpt_albert_prefix)]
 
         embedding_mapping = self._adapte_embedding_weights(
             model, ckpt, self_weight_names, ckpt_weight_names, use_functional_api=use_functional_api, **kwargs
@@ -126,11 +131,11 @@ class AlbertAdapter(AbstractAdapter):
         mapping.update(encoder_mapping)
 
         # skip weights
-        model_prefix = model.albert_model.name if use_functional_api else model.name + "/" + model.albert_model.name
-        self._skip_weights(mapping, model_prefix)
+        self_albert_prefix = model.albert_model.name if use_functional_api else model.name + "/" + model.albert_model.name
+        self._skip_weights(mapping, self_albert_prefix)
 
         # zip weight names and values
-        zipped_weights = zip_weights(model, ckpt, mapping, **kwargs)
+        zipped_weights = zip_weights(model, ckpt, mapping, self_weight_names, **kwargs)
         # set values to weights
         tf.keras.backend.batch_set_value(zipped_weights)
 
