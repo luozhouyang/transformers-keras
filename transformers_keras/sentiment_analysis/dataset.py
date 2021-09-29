@@ -51,6 +51,19 @@ class AspectTermExtractionDataset(AbstractDataset):
         return dataset
 
     @classmethod
+    def _batch_padding(cls, dataset, batch_size=32, pad_id=0, drop_remainder=False, **kwargs):
+        pad_id = tf.constant(pad_id, dtype=tf.int32)
+        # fmt: off
+        dataset = dataset.padded_batch(
+            batch_size,
+            padded_shapes=([None, ], [None, ], [None, ], [None, ], [None, ]),
+            padding_values=(pad_id, pad_id, pad_id, pad_id, pad_id),
+            drop_remainder=drop_remainder,
+        )
+        # fmt: on
+        return dataset
+
+    @classmethod
     def _fixed_padding(
         cls,
         dataset,

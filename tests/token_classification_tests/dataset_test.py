@@ -7,7 +7,7 @@ from transformers_keras.token_classification.dataset import TokenClassificationD
 class DatasetTest(unittest.TestCase):
     """Dataset tests."""
 
-    def test_generate_jsonl(self):
+    def generate_jsonl(self):
         examples = self._read_examples(["testdata/conll.txt"])
         with open("testdata/token_classify.jsonl", mode="wt", encoding="utf-8") as fout:
             for e in examples:

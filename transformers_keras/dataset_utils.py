@@ -53,19 +53,19 @@ class AbstractDataset(abc.ABC):
         return dataset
 
     @classmethod
-    def from_jsonl_files(cls, input_files, **kwargs):
-        examples = cls._read_jsonl(input_files, **kwargs)
+    def from_jsonl_files(cls, input_files, tokenizer=None, vocab_file=None, **kwargs):
+        examples = cls._read_jsonl(input_files, tokenizer=tokenizer, vocab_file=vocab_file, **kwargs)
         dataset = cls.from_examples(examples, **kwargs)
         return dataset
 
     @classmethod
-    def jsonl_to_examples(cls, input_files, **kwargs):
-        examples = cls._read_jsonl(input_files, **kwargs)
+    def jsonl_to_examples(cls, input_files, tokenizer=None, vocab_file=None, **kwargs):
+        examples = cls._read_jsonl(input_files, tokenizer=tokenizer, vocab_file=vocab_file, **kwargs)
         return examples
 
     @classmethod
-    def jsonl_to_tfrecord(cls, input_files, output_files, **kwargs):
-        examples = cls.jsonl_to_examples(input_files, **kwargs)
+    def jsonl_to_tfrecord(cls, input_files, output_files, tokenizer=None, vocab_file=None, **kwargs):
+        examples = cls.jsonl_to_examples(input_files, tokenizer=tokenizer, vocab_file=vocab_file, **kwargs)
         cls.examples_to_tfrecord(examples, output_files, **kwargs)
 
     @classmethod
@@ -148,6 +148,7 @@ class AbstractDataset(abc.ABC):
                 drop_remainder=drop_remainder,
                 **kwargs,
             )
+        dataset = dataset.prefetch(cls.AUTOTUNE)
         dataset = cls._to_dict(dataset, **kwargs)
         dataset = cls._auto_shard(dataset, auto_shard_policy=auto_shard_policy, **kwargs)
         return dataset
@@ -225,7 +226,7 @@ class AbstractDataset(abc.ABC):
         return dataset
 
     @classmethod
-    def _read_jsonl(cls, input_files, **kwargs):
+    def _read_jsonl(cls, input_files, tokenizer=None, vocab_file=None, **kwargs):
         if isinstance(input_files, str):
             input_files = [input_files]
         instances = []
@@ -238,10 +239,10 @@ class AbstractDataset(abc.ABC):
                     instance = json.loads(line)
                     instances.append(instance)
         logging.info("Collected %d instances in total.", len(instances))
-        return cls._parse_jsonl(instances, **kwargs)
+        return cls._parse_jsonl(instances, tokenizer=tokenizer, vocab_file=vocab_file, **kwargs)
 
     @abc.abstractclassmethod
-    def _parse_jsonl(cls, instances, **kwargs):
+    def _parse_jsonl(cls, instances, tokenizer=None, vocab_file=None, **kwargs):
         raise NotImplementedError()
 
     @classmethod

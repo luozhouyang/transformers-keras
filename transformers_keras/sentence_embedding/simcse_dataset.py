@@ -2,6 +2,7 @@ from collections import namedtuple
 from typing import List
 
 import tensorflow as tf
+from tensorflow._api.v2 import data
 from tokenizers import BertWordPieceTokenizer
 from transformers_keras.dataset_utils import AbstractDataset
 
@@ -51,47 +52,62 @@ class UnsupervisedSimCSEDataset(AbstractDataset):
     """Dataset builder for unsupervised SimCSE"""
 
     @classmethod
-    def _build_dataset(
+    def _filter(cls, dataset, max_sequence_length=512, **kwargs):
+        dataset = dataset.filter(lambda a, b, c: tf.size(a) <= max_sequence_length)
+        return dataset
+
+    @classmethod
+    def _bucket_padding(
         cls,
         dataset,
-        batch_size=64,
-        repeat=None,
-        max_sequence_length=512,
+        batch_size=32,
+        pad_id=0,
         bucket_boundaries=[50, 100, 150, 200, 250, 300, 350, 400, 450, 500],
         bucket_batch_sizes=None,
-        buffer_size=1000000,
-        seed=None,
-        reshuffle_each_iteration=True,
-        pad_id=0,
-        auto_shard_policy=None,
-        drop_remainder=True,
+        drop_remainder=False,
         **kwargs
     ):
-        dataset = dataset.filter(lambda a, b, c: tf.size(a) <= max_sequence_length)
-        if repeat is not None:
-            dataset = dataset.repeat(repeat)
-        dataset = dataset.shuffle(
-            buffer_size=buffer_size,
-            seed=seed,
-            reshuffle_each_iteration=reshuffle_each_iteration,
-        )
-        pad = tf.constant(pad_id, dtype=tf.int32)
+        pad_id = tf.constant(pad_id, dtype=tf.int32)
         # fmt: off
         dataset = cls._bucketing(
             dataset,
             element_length_func=lambda a, b, c: tf.size(a),
             padded_shapes=([None, ], [None, ], [None, ]),
-            padding_values=(pad, pad, pad),
+            padding_values=(pad_id, pad_id, pad_id),
             batch_size=batch_size,
-            pad_id=pad_id,
             bucket_boundaries=bucket_boundaries,
             bucket_batch_sizes=bucket_batch_sizes,
             drop_remainder=drop_remainder,
             **kwargs,
         )
         # fmt: on
-        dataset = cls._to_dict(dataset, **kwargs)
-        dataset = cls._auto_shard(dataset, auto_shard_policy=auto_shard_policy)
+        return dataset
+
+    @classmethod
+    def _batch_padding(cls, dataset, batch_size=32, pad_id=0, drop_remainder=False, **kwargs):
+        pad_id = tf.constant(pad_id, dtype=tf.int32)
+        # fmt: off
+        dataset = dataset.padded_batch(
+            batch_size,
+            padded_shapes=([None, ], [None, ], [None, ]),
+            padding_values=(pad_id, pad_id, pad_id),
+            drop_remainder=drop_remainder,
+        )
+        # fmt: on
+        return dataset
+
+    @classmethod
+    def _fixed_padding(cls, dataset, batch_size=32, pad_id=0, max_sequence_length=512, drop_remainder=False, **kwargs):
+        pad_id = tf.constant(pad_id, dtype=tf.int32)
+        maxlen = tf.constant(max_sequence_length, dtype=tf.int32)
+        # fmt: off
+        dataset = dataset.padded_batch(
+            batch_size,
+            padded_shapes=([None, ], [None, ], [None, ]),
+            padding_values=(pad_id, pad_id, pad_id),
+            drop_remainder=drop_remainder,
+        )
+        # fmt: on
         return dataset
 
     @classmethod
@@ -175,49 +191,64 @@ class SupervisedSimCSEDataset(AbstractDataset):
     """Dataset builder for supervised SimCSE"""
 
     @classmethod
-    def _build_dataset(
-        cls,
-        dataset,
-        batch_size=64,
-        repeat=None,
-        max_sequence_length=512,
-        bucket_boundaries=[50, 100, 150, 200, 250, 300, 350, 400, 450, 500],
-        bucket_batch_sizes=None,
-        buffer_size=1000000,
-        seed=None,
-        reshuffle_each_iteration=True,
-        pad_id=0,
-        auto_shard_policy=None,
-        drop_remainder=True,
-        **kwargs
-    ):
+    def _filter(cls, dataset, max_sequence_length=512, **kwargs):
         dataset = dataset.filter(
             lambda a, b, c, e, f, g: tf.logical_and(tf.size(a) <= max_sequence_length, tf.size(e) <= max_sequence_length)
         )
-        if repeat is not None:
-            dataset = dataset.repeat(repeat)
-        dataset = dataset.shuffle(
-            buffer_size=buffer_size,
-            seed=seed,
-            reshuffle_each_iteration=reshuffle_each_iteration,
-        )
-        pad = tf.constant(pad_id, dtype=tf.int32)
+        return dataset
+
+    @classmethod
+    def _bucket_padding(
+        cls,
+        dataset,
+        batch_size=32,
+        pad_id=0,
+        bucket_boundaries=[50, 100, 150, 200, 250, 300, 350, 400, 450, 500],
+        bucket_batch_sizes=None,
+        drop_remainder=False,
+        **kwargs
+    ):
+        pad_id = tf.constant(pad_id, dtype=tf.int32)
         # fmt: off
         dataset = cls._bucketing(
             dataset,
             element_length_func=lambda a, b, c, e, f, g: tf.maximum(tf.size(a), tf.size(e)),
             padded_shapes=([None,], [None,], [None,], [None,], [None,], [None,]),
-            padding_values=(pad, pad, pad, pad, pad, pad),
+            padding_values=(pad_id, pad_id, pad_id, pad_id, pad_id, pad_id),
             batch_size=batch_size,
-            pad_id=pad_id,
             bucket_boundaries=bucket_boundaries,
             bucket_batch_sizes=bucket_batch_sizes,
             drop_remainder=drop_remainder,
             **kwargs,
         )
         # fmt: on
-        dataset = cls._to_dict(dataset, **kwargs)
-        dataset = cls._auto_shard(dataset, auto_shard_policy=auto_shard_policy)
+        return dataset
+
+    @classmethod
+    def _batch_padding(cls, dataset, batch_size=32, pad_id=0, drop_remainder=False, **kwargs):
+        pad_id = tf.constant(pad_id, dtype=tf.int32)
+        # fmt: off
+        dataset = dataset.padded_batch(
+            batch_size,
+            padded_shapes=([None,], [None,], [None,], [None,], [None,], [None,]),
+            padding_values=(pad_id, pad_id, pad_id, pad_id, pad_id, pad_id),
+            drop_remainder=drop_remainder,
+        )
+        # fmt: on
+        return dataset
+
+    @classmethod
+    def _fixed_padding(cls, dataset, batch_size=32, pad_id=0, max_sequence_length=512, drop_remainder=False, **kwargs):
+        pad_id = tf.constant(pad_id, dtype=tf.int32)
+        maxlen = tf.constant(max_sequence_length, dtype=tf.int32)
+        # fmt: off
+        dataset = dataset.padded_batch(
+            batch_size,
+            padded_shapes=([maxlen,], [maxlen,], [maxlen,], [maxlen,], [maxlen,], [maxlen,]),
+            padding_values=(pad_id, pad_id, pad_id, pad_id, pad_id, pad_id),
+            drop_remainder=drop_remainder,
+        )
+        # fmt: on
         return dataset
 
     @classmethod
@@ -329,36 +360,27 @@ class HardNegativeSimCSEDataset(AbstractDataset):
     """Dataset builder for hard negavtive SimCSE"""
 
     @classmethod
-    def _build_dataset(
-        cls,
-        dataset,
-        batch_size=64,
-        repeat=None,
-        max_sequence_length=512,
-        bucket_boundaries=[50, 100, 150, 200, 250, 300, 350, 400, 450, 500],
-        bucket_batch_sizes=None,
-        buffer_size=1000000,
-        seed=None,
-        reshuffle_each_iteration=True,
-        pad_id=0,
-        auto_shard_policy=None,
-        drop_remainder=True,
-        **kwargs
-    ):
+    def _filter(cls, dataset, max_sequence_length=512, **kwargs):
         dataset = dataset.filter(
             lambda a, b, c, e, f, g, h, i, j: tf.logical_and(
                 tf.size(a) <= max_sequence_length,
                 tf.logical_and(tf.size(e) <= max_sequence_length, tf.size(h) <= max_sequence_length),
             )
         )
-        if repeat is not None:
-            dataset = dataset.repeat(repeat)
-        dataset = dataset.shuffle(
-            buffer_size=buffer_size,
-            seed=seed,
-            reshuffle_each_iteration=reshuffle_each_iteration,
-        )
-        pad = tf.constant(pad_id, dtype=tf.int32)
+        return dataset
+
+    @classmethod
+    def _bucket_padding(
+        cls,
+        dataset,
+        batch_size=32,
+        pad_id=0,
+        bucket_boundaries=[50, 100, 150, 200, 250, 300, 350, 400, 450, 500],
+        bucket_batch_sizes=None,
+        drop_remainder=False,
+        **kwargs
+    ):
+        pad_id = tf.constant(pad_id, dtype=tf.int32)
         # fmt: off
         dataset = cls._bucketing(
             dataset,
@@ -366,17 +388,41 @@ class HardNegativeSimCSEDataset(AbstractDataset):
                 tf.size(a), tf.maximum(tf.size(e), tf.size(h))
             ),
             padded_shapes=([None,], [None,], [None,], [None,], [None,], [None,], [None,], [None,], [None,]),
-            padding_values=(pad, pad, pad, pad, pad, pad, pad, pad, pad),
+            padding_values=(pad_id, pad_id, pad_id, pad_id, pad_id, pad_id, pad_id, pad_id, pad_id),
             batch_size=batch_size,
-            pad_id=pad_id,
             bucket_boundaries=bucket_boundaries,
             bucket_batch_sizes=bucket_batch_sizes,
             drop_remainder=drop_remainder,
             **kwargs,
         )
         # fmt: on
-        dataset = cls._to_dict(dataset, **kwargs)
-        dataset = cls._auto_shard(dataset, auto_shard_policy=auto_shard_policy)
+        return dataset
+
+    @classmethod
+    def _batch_padding(cls, dataset, batch_size=32, pad_id=0, drop_remainder=False, **kwargs):
+        pad_id = tf.constant(pad_id, dtype=tf.int32)
+        # fmt: off
+        dataset = dataset.padded_batch(
+            batch_size,
+            padded_shapes=([None,], [None,], [None,], [None,], [None,], [None,], [None,], [None,], [None,]),
+            padding_values=(pad_id, pad_id, pad_id, pad_id, pad_id, pad_id, pad_id, pad_id, pad_id),
+            drop_remainder=drop_remainder,
+        )
+        # fmt: on
+        return dataset
+
+    @classmethod
+    def _fixed_padding(cls, dataset, batch_size=32, pad_id=0, max_sequence_length=512, drop_remainder=False, **kwargs):
+        pad_id = tf.constant(pad_id, dtype=tf.int32)
+        maxlen = tf.constant(max_sequence_length, dtype=tf.int32)
+        # fmt: off
+        dataset = dataset.padded_batch(
+            batch_size,
+            padded_shapes=([maxlen,], [maxlen,], [maxlen,], [maxlen,], [maxlen,], [maxlen,], [maxlen,], [maxlen,], [maxlen,]),
+            padding_values=(pad_id, pad_id, pad_id, pad_id, pad_id, pad_id, pad_id, pad_id, pad_id),
+            drop_remainder=drop_remainder,
+        )
+        # fmt: on
         return dataset
 
     @classmethod

@@ -1,8 +1,4 @@
-import json
-import logging
-import os
 from collections import namedtuple
-from typing import List
 
 import tensorflow as tf
 from tokenizers import BertWordPieceTokenizer
@@ -17,26 +13,24 @@ class SequenceClassificationDataset(AbstractDataset):
     """Dataset builder for sequence classification."""
 
     @classmethod
-    def _build_dataset(
+    def _filter(cls, dataset, max_sequence_length=512, **kwargs):
+        dataset = dataset.filter(
+            lambda a, b, c, y: tf.size(a) <= max_sequence_length,
+        )
+        return dataset
+
+    @classmethod
+    def _bucket_padding(
         cls,
         dataset,
-        batch_size=64,
-        repeat=None,
-        max_sequence_length=512,
+        batch_size=32,
+        pad_id=0,
         bucket_boundaries=[50, 100, 150, 200, 250, 300, 350, 400, 450, 500],
         bucket_batch_sizes=None,
-        buffer_size=1000000,
-        seed=None,
-        reshuffle_each_iteration=True,
-        pad_id=0,
-        auto_shard_policy=None,
         drop_remainder=False,
         **kwargs
     ):
-        dataset = dataset.filter(lambda a, b, c, y: tf.size(a) <= max_sequence_length)
-        if repeat is not None:
-            dataset = dataset.repeat(repeat)
-        dataset = dataset.shuffle(buffer_size=buffer_size, seed=seed, reshuffle_each_iteration=reshuffle_each_iteration)
+        pad_id = tf.constant(pad_id, dtype=tf.int32)
         # fmt: off
         dataset = cls._bucketing(
             dataset,
@@ -44,15 +38,39 @@ class SequenceClassificationDataset(AbstractDataset):
             padded_shapes=([None, ], [None, ], [None, ], []),
             padding_values=(pad_id, pad_id, pad_id, None),
             batch_size=batch_size,
-            pad_id=pad_id,
             bucket_boundaries=bucket_boundaries,
             bucket_batch_sizes=bucket_batch_sizes,
             drop_remainder=drop_remainder,
             **kwargs
         )
         # fmt: on
-        dataset = cls._to_dict(dataset)
-        dataset = cls._auto_shard(dataset, auto_shard_policy=auto_shard_policy)
+        return dataset
+
+    @classmethod
+    def _batch_padding(cls, dataset, batch_size=32, pad_id=0, drop_remainder=False, **kwargs):
+        pad_id = tf.constant(pad_id, dtype=tf.int32)
+        # fmt: off
+        dataset = dataset.padded_batch(
+            batch_size,
+            padded_shapes=([None, ], [None, ], [None, ], []),
+            padding_values=(pad_id, pad_id, pad_id, None),
+            drop_remainder=drop_remainder,
+        )
+        # fmt: on
+        return dataset
+
+    @classmethod
+    def _fixed_padding(cls, dataset, batch_size=32, pad_id=0, max_sequence_length=512, drop_remainder=False, **kwargs):
+        pad_id = tf.constant(pad_id, dtype=tf.int32)
+        maxlen = tf.constant(max_sequence_length, dtype=tf.int32)
+        # fmt: off
+        dataset = dataset.padded_batch(
+            batch_size,
+            padded_shapes=([maxlen, ], [maxlen, ], [maxlen, ], []),
+            padding_values=(pad_id, pad_id, pad_id, None),
+            drop_remainder=drop_remainder,
+        )
+        # fmt: on
         return dataset
 
     @classmethod
@@ -76,7 +94,7 @@ class SequenceClassificationDataset(AbstractDataset):
         return dataset
 
     @classmethod
-    def _to_dict(cls, dataset):
+    def _to_dict(cls, dataset, **kwargs):
         dataset = dataset.map(
             lambda a, b, c, y: ({"input_ids": a, "segment_ids": b, "attention_mask": c}, y),
             num_parallel_calls=cls.AUTOTUNE,
