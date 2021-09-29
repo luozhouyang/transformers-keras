@@ -5,6 +5,19 @@ import numpy as np
 import tensorflow as tf
 
 
+def shape_list(x):
+    static = x.shape.as_list()
+    dynamic = tf.shape(x)
+    shape = []
+    for idx, s in enumerate(static):
+        if s is not None:
+            shape.append(s)
+            continue
+        shape.append(dynamic[idx])
+    return shape
+
+
+
 def gelu(x):
     """ Gaussian Error Linear Unit.
     Original Implementation of the gelu activation function in Google Bert repo when initially created.

@@ -4,7 +4,6 @@ import os
 
 import tensorflow as tf
 
-from transformers_keras.adapters import parse_pretrained_model_files
 from transformers_keras.adapters.bert_adapter import BertAdapter
 
 from .modeling_utils import choose_activation
@@ -408,6 +407,11 @@ class BertPretrainedModel(tf.keras.Model):
         override_params=None,
         use_functional_api=True,
         adapter=None,
+        with_mlm=False,
+        with_nsp=False,
+        ckpt_bert_prefix="bert",
+        ckpt_mlm_prefix="cls/predictions",
+        ckpt_nsp_prefix="cls/seq_relationship",
         check_weights=True,
         verbose=True,
         **kwargs
@@ -425,8 +429,6 @@ class BertPretrainedModel(tf.keras.Model):
             check_weights: Python boolean. If true, check model weights' value after loading weights from ckpt
             verbose: Python boolean.If True, logging more detailed informations when loadding pretrained weights
         """
-
-        config_file, ckpt, _ = parse_pretrained_model_files(pretrained_model_dir)
         if not adapter:
             adapter = BertAdapter(
                 skip_token_embedding=kwargs.pop("skip_token_embedding", False),
@@ -435,19 +437,27 @@ class BertPretrainedModel(tf.keras.Model):
                 skip_embedding_layernorm=kwargs.pop("skip_embedding_layernorm", False),
                 skip_pooler=kwargs.pop("skip_pooler", False),
             )
+        files = adapter.parse_files(pretrained_model_dir)
+        config_file = files["config_file"]
         model_config = adapter.adapte_config(config_file, **kwargs)
+        logging.info("Load model config: \n%s", json.dumps(model_config, indent=4))
         if override_params:
             model_config.update(override_params)
-        logging.info("Load model config: \n%s", json.dumps(model_config, indent=4))
+            logging.info("Overrided model config: \n%s", json.dumps(model_config, indent=4))
         model = cls(**model_config, **kwargs)
         assert model.bert_model is not None, "bert_model is None!"
         inputs = model.dummy_inputs()
         model(inputs=list(inputs), training=False)
         adapter.adapte_weights(
-            bert=model.bert_model,
-            config=model_config,
-            ckpt=ckpt,
-            prefix="" if use_functional_api else model.name,
+            model=model,
+            ckpt=files["ckpt"],
+            model_config=model_config,
+            use_functional_api=use_functional_api,
+            with_mlm=with_mlm,
+            with_nsp=with_nsp,
+            ckpt_bert_prefix=ckpt_bert_prefix,
+            ckpt_mlm_prefix=ckpt_mlm_prefix,
+            ckpt_nsp_prefix=ckpt_nsp_prefix,
             check_weights=check_weights,
             verbose=verbose,
             **kwargs
@@ -465,9 +475,10 @@ class BertPretrainedModel(tf.keras.Model):
                 skip_pooler=kwargs.pop("skip_pooler", False),
             )
         model_config = adapter.adapte_config(config_file, **kwargs)
+        logging.info("Load model config: \n%s", json.dumps(model_config, indent=4))
         if override_params:
             model_config.update(override_params)
-        logging.info("Load model config: \n%s", json.dumps(model_config, indent=4))
+            logging.info("Overrided model config: \n%s", json.dumps(model_config, indent=4))
         model = cls(**model_config, **kwargs)
         assert model.bert_model is not None, "bert_model is None!"
         inputs = model.dummy_inputs()

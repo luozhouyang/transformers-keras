@@ -283,9 +283,7 @@ class AlbertEncoder(tf.keras.layers.Layer):
         for i in range(self.num_layers):
             layers_per_group = self.num_layers // self.num_groups
             group_index = i // layers_per_group
-            hidden_states, group_hidden_states, group_attn_weights = self.groups[group_index](
-                hidden_states, attention_mask
-            )
+            hidden_states, group_hidden_states, group_attn_weights = self.groups[group_index](hidden_states, attention_mask)
             all_hidden_states.extend(group_hidden_states)
             all_attention_weights.extend(group_attn_weights)
 
@@ -384,6 +382,11 @@ class AlbertPretrainedModel(tf.keras.Model):
         override_params=None,
         adapter=None,
         use_functional_api=True,
+        with_mlm=False,
+        with_sop=False,
+        ckpt_albert_prefix="bert",
+        ckpt_mlm_prefix="cls/predictions",
+        ckpt_sop_prefix="cls/seq_relationship",
         check_weights=True,
         verbose=True,
         **kwargs
@@ -401,8 +404,6 @@ class AlbertPretrainedModel(tf.keras.Model):
             check_weights: Python boolean. If true, check model weights' value after loading weights from ckpt
             verbose: Python boolean.If True, logging more detailed informations when loadding pretrained weights
         """
-
-        config_file, ckpt, _ = parse_pretrained_model_files(pretrained_model_dir)
         if not adapter:
             adapter = AlbertAdapter(
                 skip_token_embedding=kwargs.pop("skip_token_embedding", False),
@@ -411,19 +412,26 @@ class AlbertPretrainedModel(tf.keras.Model):
                 skip_embedding_layernorm=kwargs.pop("skip_embedding_layernorm", False),
                 skip_pooler=kwargs.pop("skip_pooler", False),
             )
-        model_config = adapter.adapte_config(config_file, **kwargs)
+        files = adapter.parse_files(pretrained_model_dir)
+        model_config = adapter.adapte_config(files["config_file"], **kwargs)
+        logging.info("Load model config: \n%s", json.dumps(model_config, indent=4))
         if override_params:
             model_config.update(override_params)
-        logging.info("Load model config: \n%s", json.dumps(model_config, indent=4))
+            logging.info("Overrided model config: \n%s", json.dumps(model_config, indent=4))
         model = cls(**model_config, **kwargs)
         assert model.albert_model is not None, "AlbertPretrainedModel must have an attribute: `albert_model`!"
         inputs = model.dummy_inputs()
         model(inputs=list(inputs), training=False)
         adapter.adapte_weights(
-            albert=model.albert_model,
-            config=model_config,
-            ckpt=ckpt,
-            prefix="" if use_functional_api else model.name,
+            model=model,
+            ckpt=files["ckpt"],
+            model_config=model_config,
+            use_functional_api=use_functional_api,
+            with_mlm=with_mlm,
+            with_sop=with_sop,
+            ckpt_albert_prefix=ckpt_albert_prefix,
+            ckpt_mlm_prefix=ckpt_mlm_prefix,
+            ckpt_sop_prefix=ckpt_sop_prefix,
             check_weights=check_weights,
             verbose=verbose,
             **kwargs
@@ -509,9 +517,7 @@ class Albert(AlbertPretrainedModel):
             initializer_range=initializer_range,
             name="albert",
         )
-        sequence_output, pooled_output, hidden_states, attention_weights = albert_model(
-            input_ids, segment_ids, attention_mask
-        )
+        sequence_output, pooled_output, hidden_states, attention_weights = albert_model(input_ids, segment_ids, attention_mask)
         outputs = [
             tf.keras.layers.Lambda(lambda x: x, name="sequence_output")(sequence_output),
             tf.keras.layers.Lambda(lambda x: x, name="pooled_output")(pooled_output),
@@ -523,7 +529,6 @@ class Albert(AlbertPretrainedModel):
 
         super().__init__(inputs=[input_ids, segment_ids, attention_mask], outputs=outputs, **kwargs)
 
-        self.albert_model = albert_model
         self.vocab_size = vocab_size
         self.type_vocab_size = type_vocab_size
         self.max_positions = max_positions
