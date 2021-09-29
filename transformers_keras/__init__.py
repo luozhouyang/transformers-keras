@@ -1,7 +1,5 @@
 import logging
 
-import tensorflow as tf
-
 from transformers_keras.common.abc_dataset import AbstractDataset
 from transformers_keras.common.char_tokenizer import BertCharTokenizer, TokenizerEncoding
 from transformers_keras.common.metrics import ExactMatch, F1ForSequence
@@ -72,6 +70,6 @@ from transformers_keras.token_classification.dataset import TokenClassificationD
 from transformers_keras.token_classification.models import AlbertForTokenClassification, BertForTokenClassification
 
 __name__ = "transformers_keras"
-__version__ = "0.4.5"
+__version__ = "0.4.6"
 
 logging.basicConfig(format="%(asctime)s %(levelname)7s %(filename)20s %(lineno)4d] %(message)s", level=logging.INFO)
