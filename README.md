@@ -14,10 +14,11 @@
 本库功能预览：
 
 * 加载各种预训练模型的权重
-* 句向量的解决方案
-* 抽取式问答任务的解决方案
-* 序列分类任务的解决方案
-* 序列标注任务的解决方案
+* 掩码语言模型(Masked Language Model)解决方案
+* 句向量(Sentence Embedding)的解决方案
+* 抽取式问答任务(Question Answering)的解决方案
+* 序列分类任务(Sequence Classification)的解决方案
+* 序列标注任务(Token Classification)的解决方案
 
 以上任务的数据处理、模型构建都完成了，可以一键开始训练。这里有两个例子：
 
@@ -26,3 +27,12 @@
 
 
 更多使用方法和介绍，请查看在线文档：[transformers-keras文档](https://transformers-keras.readthedocs.io/zh_CN/latest/index.html)
+
+
+## 联系方式
+
+> 由于二维码过期限制，加微信讨论群请先加我微信邀请加入。
+
+* 微信: luozhouyang0528
+* 邮箱: zhouyang.luo@gmail.com
+
