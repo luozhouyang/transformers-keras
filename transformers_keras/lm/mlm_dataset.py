@@ -63,10 +63,11 @@ class WholeWordMask(abc.ABC):
 
     def _masking_tokens(self, index, tokens, vocabs, **kwargs):
         # 80% of the time, replace with [MASK]
-        if random.random() < 0.8:
+        if random.random() < self.mask_prob:
             return "[MASK]"
         # 10% of the time, keep original
-        if random.random() < 0.5:
+        p = self.rand_prob / (self.rand_prob + self.keep_prob)
+        if random.random() < p:
             return tokens[index]
         # 10% of the time, replace with random word
         masked_token = vocabs[random.randint(0, len(vocabs) - 1)]
@@ -90,11 +91,9 @@ class WholeWordMask(abc.ABC):
                 while tokens and tokens[0].startswith("##"):
                     tokens.pop(0)
             if len(tokens) > max_tokens:
-                tail_truncated = False
                 while tokens and tokens[-1].startswith("##"):
                     tokens.pop()
-                    tail_truncated = True
-                if tokens and not tail_truncated:
+                if tokens:
                     tokens.pop()
         return tokens
 
