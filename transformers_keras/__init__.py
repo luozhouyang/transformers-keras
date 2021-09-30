@@ -4,6 +4,8 @@ from transformers_keras.common.abc_dataset import AbstractDataset
 from transformers_keras.common.char_tokenizer import BertCharTokenizer, TokenizerEncoding
 from transformers_keras.common.metrics import ExactMatch, F1ForSequence
 from transformers_keras.distiller import Distiller
+from transformers_keras.lm.mlm import BertForMaskedLanguageModel
+from transformers_keras.lm.mlm_dataset import MaskedLanguageModelDataset, MaskedLangueModelExample, WholeWordMask
 from transformers_keras.modeling_albert import (
     Albert,
     AlbertEmbedding,
@@ -70,6 +72,6 @@ from transformers_keras.token_classification.dataset import TokenClassificationD
 from transformers_keras.token_classification.models import AlbertForTokenClassification, BertForTokenClassification
 
 __name__ = "transformers_keras"
-__version__ = "0.4.6"
+__version__ = "0.4.7"
 
 logging.basicConfig(format="%(asctime)s %(levelname)7s %(filename)20s %(lineno)4d] %(message)s", level=logging.INFO)
