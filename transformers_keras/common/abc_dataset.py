@@ -83,15 +83,15 @@ class AbstractDataset(abc.ABC):
             w.close()
         logging.info("Finished to write %d examples to tfrecords.", len(examples))
 
-    @abc.abstractclassmethod
+    @classmethod
     def _example_to_tfrecord(cls, example, **kwargs):
         raise NotImplementedError()
 
-    @abc.abstractclassmethod
+    @classmethod
     def _zip_dataset(cls, examples, **kwargs):
         raise NotImplementedError()
 
-    @abc.abstractclassmethod
+    @classmethod
     def _build_dataset(
         cls,
         dataset,
@@ -241,7 +241,7 @@ class AbstractDataset(abc.ABC):
         logging.info("Collected %d instances in total.", len(instances))
         return cls._parse_jsonl(instances, tokenizer=tokenizer, vocab_file=vocab_file, **kwargs)
 
-    @abc.abstractclassmethod
+    @classmethod
     def _parse_jsonl(cls, instances, tokenizer=None, vocab_file=None, **kwargs):
         raise NotImplementedError()
 
@@ -261,7 +261,7 @@ class AbstractDataset(abc.ABC):
         dataset = cls._parse_tfrecord(dataset, **kwargs)
         return dataset
 
-    @abc.abstractclassmethod
+    @classmethod
     def _parse_tfrecord(cls, dataset, **kwargs):
         raise NotImplementedError()
 
