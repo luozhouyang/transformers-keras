@@ -6,7 +6,7 @@ from transformers_keras.modeling_utils import choose_activation, shape_list
 class BertPredictionHeadTransform(tf.keras.layers.Layer):
     """Transform layer for prediction head."""
 
-    def __init__(self, hidden_size=768, activation="gelu", initializer_range=0.02, epsilon=1e-8, **kwargs):
+    def __init__(self, hidden_size=768, activation="gelu", initializer_range=0.02, epsilon=1e-12, **kwargs):
         super().__init__(**kwargs)
         self.dense = tf.keras.layers.Dense(
             hidden_size,
@@ -33,7 +33,7 @@ class BertPredictionHead(tf.keras.layers.Layer):
         hidden_size=768,
         activation="gelu",
         initializer_range=0.02,
-        epsilon=1e-8,
+        epsilon=1e-12,
         **kwargs
     ):
         super().__init__(**kwargs)
@@ -72,7 +72,7 @@ class BertMaskedLanguageModelHead(tf.keras.layers.Layer):
         hidden_size=768,
         activation="gelu",
         initializer_range=0.02,
-        epsilon=1e-8,
+        epsilon=1e-12,
         **kwargs
     ):
         super().__init__(**kwargs)
@@ -107,7 +107,7 @@ class BertForMaskedLanguageModel(BertPretrainedModel):
         hidden_dropout_rate=0.2,
         attention_dropout_rate=0.1,
         initializer_range=0.02,
-        epsilon=1e-8,
+        epsilon=1e-12,
         **kwargs
     ):
         input_ids = tf.keras.layers.Input(shape=(None,), dtype=tf.int32, name="input_ids")
@@ -143,6 +143,8 @@ class BertForMaskedLanguageModel(BertPretrainedModel):
         pred = tf.keras.layers.Lambda(lambda x: x, name="predictions")(pred)
         super().__init__(inputs=[input_ids, segment_ids, attention_mask], outputs=[pred], **kwargs)
 
+        self.epsilon = epsilon
+
     def train_step(self, data):
         x, y = data
         input_ids, segment_ids, attention_mask = x["input_ids"], x["segment_ids"], x["attention_mask"]
@@ -169,13 +171,13 @@ class BertForMaskedLanguageModel(BertPretrainedModel):
         loss = tf.keras.losses.sparse_categorical_crossentropy(y_true, y_pred, from_logits=True)
         masked_pos = tf.cast(masked_pos, dtype=loss.dtype)
         loss *= masked_pos
-        return tf.reduce_sum(loss) / (tf.reduce_sum(masked_pos) + 1e-12)
+        return tf.reduce_sum(loss) / (tf.reduce_sum(masked_pos) + self.epsilon)
 
     def test_step(self, data):
         x, y = data
         input_ids, segment_ids, attention_mask = x["input_ids"], x["segment_ids"], x["attention_mask"]
         masked_pos, y_true = y["masked_positions"], y["masked_ids"]
-        y_pred = self(inputs=[input_ids, segment_ids, attention_mask], training=True)
+        y_pred = self(inputs=[input_ids, segment_ids, attention_mask], training=False)
         loss = self._compute_loss(y_true, y_pred, masked_pos)
         # Update metrics (includes the metric that tracks the loss)
         self.compiled_metrics.update_state(y_true, y_pred)

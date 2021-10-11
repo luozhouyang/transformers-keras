@@ -18,9 +18,9 @@ class WholeWordMask(abc.ABC):
 
     def __init__(self, change_prob=0.15, mask_prob=0.8, rand_prob=0.1, keep_prob=0.1, max_predictions=20, **kwargs):
         self.change_prob = change_prob
-        self.mask_prob = mask_prob
-        self.rand_prob = rand_prob
-        self.keep_prob = keep_prob
+        self.mask_prob = mask_prob / (mask_prob + rand_prob + keep_prob)
+        self.rand_prob = rand_prob / (mask_prob + rand_prob + keep_prob)
+        self.keep_prob = keep_prob / (mask_prob + rand_prob + keep_prob)
         self.max_predictions = max_predictions
 
     def __call__(self, sequence, tokenizer: BertWordPieceTokenizer, vocabs, max_sequence_length=512, **kwargs):
@@ -184,7 +184,10 @@ class MaskedLanguageModelDataset(AbstractDataset):
     @classmethod
     def _to_dict(cls, dataset, **kwargs):
         dataset = dataset.map(
-            lambda a, b, c, x, y: ({"input_ids": a, "segment_ids": b, "attention_mask": c}, {"masked_ids": x, "masked_pos": y}),
+            lambda a, b, c, x, y: (
+                {"input_ids": a, "segment_ids": b, "attention_mask": c},
+                {"masked_ids": x, "masked_pos": y},
+            ),
             num_parallel_calls=cls.AUTOTUNE,
         ).prefetch(cls.AUTOTUNE)
         return dataset
@@ -236,10 +239,11 @@ class MaskedLanguageModelDataset(AbstractDataset):
         if mask_strategy is None:
             logging.info("Using default whole word mask strategy...")
             mask_strategy = WholeWordMask(
-                unchange_prob=kwargs.get("unchange_prob", 0.85),
+                change_prob=kwargs.get("change_prob", 0.15),
                 mask_prob=kwargs.get("mask_prob", 0.8),
-                replace_prob=kwargs.get("replace_prob", 0.1),
+                rand_prob=kwargs.get("rand_prob", 0.1),
                 keep_prob=kwargs.get("keep_prob", 0.1),
+                max_predictions=kwargs.get("max_predictions", 20),
             )
 
         examples = []
