@@ -54,13 +54,15 @@ class AbstractDataset(abc.ABC):
 
     @classmethod
     def from_jsonl_files(cls, input_files, tokenizer=None, vocab_file=None, **kwargs):
-        examples = cls._read_jsonl(input_files, tokenizer=tokenizer, vocab_file=vocab_file, **kwargs)
+        instances = cls._read_jsonl(input_files, **kwargs)
+        examples = cls._parse_instances_to_examples(instances, tokenizer=tokenizer, vocab_file=vocab_file, **kwargs)
         dataset = cls.from_examples(examples, **kwargs)
         return dataset
 
     @classmethod
     def jsonl_to_examples(cls, input_files, tokenizer=None, vocab_file=None, **kwargs):
-        examples = cls._read_jsonl(input_files, tokenizer=tokenizer, vocab_file=vocab_file, **kwargs)
+        instances = cls._read_jsonl(input_files, **kwargs)
+        examples = cls._parse_instances_to_examples(instances, tokenizer=tokenizer, vocab_file=vocab_file, **kwargs)
         return examples
 
     @classmethod
@@ -226,7 +228,7 @@ class AbstractDataset(abc.ABC):
         return dataset
 
     @classmethod
-    def _read_jsonl(cls, input_files, tokenizer=None, vocab_file=None, **kwargs):
+    def _read_jsonl(cls, input_files, **kwargs):
         if isinstance(input_files, str):
             input_files = [input_files]
         instances = []
@@ -239,10 +241,10 @@ class AbstractDataset(abc.ABC):
                     instance = json.loads(line)
                     instances.append(instance)
         logging.info("Collected %d instances in total.", len(instances))
-        return cls._parse_jsonl(instances, tokenizer=tokenizer, vocab_file=vocab_file, **kwargs)
+        return instances
 
     @classmethod
-    def _parse_jsonl(cls, instances, tokenizer=None, vocab_file=None, **kwargs):
+    def _parse_instances_to_examples(cls, instances, tokenizer=None, vocab_file=None, **kwargs):
         raise NotImplementedError()
 
     @classmethod

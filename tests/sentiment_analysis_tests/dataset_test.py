@@ -9,13 +9,13 @@ class DatasetTest(unittest.TestCase):
     def test_build_dataset(self):
         print("====from_jsonl_files\n")
         d = AspectTermExtractionDataset.from_jsonl_files(
-            "testdata/ate.jsonl", vocab_file="testdata/bert.vocab.txt", batch_size=2
+            "testdata/ate.jsonl", vocab_file="testdata/vocab.bert.txt", batch_size=2
         )
         print(next(iter(d)))
 
         print("====jsonl_to_examples\n")
         examples = AspectTermExtractionDataset.jsonl_to_examples(
-            "testdata/ate.jsonl", vocab_file="testdata/bert.vocab.txt"
+            "testdata/ate.jsonl", vocab_file="testdata/vocab.bert.txt"
         )
         for i in range(2):
             print(examples[i])

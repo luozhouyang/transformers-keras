@@ -135,7 +135,7 @@ class UnsupervisedSimCSEDataset(AbstractDataset):
         return dataset
 
     @classmethod
-    def _parse_jsonl(cls, instances, tokenizer: BertWordPieceTokenizer = None, vocab_file=None, **kwargs):
+    def _parse_instances_to_examples(cls, instances, tokenizer: BertWordPieceTokenizer = None, vocab_file=None, **kwargs):
         assert tokenizer or vocab_file, "`tokenizer` or `vocab_file` must be provided."
         if tokenizer is None:
             tokenizer = BertWordPieceTokenizer.from_file(
@@ -289,7 +289,7 @@ class SupervisedSimCSEDataset(AbstractDataset):
         return dataset
 
     @classmethod
-    def _parse_jsonl(cls, instances, tokenizer: BertWordPieceTokenizer = None, vocab_file=None, **kwargs):
+    def _parse_instances_to_examples(cls, instances, tokenizer: BertWordPieceTokenizer = None, vocab_file=None, **kwargs):
         assert tokenizer or vocab_file, "`tokenizer` or `vocab_file` must be provided."
         if tokenizer is None:
             tokenizer = BertWordPieceTokenizer.from_file(
@@ -469,7 +469,7 @@ class HardNegativeSimCSEDataset(AbstractDataset):
         return dataset
 
     @classmethod
-    def _parse_jsonl(cls, instances, tokenizer: BertWordPieceTokenizer = None, vocab_file=None, **kwargs):
+    def _parse_instances_to_examples(cls, instances, tokenizer: BertWordPieceTokenizer = None, vocab_file=None, **kwargs):
         assert tokenizer or vocab_file, "`tokenizer` or `vocab_file` must be provided."
         if tokenizer is None:
             tokenizer = BertWordPieceTokenizer.from_file(

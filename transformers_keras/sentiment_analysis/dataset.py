@@ -115,7 +115,9 @@ class AspectTermExtractionDataset(AbstractDataset):
         return dataset
 
     @classmethod
-    def _parse_jsonl(cls, instances, tokenizer: BertCharTokenizer = None, vocab_file=None, question="文中提到了哪些层面？", **kwargs):
+    def _parse_instances_to_examples(
+        cls, instances, tokenizer: BertCharTokenizer = None, vocab_file=None, question="文中提到了哪些层面？", **kwargs
+    ):
         assert tokenizer or vocab_file, "`tokenizer` or `vocab_file` must be provided."
         if tokenizer is None:
             tokenizer = BertCharTokenizer.from_file(
