@@ -13,13 +13,17 @@ class SeqEvalForTokenClassification(tf.keras.callbacks.Callback):
     """Seqeval for token classification"""
 
     @classmethod
-    def from_conll_files(cls, input_files, vocab_file, label_vocab_file, sep="\t", **kwargs):
+    def from_conll_files(cls, input_files, vocab_file, label_vocab_file, o_token="O", sep="\t", **kwargs):
         examples = TokenClassificationDataset.conll_to_examples(
-            input_files, vocab_file, label_vocab_file, sep=sep, **kwargs
+            input_files,
+            tokenizer=None,
+            vocab_file=vocab_file,
+            label_tokenizer=None,
+            label_vocab_file=label_vocab_file,
+            sep=sep,
+            **kwargs
         )
-        label_tokenizer = TokenClassificationLabelTokenizer.from_file(
-            label_vocab_file, o_token=kwargs.pop("o_token", "O")
-        )
+        label_tokenizer = TokenClassificationLabelTokenizer.from_file(label_vocab_file, o_token=o_token)
         return cls(examples=examples, label_tokenizer=label_tokenizer, **kwargs)
 
     def __init__(

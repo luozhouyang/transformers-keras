@@ -1,3 +1,6 @@
+import logging
+import os
+import re
 from collections import namedtuple
 
 import tensorflow as tf
@@ -13,6 +16,84 @@ TokenClassificationExample = namedtuple(
 
 class TokenClassificationDataset(AbstractDataset):
     """Dataset for token classification."""
+
+    @classmethod
+    def from_conll_files(
+        cls,
+        input_files,
+        tokenizer=None,
+        vocab_file=None,
+        label_tokenizer=None,
+        label_vocab_file=None,
+        sep="\t",
+        verbose=True,
+        n=5,
+        **kwargs
+    ):
+        examples = cls.conll_to_examples(
+            input_files,
+            tokenizer=tokenizer,
+            vocab_file=vocab_file,
+            label_tokenizer=label_tokenizer,
+            label_vocab_file=label_vocab_file,
+            sep=sep,
+            **kwargs,
+        )
+        dataset = cls.from_examples(examples, verbose=verbose, n=n, **kwargs)
+        return dataset
+
+    @classmethod
+    def conll_to_examples(
+        cls,
+        input_files,
+        tokenizer=None,
+        vocab_file=None,
+        label_tokenizer=None,
+        label_vocab_file=None,
+        sep="\t",
+        **kwargs
+    ):
+        instances = cls._read_conll(input_files, sep=sep, **kwargs)
+        examples = cls._parse_instances_to_examples(
+            instances,
+            tokenizer=tokenizer,
+            vocab_file=vocab_file,
+            label_tokenizer=label_tokenizer,
+            label_vocab_file=label_vocab_file,
+            features_key="features",
+            labels_ley="labels",
+            **kwargs,
+        )
+        return examples
+
+    @classmethod
+    def _read_conll(cls, input_files, sep="\t", **kwargs):
+        instances = []
+        if isinstance(input_files, str):
+            input_files = [input_files]
+        for f in input_files:
+            if not os.path.exists(f):
+                logging.warning("File %s does not exist, skip.", f)
+                continue
+            features, labels = [], []
+            with open(f, mode="rt", encoding="utf-8") as fin:
+                for line in fin:
+                    if not line:
+                        break
+                    line = line.strip()
+                    if not line:
+                        instances.append({"features": features, "labels": labels})
+                        features, labels = [], []
+                        continue
+                    parts = re.split(sep, line)
+                    if len(parts) < 2:
+                        raise ValueError("Invalid file data")
+                    features.append(str(parts[0].strip()))
+                    labels.append(str(parts[1]).strip())
+            if features and labels:
+                instances.append({"features": features, "labels": labels})
+        logging.info("Read %d instances from CoNLL files.", len(instances))
+        return instances
 
     @classmethod
     def _filter(cls, dataset, max_sequence_length=512, **kwargs):
@@ -103,7 +184,7 @@ class TokenClassificationDataset(AbstractDataset):
         return dataset
 
     @classmethod
-    def _parse_jsonl(
+    def _parse_instances_to_examples(
         cls,
         instances,
         tokenizer: BertCharTokenizer = None,
@@ -120,7 +201,9 @@ class TokenClassificationDataset(AbstractDataset):
             )
         assert label_tokenizer or label_vocab_file, "`label_tokenizer` or `label_vocab_file` must be provided."
         if label_tokenizer is None:
-            label_tokenizer = TokenClassificationLabelTokenizer.from_file(label_vocab_file, o_token=kwargs.get("o_token", "O"))
+            label_tokenizer = TokenClassificationLabelTokenizer.from_file(
+                label_vocab_file, o_token=kwargs.get("o_token", "O")
+            )
         # collect examples
         examples = []
         for instance in instances:
