@@ -19,6 +19,7 @@
 * 抽取式问答任务(Question Answering)的解决方案
 * 序列分类任务(Sequence Classification)的解决方案
 * 序列标注任务(Token Classification)的解决方案
+* 知识蒸馏(Knowledge Distillation)的框架
 
 以上任务的数据处理、模型构建都完成了，可以一键开始训练。这里有两个例子：
 
