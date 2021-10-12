@@ -1,12 +1,16 @@
 import numpy as np
 import tensorflow as tf
-from transformers_keras.modeling_albert import (Albert, AlbertEmbedding,
-                                                AlbertEncoder,
-                                                AlbertEncoderGroup,
-                                                AlbertEncoderLayer)
+from transformers_keras.modeling_albert import (
+    Albert,
+    AlbertEmbedding,
+    AlbertEncoder,
+    AlbertEncoderGroup,
+    AlbertEncoderLayer,
+)
 
 
 class ModelingAlbertTest(tf.test.TestCase):
+    """Albert model tests"""
 
     def testAlbertEmbedding(self):
         embedding = AlbertEmbedding(vocab_size=100, embedding_size=128)
@@ -21,9 +25,14 @@ class ModelingAlbertTest(tf.test.TestCase):
     def testAlbertEncoderLayer(self):
         encoder = AlbertEncoderLayer()
         hidden_states = tf.random.uniform(shape=(2, 16, 768))  # hidden states
-        mask = tf.constant([[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1],
-                            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1]],
-                           shape=(2, 16), dtype=tf.float32)  # mask
+        mask = tf.constant(
+            [
+                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1],
+                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1],
+            ],
+            shape=(2, 16),
+            dtype=tf.float32,
+        )  # mask
         attention_mask = mask[:, tf.newaxis, tf.newaxis, :]
         outputs, attn_weights = encoder(hidden_states, attention_mask)
         self.assertAllEqual([2, 16, 768], outputs.shape)
@@ -32,9 +41,14 @@ class ModelingAlbertTest(tf.test.TestCase):
     def testAlbertEncoderGroup(self):
 
         hidden_states = tf.random.uniform(shape=(2, 16, 768))  # hidden states
-        mask = tf.constant([[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1],
-                            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1]],
-                           shape=(2, 16), dtype=tf.float32)  # mask
+        mask = tf.constant(
+            [
+                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1],
+                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1],
+            ],
+            shape=(2, 16),
+            dtype=tf.float32,
+        )  # mask
         mask = mask[:, tf.newaxis, tf.newaxis, :]
 
         def _run_albert_encoder_group(num_layers_each_group):
@@ -55,9 +69,14 @@ class ModelingAlbertTest(tf.test.TestCase):
 
     def testAlbertEncoder(self):
         hidden_states = tf.random.uniform(shape=(2, 16, 768))  # hidden states
-        mask = tf.constant([[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1],
-                            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1]],
-                           shape=(2, 16), dtype=tf.float32)  # mask
+        mask = tf.constant(
+            [
+                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1],
+                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1],
+            ],
+            shape=(2, 16),
+            dtype=tf.float32,
+        )  # mask
         mask = mask[:, tf.newaxis, tf.newaxis, :]
 
         NUM_LAYERS = 4
@@ -74,22 +93,35 @@ class ModelingAlbertTest(tf.test.TestCase):
         input_ids = tf.constant(
             [1, 2, 3, 4, 5, 6, 7, 5, 3, 2, 3, 4, 1, 2, 3, 1, 2, 3, 4, 5, 6, 6, 6, 7, 7, 8, 0, 0, 0, 0, 0, 0],
             shape=(2, 16),
-            dtype=np.int32)  # input_ids
+            dtype=np.int32,
+        )  # input_ids
         token_type_ids = np.array(
-            [[0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1],
-             [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1]], dtype=np.int64)  # token_type_ids,
+            [
+                [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1],
+                [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            ],
+            dtype=np.int64,
+        )  # token_type_ids,
         input_mask = tf.constant(
-            [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0],
-             [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]], dtype=np.float32)  # input_mask
+            [
+                [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0],
+                [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0],
+            ],
+            dtype=np.float32,
+        )  # input_mask
         return input_ids, token_type_ids, input_mask
 
     def _check_albert_outputs(self, return_states=False, return_attention_weights=False):
         NUM_LAYERS, NUM_GROUPS, NUM_LAYERS_EACH_GROUP = 4, 1, 1
         model = Albert(
-            vocab_size=100, hidden_size=768,
-            num_layers=NUM_LAYERS, num_groups=NUM_GROUPS, num_layers_each_group=NUM_LAYERS_EACH_GROUP,
+            vocab_size=100,
+            hidden_size=768,
+            num_layers=NUM_LAYERS,
+            num_groups=NUM_GROUPS,
+            num_layers_each_group=NUM_LAYERS_EACH_GROUP,
             return_states=return_states,
-            return_attention_weights=return_attention_weights)
+            return_attention_weights=return_attention_weights,
+        )
         input_ids, segment_ids, attn_mask = self._build_albert_inputs()
         outputs = model(inputs=[input_ids, segment_ids, attn_mask])
         sequence_outputs, pooled_outputs = outputs[0], outputs[1]
@@ -135,16 +167,21 @@ class ModelingAlbertTest(tf.test.TestCase):
         print(model.get_config())
 
     def test_export_saved_model(self):
-        model = Albert(vocab_size=21128, num_layers=12, num_attention_heads=8,
-                       return_states=True, return_attention_weights=True)
+        model = Albert(
+            vocab_size=21128,
+            num_layers=12,
+            num_attention_heads=8,
+            return_states=True,
+            return_attention_weights=True,
+        )
         input_ids, segment_ids, input_mask = model.dummy_inputs()
         model(inputs=[input_ids, segment_ids, input_mask])
         model.summary()
-        model.save('models/albert/export/1', include_optimizer=False)
+        model.save("models/albert/export/1", include_optimizer=False)
 
     def test_load_saved_model(self):
-        loaded = tf.saved_model.load('models/albert/export/1')
-        model = loaded.signatures['serving_default']
+        loaded = tf.saved_model.load("models/albert/export/1")
+        model = loaded.signatures["serving_default"]
         print(model.structured_input_signature)
         print(model.structured_outputs)
 

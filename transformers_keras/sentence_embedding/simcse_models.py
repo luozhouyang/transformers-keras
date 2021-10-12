@@ -109,7 +109,11 @@ class SupervisedSimCSE(AbstractSimCSE):
 
     def forward(self, x, y, training=False):
         input_ids, segment_ids, attention_mask = x["input_ids"], x["segment_ids"], x["attention_mask"]
-        pos_input_ids, pos_segment_ids, pos_attention_mask = x["pos_input_ids"], x["pos_segment_ids"], x["pos_attention_mask"]
+        pos_input_ids, pos_segment_ids, pos_attention_mask = (
+            x["pos_input_ids"],
+            x["pos_segment_ids"],
+            x["pos_attention_mask"],
+        )
         embedding = self(inputs=[input_ids, segment_ids, attention_mask], training=training)
         pos_embedding = self(inputs=[pos_input_ids, pos_segment_ids, pos_attention_mask], training=training)
         loss, y_pred = self._compute_contrastive_loss(embedding, pos_embedding, y)
@@ -130,8 +134,16 @@ class HardNegativeSimCSE(AbstractSimCSE):
 
     def forward(self, x, y, training=False):
         input_ids, segment_ids, attention_mask = x["input_ids"], x["segment_ids"], x["attention_mask"]
-        pos_input_ids, pos_segment_ids, pos_attention_mask = x["pos_input_ids"], x["pos_segment_ids"], x["pos_attention_mask"]
-        neg_input_ids, neg_segment_ids, neg_attention_mask = x["neg_input_ids"], x["neg_segment_ids"], x["neg_attention_mask"]
+        pos_input_ids, pos_segment_ids, pos_attention_mask = (
+            x["pos_input_ids"],
+            x["pos_segment_ids"],
+            x["pos_attention_mask"],
+        )
+        neg_input_ids, neg_segment_ids, neg_attention_mask = (
+            x["neg_input_ids"],
+            x["neg_segment_ids"],
+            x["neg_attention_mask"],
+        )
         embedding = self(inputs=[input_ids, segment_ids, attention_mask], training=training)
         pos_embedding = self(inputs=[pos_input_ids, pos_segment_ids, pos_attention_mask], training=training)
         neg_embedding = self(inputs=[neg_input_ids, neg_segment_ids, neg_attention_mask], training=training)

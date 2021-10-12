@@ -107,7 +107,9 @@ class AlbertAdapter(AbstractAdapter):
 
     def _adapte_albert_weights(self, model, ckpt, model_config, use_functional_api=True, **kwargs):
         mapping = {}
-        self_albert_prefix = model.albert_model.name if use_functional_api else model.name + "/" + model.albert_model.name
+        self_albert_prefix = (
+            model.albert_model.name if use_functional_api else model.name + "/" + model.albert_model.name
+        )
         ckpt_albert_prefix = kwargs.get("ckpt_albert_prefix", "bert")
         logging.info("Adapting albert weights, using model weight prefix: %s", self_albert_prefix)
         logging.info("Adapting albert weights, using  ckpt weight prefix: %s", ckpt_albert_prefix)
@@ -131,7 +133,9 @@ class AlbertAdapter(AbstractAdapter):
         mapping.update(encoder_mapping)
 
         # skip weights
-        self_albert_prefix = model.albert_model.name if use_functional_api else model.name + "/" + model.albert_model.name
+        self_albert_prefix = (
+            model.albert_model.name if use_functional_api else model.name + "/" + model.albert_model.name
+        )
         self._skip_weights(mapping, self_albert_prefix)
 
         # zip weight names and values
@@ -145,7 +149,9 @@ class AlbertAdapter(AbstractAdapter):
 
         return mapping
 
-    def _adapte_embedding_weights(self, model, ckpt, self_weight_names, ckpt_weight_names, use_functional_api=True, **kwargs):
+    def _adapte_embedding_weights(
+        self, model, ckpt, self_weight_names, ckpt_weight_names, use_functional_api=True, **kwargs
+    ):
         model_prefix = model.albert_model.name if use_functional_api else model.name + "/" + model.albert_model.name
         ckpt_prefix = kwargs.get("ckpt_albert_prefix", "bert")
         mapping = {}

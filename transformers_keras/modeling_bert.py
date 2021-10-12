@@ -76,7 +76,9 @@ class BertEmbedding(tf.keras.layers.Layer):
 class BertMultiHeadAtttetion(tf.keras.layers.Layer):
     """Multi head attention."""
 
-    def __init__(self, hidden_size=768, num_attention_heads=8, attention_dropout_rate=0.1, initializer_range=0.02, **kwargs):
+    def __init__(
+        self, hidden_size=768, num_attention_heads=8, attention_dropout_rate=0.1, initializer_range=0.02, **kwargs
+    ):
         super().__init__(**kwargs)
         self.num_attention_heads = num_attention_heads
         self.hidden_size = hidden_size
@@ -392,7 +394,9 @@ class BertModel(tf.keras.layers.Layer):
         embedding = self.bert_embedding(input_ids, segment_ids, training=training)
         # (batch_size, seq_len) -> (batch_size, 1, 1, seq_len)
         attention_mask = attention_mask[:, tf.newaxis, tf.newaxis, :]
-        output, all_hidden_states, all_attention_scores = self.bert_encoder(embedding, attention_mask, training=training)
+        output, all_hidden_states, all_attention_scores = self.bert_encoder(
+            embedding, attention_mask, training=training
+        )
         pooled_output = self.bert_pooler(output)
         return output, pooled_output, all_hidden_states, all_attention_scores
 
@@ -538,7 +542,9 @@ class Bert(BertPretrainedModel):
             epsilon=epsilon,
             name="bert",
         )
-        sequence_output, pooled_output, hidden_states, attention_weights = bert_model(input_ids, segment_ids, attention_mask)
+        sequence_output, pooled_output, hidden_states, attention_weights = bert_model(
+            input_ids, segment_ids, attention_mask
+        )
         outputs = [
             tf.keras.layers.Lambda(lambda x: x, name="sequence_output")(sequence_output),
             tf.keras.layers.Lambda(lambda x: x, name="pooled_output")(pooled_output),

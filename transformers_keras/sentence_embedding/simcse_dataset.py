@@ -135,7 +135,9 @@ class UnsupervisedSimCSEDataset(AbstractDataset):
         return dataset
 
     @classmethod
-    def _parse_instances_to_examples(cls, instances, tokenizer: BertWordPieceTokenizer = None, vocab_file=None, **kwargs):
+    def _parse_instances_to_examples(
+        cls, instances, tokenizer: BertWordPieceTokenizer = None, vocab_file=None, **kwargs
+    ):
         assert tokenizer or vocab_file, "`tokenizer` or `vocab_file` must be provided."
         if tokenizer is None:
             tokenizer = BertWordPieceTokenizer.from_file(
@@ -192,7 +194,9 @@ class SupervisedSimCSEDataset(AbstractDataset):
     @classmethod
     def _filter(cls, dataset, max_sequence_length=512, **kwargs):
         dataset = dataset.filter(
-            lambda a, b, c, e, f, g: tf.logical_and(tf.size(a) <= max_sequence_length, tf.size(e) <= max_sequence_length)
+            lambda a, b, c, e, f, g: tf.logical_and(
+                tf.size(a) <= max_sequence_length, tf.size(e) <= max_sequence_length
+            )
         )
         return dataset
 
@@ -289,7 +293,9 @@ class SupervisedSimCSEDataset(AbstractDataset):
         return dataset
 
     @classmethod
-    def _parse_instances_to_examples(cls, instances, tokenizer: BertWordPieceTokenizer = None, vocab_file=None, **kwargs):
+    def _parse_instances_to_examples(
+        cls, instances, tokenizer: BertWordPieceTokenizer = None, vocab_file=None, **kwargs
+    ):
         assert tokenizer or vocab_file, "`tokenizer` or `vocab_file` must be provided."
         if tokenizer is None:
             tokenizer = BertWordPieceTokenizer.from_file(
@@ -469,7 +475,9 @@ class HardNegativeSimCSEDataset(AbstractDataset):
         return dataset
 
     @classmethod
-    def _parse_instances_to_examples(cls, instances, tokenizer: BertWordPieceTokenizer = None, vocab_file=None, **kwargs):
+    def _parse_instances_to_examples(
+        cls, instances, tokenizer: BertWordPieceTokenizer = None, vocab_file=None, **kwargs
+    ):
         assert tokenizer or vocab_file, "`tokenizer` or `vocab_file` must be provided."
         if tokenizer is None:
             tokenizer = BertWordPieceTokenizer.from_file(

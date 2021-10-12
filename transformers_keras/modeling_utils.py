@@ -17,9 +17,8 @@ def shape_list(x):
     return shape
 
 
-
 def gelu(x):
-    """ Gaussian Error Linear Unit.
+    """Gaussian Error Linear Unit.
     Original Implementation of the gelu activation function in Google Bert repo when initially created.
         For information: OpenAI GPT's gelu is slightly different (and gives slightly different results):
         0.5 * x * (1 + torch.tanh(math.sqrt(2 / math.pi) * (x + 0.044715 * torch.pow(x, 3))))
@@ -70,25 +69,25 @@ def parse_pretrained_model_files(pretrain_model_dir):
     config_file, ckpt, vocab = None, None, None
     pretrain_model_dir = os.path.abspath(pretrain_model_dir)
     if not os.path.exists(pretrain_model_dir):
-        logging.info('pretrain model dir: {} is not exists.'.format(pretrain_model_dir))
+        logging.info("pretrain model dir: {} is not exists.".format(pretrain_model_dir))
         return config_file, ckpt, vocab
     for f in os.listdir(pretrain_model_dir):
-        if str(f).endswith('config.json'):
+        if str(f).endswith("config.json"):
             config_file = os.path.join(pretrain_model_dir, f)
-        if 'vocab' in str(f):
+        if "vocab" in str(f):
             vocab = os.path.join(pretrain_model_dir, f)
-        if 'ckpt' in str(f):
-            n = '.'.join(str(f).split('.')[:-1])
+        if "ckpt" in str(f):
+            n = ".".join(str(f).split(".")[:-1])
             ckpt = os.path.join(pretrain_model_dir, n)
     return config_file, ckpt, vocab
 
 
 def unpack_inputs_2(inputs):
     if not isinstance(inputs, (list, tuple)):
-        raise ValueError('Invalid inputs type! Inputs type must be a list or tuple!')
+        raise ValueError("Invalid inputs type! Inputs type must be a list or tuple!")
     inputs = list(inputs)
     if len(inputs) == 0:
-        raise ValueError('Invalid inputs, must be not empty!')
+        raise ValueError("Invalid inputs, must be not empty!")
     if len(inputs) == 1:
         input_ids, segment_ids = inputs[0], None
     if len(inputs) == 2:
@@ -100,10 +99,10 @@ def unpack_inputs_2(inputs):
 
 def unpack_inputs_3(inputs):
     if not isinstance(inputs, (list, tuple)):
-        raise ValueError('Invalid inputs type! Inputs type must be a list or tuple!')
+        raise ValueError("Invalid inputs type! Inputs type must be a list or tuple!")
     inputs = list(inputs)
     if len(inputs) == 0:
-        raise ValueError('Invalid inputs, must be not empty!')
+        raise ValueError("Invalid inputs, must be not empty!")
     if len(inputs) == 1:
         input_ids, segment_ids, mask = inputs[0], None, None
     if len(inputs) == 2:

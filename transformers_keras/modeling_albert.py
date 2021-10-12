@@ -283,7 +283,9 @@ class AlbertEncoder(tf.keras.layers.Layer):
         for i in range(self.num_layers):
             layers_per_group = self.num_layers // self.num_groups
             group_index = i // layers_per_group
-            hidden_states, group_hidden_states, group_attn_weights = self.groups[group_index](hidden_states, attention_mask)
+            hidden_states, group_hidden_states, group_attn_weights = self.groups[group_index](
+                hidden_states, attention_mask
+            )
             all_hidden_states.extend(group_hidden_states)
             all_attention_weights.extend(group_attn_weights)
 
@@ -517,7 +519,9 @@ class Albert(AlbertPretrainedModel):
             initializer_range=initializer_range,
             name="albert",
         )
-        sequence_output, pooled_output, hidden_states, attention_weights = albert_model(input_ids, segment_ids, attention_mask)
+        sequence_output, pooled_output, hidden_states, attention_weights = albert_model(
+            input_ids, segment_ids, attention_mask
+        )
         outputs = [
             tf.keras.layers.Lambda(lambda x: x, name="sequence_output")(sequence_output),
             tf.keras.layers.Lambda(lambda x: x, name="pooled_output")(pooled_output),

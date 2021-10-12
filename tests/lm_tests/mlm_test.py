@@ -18,7 +18,9 @@ class MaskedLanguageModelTest(tf.test.TestCase):
         m.summary()
 
     def test_bert_for_mlm_train(self):
-        d = MaskedLanguageModelDataset.from_tfrecord_files(input_files=["testdata/mlm.tfrecord"], batch_size=2, repeat=100)
+        d = MaskedLanguageModelDataset.from_tfrecord_files(
+            input_files=["testdata/mlm.tfrecord"], batch_size=2, repeat=100
+        )
         m = BertForMaskedLanguageModel.from_pretrained(BERT_PATH, with_mlm=True)
         m.summary()
         m.compile(optimizer="adam")
@@ -74,7 +76,9 @@ class MaskedLanguageModelTest(tf.test.TestCase):
             self.assertAllClose(a, b)
 
         def _compare_hidden_states():
-            a_sequence, a_pooled, a_hidden, a_attn = my_model.bert_model(input_ids, segment_ids, attention_mask, training=False)
+            a_sequence, a_pooled, a_hidden, a_attn = my_model.bert_model(
+                input_ids, segment_ids, attention_mask, training=False
+            )
             b_sequence, b_pooled, b_hidden, b_attn = hg_model.get_layer("bert")(
                 input_ids=input_ids,
                 token_type_ids=segment_ids,
@@ -89,7 +93,9 @@ class MaskedLanguageModelTest(tf.test.TestCase):
 
         def _compare_final_outputs():
             a_pred = my_model(inputs=[input_ids, segment_ids, attention_mask])
-            outputs = hg_model(input_ids=input_ids, token_type_ids=segment_ids, attention_mask=attention_mask, return_dict=True)
+            outputs = hg_model(
+                input_ids=input_ids, token_type_ids=segment_ids, attention_mask=attention_mask, return_dict=True
+            )
             b_pred = outputs["logits"]
             self.assertAllClose(a_pred, b_pred, rtol=7e-1, atol=4e-4)
 

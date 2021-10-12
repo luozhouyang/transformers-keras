@@ -102,6 +102,7 @@ class AlbertForQuestionAnswering(AlbertPretrainedModel):
         tail_logits = tf.keras.layers.Lambda(lambda x: x[:, :, 1], name="tail")(logits)
         super().__init__(inputs=[input_ids, segment_ids, attention_mask], outputs=[head_logits, tail_logits], **kwargs)
 
+
 class BertForQuestionAnsweringX(BertPretrainedModel):
     """Bert for question asnwering, with classification head."""
 

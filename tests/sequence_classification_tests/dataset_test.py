@@ -26,7 +26,9 @@ class DatasetTest(unittest.TestCase):
         print(next(iter(d)))
 
         print("====examples_to_tfrecord")
-        SequenceClassificationDataset.examples_to_tfrecord(examples, output_files=["testdata/sequence_classify.tfrecord"])
+        SequenceClassificationDataset.examples_to_tfrecord(
+            examples, output_files=["testdata/sequence_classify.tfrecord"]
+        )
 
         print("====from_tfrecord_files")
         d = SequenceClassificationDataset.from_tfrecord_files("testdata/sequence_classify.tfrecord", batch_size=2)

@@ -17,11 +17,9 @@ setuptools.setup(
     install_requires=[
         "tokenizers",
         "tensorflow-addons[tensorflow]",
-        "seqeval"
+        "seqeval",
     ],
-    extras_require={
-
-    },
+    extras_require={},
     license="Apache Software License",
     classifiers=(
         "Programming Language :: Python :: 3",
@@ -33,5 +31,5 @@ setuptools.setup(
         "License :: OSI Approved :: Apache Software License",
         "Operating System :: OS Independent",
         "Topic :: Scientific/Engineering :: Artificial Intelligence",
-    )
+    ),
 )

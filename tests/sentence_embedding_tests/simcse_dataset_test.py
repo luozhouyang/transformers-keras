@@ -18,7 +18,9 @@ class SimCSEDatasetTest(unittest.TestCase):
         print(next(iter(d)))
 
         print("====jsonl_to_examples\n")
-        examples = UnsupervisedSimCSEDataset.jsonl_to_examples("testdata/simcse.jsonl", vocab_file="testdata/vocab.bert.txt")
+        examples = UnsupervisedSimCSEDataset.jsonl_to_examples(
+            "testdata/simcse.jsonl", vocab_file="testdata/vocab.bert.txt"
+        )
         for i in range(2):
             print(examples[i])
 
@@ -41,7 +43,9 @@ class SimCSEDatasetTest(unittest.TestCase):
         print(next(iter(d)))
 
         print("====jsonl_to_examples\n")
-        examples = SupervisedSimCSEDataset.jsonl_to_examples("testdata/simcse.jsonl", vocab_file="testdata/vocab.bert.txt")
+        examples = SupervisedSimCSEDataset.jsonl_to_examples(
+            "testdata/simcse.jsonl", vocab_file="testdata/vocab.bert.txt"
+        )
         for i in range(2):
             print(examples[i])
 
@@ -64,7 +68,9 @@ class SimCSEDatasetTest(unittest.TestCase):
         print(next(iter(d)))
 
         print("====jsonl_to_examples\n")
-        examples = HardNegativeSimCSEDataset.jsonl_to_examples("testdata/simcse.jsonl", vocab_file="testdata/vocab.bert.txt")
+        examples = HardNegativeSimCSEDataset.jsonl_to_examples(
+            "testdata/simcse.jsonl", vocab_file="testdata/vocab.bert.txt"
+        )
         for i in range(2):
             print(examples[i])
 

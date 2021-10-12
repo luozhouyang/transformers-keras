@@ -60,8 +60,14 @@ from transformers_keras.sentiment_analysis.dataset import (
     OpinionTermExtractionAndClassificationDataset,
 )
 from transformers_keras.sentiment_analysis.otec import BertForOpinionTermExtractionAndClassification
-from transformers_keras.sequence_classification.dataset import SequenceClassificationDataset, SequenceClassificationExample
-from transformers_keras.sequence_classification.models import AlbertForSequenceClassification, BertForSequenceClassification
+from transformers_keras.sequence_classification.dataset import (
+    SequenceClassificationDataset,
+    SequenceClassificationExample,
+)
+from transformers_keras.sequence_classification.models import (
+    AlbertForSequenceClassification,
+    BertForSequenceClassification,
+)
 from transformers_keras.token_classification.callback import SeqEvalForTokenClassification
 from transformers_keras.token_classification.crf_models import (
     AlertCRFForTokenClassification,

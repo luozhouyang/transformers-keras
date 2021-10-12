@@ -101,7 +101,7 @@ class BertAdapter(AbstractAdapter):
             if any(k in w for k in ["key", "value", "query", "prev"]):
                 continue
             if str(w).startswith(ckpt_mlm_prefix):
-                mw = self_mlm_prefix + w[len(ckpt_mlm_prefix):]+ ":0"
+                mw = self_mlm_prefix + w[len(ckpt_mlm_prefix) :] + ":0"
                 if mw not in self_weight_names:
                     logging.warning("weight: %s not in model weights", mw)
                     continue

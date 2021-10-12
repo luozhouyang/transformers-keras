@@ -146,7 +146,9 @@ class QuestionAnsweringDataset(AbstractDataset):
         return tf.train.Example(features=tf.train.Features(feature=feature))
 
     @classmethod
-    def _parse_instances_to_examples(cls, instances, tokenizer: BertWordPieceTokenizer = None, vocab_file=None, **kwargs):
+    def _parse_instances_to_examples(
+        cls, instances, tokenizer: BertWordPieceTokenizer = None, vocab_file=None, **kwargs
+    ):
         assert tokenizer or vocab_file, "`tokenizer` or `vocab_file` must be provided."
         if tokenizer is None:
             tokenizer = BertWordPieceTokenizer.from_file(
@@ -349,7 +351,9 @@ class QuestionAnsweringXDataset(AbstractDataset):
         return tf.train.Example(features=tf.train.Features(feature=feature))
 
     @classmethod
-    def _parse_instances_to_examples(cls, instances, tokenizer: BertWordPieceTokenizer = None, vocab_file=None, **kwargs):
+    def _parse_instances_to_examples(
+        cls, instances, tokenizer: BertWordPieceTokenizer = None, vocab_file=None, **kwargs
+    ):
         assert tokenizer or vocab_file, "`tokenizer` or `vocab_file` must be provided."
         if tokenizer is None:
             tokenizer = BertWordPieceTokenizer.from_file(
