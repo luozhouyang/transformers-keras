@@ -5,8 +5,8 @@ from typing import List
 import numpy as np
 import tensorflow as tf
 from seqeval.metrics import classification_report
-from transformers_keras.token_classification.dataset import TokenClassificationDataset, TokenClassificationExample
-from transformers_keras.token_classification.tokenizer import TokenClassificationLabelTokenizer
+from transformers_keras.common.label_tokenizer import LabelTokenizerForTokenClassification
+from transformers_keras.datapipe.tc_dataset import DatasetForTokenClassification, ExampleForTokenClassification
 
 
 class SeqEvalForTokenClassification(tf.keras.callbacks.Callback):
@@ -14,7 +14,7 @@ class SeqEvalForTokenClassification(tf.keras.callbacks.Callback):
 
     @classmethod
     def from_conll_files(cls, input_files, vocab_file, label_vocab_file, o_token="O", sep="\t", **kwargs):
-        examples = TokenClassificationDataset.conll_to_examples(
+        examples = DatasetForTokenClassification.conll_to_examples(
             input_files,
             tokenizer=None,
             vocab_file=vocab_file,
@@ -23,13 +23,13 @@ class SeqEvalForTokenClassification(tf.keras.callbacks.Callback):
             sep=sep,
             **kwargs
         )
-        label_tokenizer = TokenClassificationLabelTokenizer.from_file(label_vocab_file, o_token=o_token)
+        label_tokenizer = LabelTokenizerForTokenClassification.from_file(label_vocab_file, o_token=o_token)
         return cls(examples=examples, label_tokenizer=label_tokenizer, **kwargs)
 
     def __init__(
         self,
-        examples: List[TokenClassificationExample],
-        label_tokenizer: TokenClassificationLabelTokenizer,
+        examples: List[ExampleForTokenClassification],
+        label_tokenizer: LabelTokenizerForTokenClassification,
         batch_size=32,
         **kwargs
     ):

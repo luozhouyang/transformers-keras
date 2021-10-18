@@ -4,7 +4,7 @@ from typing import List
 import numpy as np
 import tensorflow as tf
 from transformers_keras.common.metrics import ExactMatch, F1ForSequence
-from transformers_keras.sentiment_analysis.dataset import AspectTermExtractionDataset, AspectTermExtractionExample
+from transformers_keras.datapipe.sa_dataset import DatasetForAspectTermExtraction, ExampleForAspectTermExtraction
 
 
 class BaseMetricForAspectTermExtraction(tf.keras.callbacks.Callback):
@@ -12,15 +12,15 @@ class BaseMetricForAspectTermExtraction(tf.keras.callbacks.Callback):
 
     @classmethod
     def from_jsonl_files(cls, input_files, limit=None, **kwargs):
-        examples = AspectTermExtractionDataset.jsonl_to_examples(input_files, **kwargs)
+        examples = DatasetForAspectTermExtraction.jsonl_to_examples(input_files, **kwargs)
         if limit is not None and limit > 0:
             examples = examples[:limit]
         return cls(examples, **kwargs)
 
-    def __init__(self, examples: List[AspectTermExtractionExample], **kwargs):
+    def __init__(self, examples: List[ExampleForAspectTermExtraction], **kwargs):
         super().__init__()
         self.examples = examples
-        self.dataset = AspectTermExtractionDataset.from_examples(self.examples, **kwargs)
+        self.dataset = DatasetForAspectTermExtraction.from_examples(self.examples, **kwargs)
 
     def on_epoch_end(self, epoch, logs=None):
         outputs = self.model.predict(self.dataset)
@@ -51,7 +51,7 @@ class BaseMetricForAspectTermExtraction(tf.keras.callbacks.Callback):
 class ExactMatchForAspectTermExtraction(BaseMetricForAspectTermExtraction):
     """EM for ATE"""
 
-    def __init__(self, examples: List[AspectTermExtractionExample], **kwargs) -> None:
+    def __init__(self, examples: List[ExampleForAspectTermExtraction], **kwargs) -> None:
         super().__init__(examples, **kwargs)
         self.em = ExactMatch()
 
@@ -64,7 +64,7 @@ class ExactMatchForAspectTermExtraction(BaseMetricForAspectTermExtraction):
 class F1ForAspectTermExtraction(BaseMetricForAspectTermExtraction):
     """F1 for ATE"""
 
-    def __init__(self, examples: List[AspectTermExtractionExample], split_whitespace=False, **kwargs):
+    def __init__(self, examples: List[ExampleForAspectTermExtraction], split_whitespace=False, **kwargs):
         super().__init__(examples, **kwargs)
         self.split_whitespace = split_whitespace
         self.f1 = F1ForSequence()

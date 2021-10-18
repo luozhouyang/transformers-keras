@@ -1,11 +1,37 @@
 import logging
 
-from transformers_keras.common.abc_dataset import AbstractDataset
 from transformers_keras.common.char_tokenizer import BertCharTokenizer, TokenizerEncoding
+from transformers_keras.common.label_tokenizer import LabelTokenizerForTokenClassification
 from transformers_keras.common.metrics import ExactMatch, F1ForSequence
+from transformers_keras.datapipe.abc_dataset import AbstractDataset
+from transformers_keras.datapipe.mlm_dataset import (
+    DatasetForMaskedLanguageModel,
+    ExampleForMaskedLanguageModel,
+    WholeWordMask,
+)
+from transformers_keras.datapipe.qa_dataset import (
+    DatasetForQuestionAnswering,
+    DatasetForQuestionAnsweringX,
+    ExampleForQuestionAnswering,
+    ExampleForQuestionAnsweringX,
+)
+from transformers_keras.datapipe.sa_dataset import (
+    DatasetForAspectTermExtraction,
+    DatasetForOpinionTermExtractionAndClassification,
+    ExampleForAspectTermExtraction,
+)
+from transformers_keras.datapipe.sc_dataset import DatasetForSequenceClassification, ExampleForSequenceClassification
+from transformers_keras.datapipe.se_dataset import (
+    DatasetForHardNegativeSimCSE,
+    DatasetForSupervisedSimCSE,
+    DatasetForUnsupervisedSimCSE,
+    ExampleForHardNegativeSimCSE,
+    ExampleForSupervisedSimCSE,
+    ExampleForUnsupervisedSimCSE,
+)
+from transformers_keras.datapipe.tc_dataset import DatasetForTokenClassification, ExampleForTokenClassification
 from transformers_keras.distiller import Distiller
 from transformers_keras.lm.mlm import BertForMaskedLanguageModel
-from transformers_keras.lm.mlm_dataset import MaskedLanguageModelDataset, MaskedLangueModelExample, WholeWordMask
 from transformers_keras.modeling_albert import (
     Albert,
     AlbertEmbedding,
@@ -30,12 +56,6 @@ from transformers_keras.question_answering.callback import (
     ExactMatchForQuestionAnswering,
     F1ForQuestionAnswering,
 )
-from transformers_keras.question_answering.dataset import (
-    QuestionAnsweringDataset,
-    QuestionAnsweringExample,
-    QuestionAnsweringXDataset,
-    QuestionAnsweringXExample,
-)
 from transformers_keras.question_answering.models import (
     AlbertForQuestionAnswering,
     AlbertForQuestionAnsweringX,
@@ -44,26 +64,9 @@ from transformers_keras.question_answering.models import (
 )
 from transformers_keras.sentence_embedding.bert_embedding import BertForSentenceEmbedding
 from transformers_keras.sentence_embedding.callback import SpearmanForSentenceEmbedding
-from transformers_keras.sentence_embedding.simcse_dataset import (
-    HardNegativeSimCSEDataset,
-    HardNegativeSimCSEExample,
-    SupervisedSimCSEDataset,
-    SupervisedSimCSEExample,
-    UnsupervisedSimCSEDataset,
-    UnsupervisedSimCSEExample,
-)
 from transformers_keras.sentence_embedding.simcse_models import HardNegativeSimCSE, SupervisedSimCSE, UnsupervisedSimCSE
 from transformers_keras.sentiment_analysis.ate import BertForAspectTermExtraction
-from transformers_keras.sentiment_analysis.dataset import (
-    AspectTermExtractionDataset,
-    AspectTermExtractionExample,
-    OpinionTermExtractionAndClassificationDataset,
-)
 from transformers_keras.sentiment_analysis.otec import BertForOpinionTermExtractionAndClassification
-from transformers_keras.sequence_classification.dataset import (
-    SequenceClassificationDataset,
-    SequenceClassificationExample,
-)
 from transformers_keras.sequence_classification.models import (
     AlbertForSequenceClassification,
     BertForSequenceClassification,
@@ -74,7 +77,6 @@ from transformers_keras.token_classification.crf_models import (
     BertCRFForTokenClassification,
     CRFModel,
 )
-from transformers_keras.token_classification.dataset import TokenClassificationDataset, TokenClassificationExample
 from transformers_keras.token_classification.models import AlbertForTokenClassification, BertForTokenClassification
 
 __name__ = "transformers_keras"

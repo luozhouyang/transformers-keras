@@ -5,22 +5,23 @@ from typing import List
 
 import tensorflow as tf
 from tokenizers import BertWordPieceTokenizer
-from transformers_keras.common.abc_dataset import AbstractDataset
 
-QuestionAnsweringExample = namedtuple(
-    "QuestionAnsweringExample", ["tokens", "input_ids", "segment_ids", "attention_mask", "start", "end"]
+from .abc_dataset import AbstractDataset
+
+ExampleForQuestionAnswering = namedtuple(
+    "ExampleForQuestionAnswering", ["tokens", "input_ids", "segment_ids", "attention_mask", "start", "end"]
 )
-QuestionAnsweringXExample = namedtuple(
-    "QuestionAnsweringXExample",
+ExampleForQuestionAnsweringX = namedtuple(
+    "ExampleForQuestionAnsweringX",
     ["tokens", "input_ids", "segment_ids", "attention_mask", "start", "end", "class_id"],
 )
 
 
-class QuestionAnsweringDataset(AbstractDataset):
+class DatasetForQuestionAnswering(AbstractDataset):
     """Dataset builder for question answering models."""
 
     @classmethod
-    def _zip_dataset(cls, examples: List[QuestionAnsweringExample], **kwargs):
+    def _zip_dataset(cls, examples: List[ExampleForQuestionAnswering], **kwargs):
         """Zip datasets to one dataset."""
 
         def _to_dataset(x, dtype=tf.int32):
@@ -135,7 +136,7 @@ class QuestionAnsweringDataset(AbstractDataset):
         return dataset
 
     @classmethod
-    def _example_to_tfrecord(cls, example: QuestionAnsweringExample, **kwargs):
+    def _example_to_tfrecord(cls, example: ExampleForQuestionAnswering, **kwargs):
         feature = {
             "input_ids": cls._int64_feature([int(x) for x in example.input_ids]),
             "segment_ids": cls._int64_feature([int(x) for x in example.segment_ids]),
@@ -196,7 +197,7 @@ class QuestionAnsweringDataset(AbstractDataset):
             len(input_ids), len(attention_mask)
         )
 
-        example = QuestionAnsweringExample(
+        example = ExampleForQuestionAnswering(
             tokens=context_encoding.tokens + question_encoding.tokens[1:],
             input_ids=input_ids,
             segment_ids=segment_ids,
@@ -214,7 +215,7 @@ class QuestionAnsweringDataset(AbstractDataset):
         return 0, 0
 
 
-class QuestionAnsweringXDataset(AbstractDataset):
+class DatasetForQuestionAnsweringX(AbstractDataset):
     """Dataset builder for question answering models."""
 
     @classmethod
@@ -279,7 +280,7 @@ class QuestionAnsweringXDataset(AbstractDataset):
         return dataset
 
     @classmethod
-    def _zip_dataset(cls, examples: List[QuestionAnsweringXExample], **kwargs):
+    def _zip_dataset(cls, examples: List[ExampleForQuestionAnsweringX], **kwargs):
         """Zip datasets to one dataset."""
 
         def _to_dataset(x, dtype=tf.int32):
@@ -339,7 +340,7 @@ class QuestionAnsweringXDataset(AbstractDataset):
         return dataset
 
     @classmethod
-    def _example_to_tfrecord(cls, example: QuestionAnsweringXExample, **kwargs):
+    def _example_to_tfrecord(cls, example: ExampleForQuestionAnsweringX, **kwargs):
         feature = {
             "input_ids": cls._int64_feature([int(x) for x in example.input_ids]),
             "segment_ids": cls._int64_feature([int(x) for x in example.segment_ids]),
@@ -401,7 +402,7 @@ class QuestionAnsweringXDataset(AbstractDataset):
         input_ids = context_encoding.ids + question_encoding.ids[1:]
         segment_ids = [0] * len(context_encoding.type_ids) + [1] * len(context_encoding.type_ids[1:])
         attention_mask = [1] * len(context_encoding.attention_mask + question_encoding.attention_mask[1:])
-        return QuestionAnsweringXExample(
+        return ExampleForQuestionAnsweringX(
             tokens=tokens,
             input_ids=input_ids,
             segment_ids=segment_ids,

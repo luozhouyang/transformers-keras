@@ -1,3 +1,4 @@
+"""Dataset builder for masked language models."""
 import abc
 import logging
 import random
@@ -5,10 +6,11 @@ from collections import namedtuple
 
 import tensorflow as tf
 from tokenizers import BertWordPieceTokenizer
-from transformers_keras.common.abc_dataset import AbstractDataset
 
-MaskedLangueModelExample = namedtuple(
-    "MaskedLanguageModelExample",
+from .abc_dataset import AbstractDataset
+
+ExampleForMaskedLanguageModel = namedtuple(
+    "ExampleForMaskedLanguageModel",
     ["tokens", "input_ids", "segment_ids", "attention_mask", "masked_ids", "masked_pos"],
 )
 
@@ -51,7 +53,7 @@ class WholeWordMask(abc.ABC):
         masked_indexes = [0] + masked_indexes + [0]
         assert len(tokens) == len(masked_tokens) == len(masked_indexes)
 
-        example = MaskedLangueModelExample(
+        example = ExampleForMaskedLanguageModel(
             tokens=masked_tokens,
             input_ids=[tokenizer.token_to_id(x) for x in masked_tokens],
             segment_ids=[0] * len(masked_tokens),
@@ -98,7 +100,7 @@ class WholeWordMask(abc.ABC):
         return tokens
 
 
-class MaskedLanguageModelDataset(AbstractDataset):
+class DatasetForMaskedLanguageModel(AbstractDataset):
     """Dataset builder for masked language model."""
 
     @classmethod

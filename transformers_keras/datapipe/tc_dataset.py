@@ -1,20 +1,21 @@
+"""Dataset builder for token classification."""
 import logging
 import os
 import re
 from collections import namedtuple
 
 import tensorflow as tf
-from transformers_keras.common.abc_dataset import AbstractDataset
 from transformers_keras.common.char_tokenizer import BertCharTokenizer
+from transformers_keras.common.label_tokenizer import LabelTokenizerForTokenClassification
 
-from .tokenizer import TokenClassificationLabelTokenizer
+from .abc_dataset import AbstractDataset
 
-TokenClassificationExample = namedtuple(
-    "TokenClassificationExample", ["tokens", "labels", "input_ids", "segment_ids", "attention_mask", "label_ids"]
+ExampleForTokenClassification = namedtuple(
+    "ExampleForTokenClassification", ["tokens", "labels", "input_ids", "segment_ids", "attention_mask", "label_ids"]
 )
 
 
-class TokenClassificationDataset(AbstractDataset):
+class DatasetForTokenClassification(AbstractDataset):
     """Dataset for token classification."""
 
     @classmethod
@@ -189,7 +190,7 @@ class TokenClassificationDataset(AbstractDataset):
         instances,
         tokenizer: BertCharTokenizer = None,
         vocab_file=None,
-        label_tokenizer: TokenClassificationLabelTokenizer = None,
+        label_tokenizer: LabelTokenizerForTokenClassification = None,
         label_vocab_file=None,
         **kwargs
     ):
@@ -201,7 +202,7 @@ class TokenClassificationDataset(AbstractDataset):
             )
         assert label_tokenizer or label_vocab_file, "`label_tokenizer` or `label_vocab_file` must be provided."
         if label_tokenizer is None:
-            label_tokenizer = TokenClassificationLabelTokenizer.from_file(
+            label_tokenizer = LabelTokenizerForTokenClassification.from_file(
                 label_vocab_file, o_token=kwargs.get("o_token", "O")
             )
         # collect examples
@@ -211,7 +212,7 @@ class TokenClassificationDataset(AbstractDataset):
             input_ids = [tokenizer.token_to_id(token) for token in tokens]
             labels = instance[kwargs.get("labels_key", "labels")]
             label_ids = label_tokenizer.labels_to_ids(labels, add_cls=False, add_sep=False)
-            example = TokenClassificationExample(
+            example = ExampleForTokenClassification(
                 tokens=tokens,
                 labels=labels,
                 input_ids=input_ids,
@@ -246,7 +247,7 @@ class TokenClassificationDataset(AbstractDataset):
         return dataset
 
     @classmethod
-    def _example_to_tfrecord(cls, example: TokenClassificationExample, **kwargs):
+    def _example_to_tfrecord(cls, example: ExampleForTokenClassification, **kwargs):
         feature = {
             "input_ids": cls._int64_feature([int(x) for x in example.input_ids]),
             "segment_ids": cls._int64_feature([int(x) for x in example.segment_ids]),

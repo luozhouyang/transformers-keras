@@ -4,8 +4,8 @@ import unittest
 
 import tensorflow as tf
 from tokenizers import BertWordPieceTokenizer
+from transformers_keras.datapipe.mlm_dataset import DatasetForMaskedLanguageModel
 from transformers_keras.lm.mlm import BertForMaskedLanguageModel
-from transformers_keras.lm.mlm_dataset import MaskedLanguageModelDataset
 
 BERT_PATH = os.path.join(os.environ["CHINESE_BERT_PATH"], "chinese_roberta_wwm_ext_L-3_H-768_A-12")
 
@@ -18,7 +18,7 @@ class MaskedLanguageModelTest(tf.test.TestCase):
         m.summary()
 
     def test_bert_for_mlm_train(self):
-        d = MaskedLanguageModelDataset.from_tfrecord_files(
+        d = DatasetForMaskedLanguageModel.from_tfrecord_files(
             input_files=["testdata/mlm.tfrecord"], batch_size=2, repeat=100
         )
         m = BertForMaskedLanguageModel.from_pretrained(BERT_PATH, with_mlm=True)

@@ -4,8 +4,7 @@ from typing import List
 import numpy as np
 import tensorflow as tf
 from transformers_keras.common.metrics import ExactMatch, F1ForSequence
-
-from .dataset import QuestionAnsweringDataset, QuestionAnsweringExample
+from transformers_keras.datapipe.qa_dataset import DatasetForQuestionAnswering, ExampleForQuestionAnswering
 
 
 class BaseMetricForQuestionAnswering(tf.keras.callbacks.Callback):
@@ -13,7 +12,7 @@ class BaseMetricForQuestionAnswering(tf.keras.callbacks.Callback):
 
     @classmethod
     def from_jsonl_files(cls, input_files, vocab_file, limit=None, **kwargs):
-        examples = QuestionAnsweringDataset.jsonl_to_examples(input_files, vocab_file=vocab_file, **kwargs)
+        examples = DatasetForQuestionAnswering.jsonl_to_examples(input_files, vocab_file=vocab_file, **kwargs)
         if limit is not None and limit > 0:
             examples = examples[:limit]
         return cls(examples, **kwargs)
@@ -21,7 +20,7 @@ class BaseMetricForQuestionAnswering(tf.keras.callbacks.Callback):
     def __init__(self, examples, **kwargs):
         super().__init__()
         self.examples = examples
-        self.dataset = QuestionAnsweringDataset.from_examples(self.examples, **kwargs)
+        self.dataset = DatasetForQuestionAnswering.from_examples(self.examples, **kwargs)
         self.em = ExactMatch()
 
     def on_epoch_end(self, epoch, logs):
@@ -53,7 +52,7 @@ class ExactMatchForQuestionAnswering(BaseMetricForQuestionAnswering):
 class F1ForQuestionAnswering(BaseMetricForQuestionAnswering):
     """F1 metric for question answering."""
 
-    def __init__(self, examples: List[QuestionAnsweringExample], split_whitespace=False, **kwargs):
+    def __init__(self, examples: List[ExampleForQuestionAnswering], split_whitespace=False, **kwargs):
         super().__init__(examples, **kwargs)
         self.split_whitespace = split_whitespace
         self.f1 = F1ForSequence()

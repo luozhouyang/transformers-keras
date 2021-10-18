@@ -1,4 +1,7 @@
-class TokenClassificationLabelTokenizer:
+"""Tokenizer for labels, used in token classification tasks."""
+
+
+class LabelTokenizerForTokenClassification:
     """Label tokenizer."""
 
     def __init__(self, label2id, o_token="O", **kwargs) -> None:

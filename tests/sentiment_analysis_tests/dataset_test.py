@@ -1,6 +1,6 @@
 import unittest
 
-from transformers_keras.sentiment_analysis.dataset import AspectTermExtractionDataset
+from transformers_keras.datapipe.sa_dataset import DatasetForAspectTermExtraction
 
 
 class DatasetTest(unittest.TestCase):
@@ -8,27 +8,27 @@ class DatasetTest(unittest.TestCase):
 
     def test_build_dataset(self):
         print("====from_jsonl_files\n")
-        d = AspectTermExtractionDataset.from_jsonl_files(
+        d = DatasetForAspectTermExtraction.from_jsonl_files(
             "testdata/ate.jsonl", vocab_file="testdata/vocab.bert.txt", batch_size=2
         )
         print(next(iter(d)))
 
         print("====jsonl_to_examples\n")
-        examples = AspectTermExtractionDataset.jsonl_to_examples(
+        examples = DatasetForAspectTermExtraction.jsonl_to_examples(
             "testdata/ate.jsonl", vocab_file="testdata/vocab.bert.txt"
         )
         for i in range(2):
             print(examples[i])
 
         print("====from_examples\n")
-        d = AspectTermExtractionDataset.from_examples(examples, batch_size=2)
+        d = DatasetForAspectTermExtraction.from_examples(examples, batch_size=2)
         print(next(iter(d)))
 
         print("====examples_to_tfrecord\n")
-        AspectTermExtractionDataset.examples_to_tfrecord(examples, output_files=["testdata/ate.tfrecord"])
+        DatasetForAspectTermExtraction.examples_to_tfrecord(examples, output_files=["testdata/ate.tfrecord"])
 
         print("====from_tfrecord_files\n")
-        d = AspectTermExtractionDataset.from_tfrecord_files(input_files=["testdata/ate.tfrecord"])
+        d = DatasetForAspectTermExtraction.from_tfrecord_files(input_files=["testdata/ate.tfrecord"])
         print(next(iter(d)))
 
 

@@ -1,19 +1,21 @@
+"""Dataset builder for sentiment analysis."""
 import logging
 from collections import namedtuple
 from typing import List
 
 import tensorflow as tf
-from transformers_keras.common.abc_dataset import AbstractDataset
 from transformers_keras.common.char_tokenizer import BertCharTokenizer
-from transformers_keras.question_answering.dataset import QuestionAnsweringXDataset
 
-AspectTermExtractionExample = namedtuple(
-    "AspectTermExtractionExample",
+from .abc_dataset import AbstractDataset
+from .qa_dataset import DatasetForQuestionAnsweringX
+
+ExampleForAspectTermExtraction = namedtuple(
+    "ExampleForAspectTermExtraction",
     ["tokens", "input_ids", "segment_ids", "attention_mask", "start_ids", "end_ids"],
 )
 
 
-class AspectTermExtractionDataset(AbstractDataset):
+class DatasetForAspectTermExtraction(AbstractDataset):
     """Build dataset for aspect term extraction models."""
 
     @classmethod
@@ -94,7 +96,7 @@ class AspectTermExtractionDataset(AbstractDataset):
         return dataset
 
     @classmethod
-    def _zip_dataset(cls, examples: List[AspectTermExtractionExample], **kwargs):
+    def _zip_dataset(cls, examples: List[ExampleForAspectTermExtraction], **kwargs):
         """Zip datasets to one dataset."""
 
         def _to_dataset(x, dtype=tf.int32):
@@ -139,7 +141,7 @@ class AspectTermExtractionDataset(AbstractDataset):
                 assert "".join(tokens[start : end + 1]).lower() == str(sequence[span[0] : span[1]]).lower()
                 start_ids[start] = 1
                 end_ids[end] = 1
-            example = AspectTermExtractionExample(
+            example = ExampleForAspectTermExtraction(
                 tokens=tokens,
                 input_ids=sequence_encoding.ids + question_encoding.ids,
                 segment_ids=[0] * len(sequence_encoding.ids) + [1] * len(question_encoding.ids),
@@ -177,7 +179,7 @@ class AspectTermExtractionDataset(AbstractDataset):
         return dataset
 
     @classmethod
-    def _example_to_tfrecord(cls, example: AspectTermExtractionExample, **kwargs):
+    def _example_to_tfrecord(cls, example: ExampleForAspectTermExtraction, **kwargs):
         feature = {
             "input_ids": cls._int64_feature([int(x) for x in example.input_ids]),
             "segment_ids": cls._int64_feature([int(x) for x in example.segment_ids]),
@@ -188,7 +190,7 @@ class AspectTermExtractionDataset(AbstractDataset):
         return tf.train.Example(features=tf.train.Features(feature=feature))
 
 
-class OpinionTermExtractionAndClassificationDataset(QuestionAnsweringXDataset):
+class DatasetForOpinionTermExtractionAndClassification(DatasetForQuestionAnsweringX):
     """Dataset builder for Opinion Term Extraction and Classification"""
 
     pass

@@ -1,12 +1,14 @@
+"""Dataset builder for sentence embeddings."""
 from collections import namedtuple
 from typing import List
 
 import tensorflow as tf
 from tokenizers import BertWordPieceTokenizer
-from transformers_keras.common.abc_dataset import AbstractDataset
 
-UnsupervisedSimCSEExample = namedtuple(
-    "UnsupervisedSimCSEExample",
+from .abc_dataset import AbstractDataset
+
+ExampleForUnsupervisedSimCSE = namedtuple(
+    "ExampleForUnsupervisedSimCSE",
     [
         "tokens",
         "input_ids",
@@ -14,8 +16,8 @@ UnsupervisedSimCSEExample = namedtuple(
         "attention_mask",
     ],
 )
-SupervisedSimCSEExample = namedtuple(
-    "SupervisedSimCSEExample",
+ExampleForSupervisedSimCSE = namedtuple(
+    "ExampleForSupervisedSimCSE",
     [
         "tokens",
         "input_ids",
@@ -28,8 +30,8 @@ SupervisedSimCSEExample = namedtuple(
     ],
 )
 
-HardNegativeSimCSEExample = namedtuple(
-    "HardNegativeSimCSEExample",
+ExampleForHardNegativeSimCSE = namedtuple(
+    "ExampleForHardNegativeSimCSE",
     [
         "tokens",
         "input_ids",
@@ -47,7 +49,7 @@ HardNegativeSimCSEExample = namedtuple(
 )
 
 
-class UnsupervisedSimCSEDataset(AbstractDataset):
+class DatasetForUnsupervisedSimCSE(AbstractDataset):
     """Dataset builder for unsupervised SimCSE"""
 
     @classmethod
@@ -110,7 +112,7 @@ class UnsupervisedSimCSEDataset(AbstractDataset):
         return dataset
 
     @classmethod
-    def _zip_dataset(cls, examples: List[UnsupervisedSimCSEExample], **kwargs):
+    def _zip_dataset(cls, examples: List[ExampleForUnsupervisedSimCSE], **kwargs):
         def _to_dataset(x, dtype=tf.int32):
             x = tf.ragged.constant(x, dtype=dtype)
             d = tf.data.Dataset.from_tensor_slices(x)
@@ -148,7 +150,7 @@ class UnsupervisedSimCSEDataset(AbstractDataset):
         for instance in instances:
             sequence = instance[kwargs.get("sequence_key", "sequence")]
             seq_encoding = tokenizer.encode(sequence)
-            example = UnsupervisedSimCSEExample(
+            example = ExampleForUnsupervisedSimCSE(
                 tokens=seq_encoding.tokens,
                 input_ids=seq_encoding.ids,
                 segment_ids=seq_encoding.type_ids,
@@ -188,7 +190,7 @@ class UnsupervisedSimCSEDataset(AbstractDataset):
         return tf.train.Example(features=tf.train.Features(feature=feature))
 
 
-class SupervisedSimCSEDataset(AbstractDataset):
+class DatasetForSupervisedSimCSE(AbstractDataset):
     """Dataset builder for supervised SimCSE"""
 
     @classmethod
@@ -255,7 +257,7 @@ class SupervisedSimCSEDataset(AbstractDataset):
         return dataset
 
     @classmethod
-    def _zip_dataset(cls, examples: List[SupervisedSimCSEExample], **kwargs):
+    def _zip_dataset(cls, examples: List[ExampleForSupervisedSimCSE], **kwargs):
         def _to_dataset(x, dtype=tf.int32):
             x = tf.ragged.constant(x, dtype=dtype)
             d = tf.data.Dataset.from_tensor_slices(x)
@@ -308,7 +310,7 @@ class SupervisedSimCSEDataset(AbstractDataset):
             seq_encoding = tokenizer.encode(sequence)
             pos_sequence = instance[kwargs.get("pos_sequence_key", "pos_sequence")]
             pos_encoding = tokenizer.encode(pos_sequence)
-            example = SupervisedSimCSEExample(
+            example = ExampleForSupervisedSimCSE(
                 tokens=seq_encoding.tokens,
                 input_ids=seq_encoding.ids,
                 segment_ids=seq_encoding.type_ids,
@@ -361,7 +363,7 @@ class SupervisedSimCSEDataset(AbstractDataset):
         return tf.train.Example(features=tf.train.Features(feature=feature))
 
 
-class HardNegativeSimCSEDataset(AbstractDataset):
+class DatasetForHardNegativeSimCSE(AbstractDataset):
     """Dataset builder for hard negavtive SimCSE"""
 
     @classmethod
@@ -431,7 +433,7 @@ class HardNegativeSimCSEDataset(AbstractDataset):
         return dataset
 
     @classmethod
-    def _zip_dataset(cls, examples: List[UnsupervisedSimCSEExample], **kwargs):
+    def _zip_dataset(cls, examples: List[ExampleForUnsupervisedSimCSE], **kwargs):
         def _to_dataset(x, dtype=tf.int32):
             x = tf.ragged.constant(x, dtype=dtype)
             d = tf.data.Dataset.from_tensor_slices(x)
@@ -492,7 +494,7 @@ class HardNegativeSimCSEDataset(AbstractDataset):
             pos_encoding = tokenizer.encode(pos_sequence)
             neg_sequence = instance[kwargs.get("neg_sequence_key", "neg_sequence")]
             neg_encoding = tokenizer.encode(neg_sequence)
-            example = HardNegativeSimCSEExample(
+            example = ExampleForHardNegativeSimCSE(
                 tokens=seq_encoding.tokens,
                 input_ids=seq_encoding.ids,
                 segment_ids=seq_encoding.type_ids,

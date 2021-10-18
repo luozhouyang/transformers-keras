@@ -1,15 +1,17 @@
+"""Dataset builder for sequence classification."""
 from collections import namedtuple
 
 import tensorflow as tf
 from tokenizers import BertWordPieceTokenizer
-from transformers_keras.common.abc_dataset import AbstractDataset
 
-SequenceClassificationExample = namedtuple(
-    "SequenceClassificationExample", ["tokens", "input_ids", "segment_ids", "attention_mask", "label"]
+from .abc_dataset import AbstractDataset
+
+ExampleForSequenceClassification = namedtuple(
+    "ExampleForSequenceClassification", ["tokens", "input_ids", "segment_ids", "attention_mask", "label"]
 )
 
 
-class SequenceClassificationDataset(AbstractDataset):
+class DatasetForSequenceClassification(AbstractDataset):
     """Dataset builder for sequence classification."""
 
     @classmethod
@@ -125,7 +127,7 @@ class SequenceClassificationDataset(AbstractDataset):
         return dataset
 
     @classmethod
-    def _example_to_tfrecord(cls, example: SequenceClassificationExample, **kwargs):
+    def _example_to_tfrecord(cls, example: ExampleForSequenceClassification, **kwargs):
         feature = {
             "input_ids": cls._int64_feature([int(x) for x in example.input_ids]),
             "segment_ids": cls._int64_feature([int(x) for x in example.segment_ids]),
@@ -150,7 +152,7 @@ class SequenceClassificationDataset(AbstractDataset):
             label = instance[kwargs.get("label_key", "label")]
             encoding = tokenizer.encode(sequence)
             examples.append(
-                SequenceClassificationExample(
+                ExampleForSequenceClassification(
                     tokens=encoding.tokens,
                     input_ids=encoding.ids,
                     segment_ids=encoding.type_ids,
