@@ -48,7 +48,7 @@ class BaseMetricForAspectTermExtraction(tf.keras.callbacks.Callback):
         return spans
 
 
-class ExactMatchForAspectTermExtraction(BaseMetricForAspectTermExtraction):
+class EMForAspectTermExtraction(BaseMetricForAspectTermExtraction):
     """EM for ATE"""
 
     def __init__(self, examples: List[ExampleForAspectTermExtraction], **kwargs) -> None:

@@ -40,7 +40,7 @@ class BaseMetricForQuestionAnswering(tf.keras.callbacks.Callback):
         raise NotImplementedError()
 
 
-class ExactMatchForQuestionAnswering(BaseMetricForQuestionAnswering):
+class EMForQuestionAnswering(BaseMetricForQuestionAnswering):
     """Exact Match metric for question answering."""
 
     def _compute_metric(self, gold_answers, pred_answers, epoch=0):

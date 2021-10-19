@@ -53,7 +53,7 @@ from transformers_keras.modeling_bert import (
 from transformers_keras.modeling_utils import complete_inputs
 from transformers_keras.question_answering.callback import (
     BaseMetricForQuestionAnswering,
-    ExactMatchForQuestionAnswering,
+    EMForQuestionAnswering,
     F1ForQuestionAnswering,
 )
 from transformers_keras.question_answering.models import (
