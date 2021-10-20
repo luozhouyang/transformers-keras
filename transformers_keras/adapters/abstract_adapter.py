@@ -56,8 +56,8 @@ class AbstractAdapter(abc.ABC):
         raise NotImplementedError()
 
 
-class AbstractBertAdapter(AbstractAdapter):
-    """Abstract Bert adapter"""
+class BaseAdapter(AbstractAdapter):
+    """Base adapter for pretrained models."""
 
     def __init__(
         self,
@@ -83,6 +83,7 @@ class AbstractBertAdapter(AbstractAdapter):
 
         self.model_files = None
         self._pretrained_weights_map = {}
+        self.weights_to_skip = set()
 
         # skip weights
         self.skip_token_embedding = skip_token_embedding
@@ -90,7 +91,6 @@ class AbstractBertAdapter(AbstractAdapter):
         self.skip_segment_embedding = skip_segment_embedding
         self.skip_embedding_layernorm = skip_embedding_layernorm
         self.skip_pooler = skip_pooler
-        self.weights_to_skip = set()
         logging.info(
             "Adapter skipping config: %s",
             json.dumps(
@@ -112,27 +112,13 @@ class AbstractBertAdapter(AbstractAdapter):
             "vocab_file": vocab,
         }
 
-    def adapte_config(self, model_path, **kwargs):
+    def _read_pretrained_weights(self, model_path, **kwargs):
         if self.model_files is None:
             self.model_files = self._parse_files(model_path, **kwargs)
-        config_file = self.model_files["config_file"]
-        with open(config_file, mode="rt", encoding="utf8") as fin:
-            config = json.load(fin)
-
-        model_config = {
-            "vocab_size": config["vocab_size"],
-            "activation": config["hidden_act"],
-            "max_positions": config["max_position_embeddings"],
-            "hidden_size": config["hidden_size"],
-            "type_vocab_size": config["type_vocab_size"],
-            "intermediate_size": config["intermediate_size"],
-            "hidden_dropout_rate": config["hidden_dropout_prob"],
-            "attention_dropout_rate": config["attention_probs_dropout_prob"],
-            "initializer_range": config["initializer_range"],
-            "num_layers": config["num_hidden_layers"],
-            "num_attention_heads": config["num_attention_heads"],
-        }
-        return model_config
+        ckpt = self.model_files["ckpt"]
+        ckpt_weight_names = [w for (w, _) in tf.train.list_variables(ckpt)]
+        ckpt_weights_map = {w: tf.train.load_variable(ckpt, w) for w in ckpt_weight_names}
+        return ckpt_weights_map
 
     def adapte_weights(self, model, model_config, model_path, **kwargs):
         self._pretrained_weights_map = self._read_pretrained_weights(model_path, **kwargs)
@@ -168,10 +154,6 @@ class AbstractBertAdapter(AbstractAdapter):
         self._check_weights(model, zipping_weights, zipping_values, weights_mapping, **kwargs)
 
     @abc.abstractmethod
-    def _read_pretrained_weights(self, model_path, **kwargs):
-        raise NotImplementedError()
-
-    @abc.abstractmethod
     def _adapte_bert_weights(self, model, model_config, **kwargs):
         raise NotImplementedError()
 
@@ -191,25 +173,29 @@ class AbstractBertAdapter(AbstractAdapter):
     def _zip_weights(self, model, model_config, weights_mapping, **kwargs):
         raise NotImplementedError()
 
+    @abc.abstractmethod
+    def get_backbone_prefix(self, model):
+        raise NotImplementedError()
+
     def _skipping_weights(self, model, **kwargs):
-        model_prefix = model.bert_model.name if self.use_functional_api else model.name + "/" + model.bert_model.name
+        backbone_prefix = self.get_backbone_prefix(model)
 
         def _skip(w):
             self.weights_to_skip.add(w)
             logging.info("Weights will be skipped to load: %s", w)
 
         if self.skip_token_embedding:
-            _skip("{}/embeddings/word_embeddings:0".format(model_prefix))
+            _skip("{}/embeddings/word_embeddings:0".format(backbone_prefix))
         if self.skip_position_embedding:
-            _skip("{}/embeddings/position_embeddings:0".format(model_prefix))
+            _skip("{}/embeddings/position_embeddings:0".format(backbone_prefix))
         if self.skip_segment_embedding:
-            _skip("{}/embeddings/token_type_embeddings:0".format(model_prefix))
+            _skip("{}/embeddings/token_type_embeddings:0".format(backbone_prefix))
         if self.skip_embedding_layernorm:
-            _skip("{}/embeddings/LayerNorm/gamma:0".format(model_prefix))
-            _skip("{}/embeddings/LayerNorm/beta:0".format(model_prefix))
+            _skip("{}/embeddings/LayerNorm/gamma:0".format(backbone_prefix))
+            _skip("{}/embeddings/LayerNorm/beta:0".format(backbone_prefix))
         if self.skip_pooler:
-            _skip("{}/pooler/dense/kernel:0".format(model_prefix))
-            _skip("{}/pooler/dense/bias:0".format(model_prefix))
+            _skip("{}/pooler/dense/kernel:0".format(backbone_prefix))
+            _skip("{}/pooler/dense/bias:0".format(backbone_prefix))
 
     def _check_weights(self, model, zipping_weights, zipping_values, weights_mapping, **kwargs):
         if not self.check_weights:
@@ -227,63 +213,40 @@ class AbstractBertAdapter(AbstractAdapter):
                 logging.warning("=" * 80)
 
 
-class AbstractAlbertAdapter(AbstractAdapter):
+class AbstractBertAdapter(BaseAdapter):
+    """Abstract Bert adapter"""
+
+    def get_backbone_prefix(self, model):
+        return model.bert_model.name if self.use_functional_api else model.name + "/" + model.bert_model.name
+
+    def adapte_config(self, model_path, **kwargs):
+        if self.model_files is None:
+            self.model_files = self._parse_files(model_path, **kwargs)
+        config_file = self.model_files["config_file"]
+        with open(config_file, mode="rt", encoding="utf8") as fin:
+            config = json.load(fin)
+
+        model_config = {
+            "vocab_size": config["vocab_size"],
+            "activation": config["hidden_act"],
+            "max_positions": config["max_position_embeddings"],
+            "hidden_size": config["hidden_size"],
+            "type_vocab_size": config["type_vocab_size"],
+            "intermediate_size": config["intermediate_size"],
+            "hidden_dropout_rate": config["hidden_dropout_prob"],
+            "attention_dropout_rate": config["attention_probs_dropout_prob"],
+            "initializer_range": config["initializer_range"],
+            "num_layers": config["num_hidden_layers"],
+            "num_attention_heads": config["num_attention_heads"],
+        }
+        return model_config
+
+
+class AbstractAlbertAdapter(BaseAdapter):
     """Abstract adapter for albert"""
 
-    def __init__(
-        self,
-        use_functional_api=True,
-        with_mlm=False,
-        with_nsp=False,
-        with_sop=False,
-        skip_embedding_mapping_in=False,
-        skip_token_embedding=False,
-        skip_position_embedding=False,
-        skip_segment_embedding=False,
-        skip_embedding_layernorm=False,
-        skip_pooler=False,
-        verbose=True,
-        check_weights=True,
-        **kwargs
-    ) -> None:
-        self.use_functional_api = use_functional_api
-        self.with_mlm = with_mlm
-        self.with_nsp = with_nsp
-        self.with_sop = with_sop
-        self.check_weights = check_weights
-        self.verbose = verbose
-
-        # model files
-        self.model_files = None
-
-        # skip weights
-        self.skip_embedding_mapping_in = skip_embedding_mapping_in
-        self.skip_token_embedding = skip_token_embedding
-        self.skip_position_embedding = skip_position_embedding
-        self.skip_segment_embedding = skip_segment_embedding
-        self.skip_embedding_layernorm = skip_embedding_layernorm
-        self.skip_pooler = skip_pooler
-        logging.info(
-            "Adapter skipping config: %s",
-            json.dumps(
-                {
-                    "skip_token_embedding": self.skip_token_embedding,
-                    "skip_position_embedding": self.skip_position_embedding,
-                    "skip_segment_embedding": self.skip_segment_embedding,
-                    "skip_embedding_layernorm": self.skip_embedding_layernorm,
-                    "skip_pooler": self.skip_pooler,
-                    "skip_embedding_mapping_in": self.skip_embedding_mapping_in,
-                }
-            ),
-        )
-
-    def _parse_files(self, model_path, **kwargs):
-        config_file, ckpt, vocab = parse_pretrained_model_files(model_path)
-        return {
-            "config_file": config_file,
-            "ckpt": ckpt,
-            "vocab_file": vocab,
-        }
+    def get_backbone_prefix(self, model):
+        return model.albert_model.name if self.use_functional_api else model.name + "/" + model.albert_model.name
 
     def adapte_config(self, model_path, **kwargs):
         if self.model_files is None:
@@ -309,7 +272,3 @@ class AbstractAlbertAdapter(AbstractAdapter):
             "initializer_range": config["initializer_range"],
         }
         return model_config
-
-    def _skip_weight(self, mapping, name):
-        mapping.pop(name)
-        logging.info("Skip load weight: %s", name)

@@ -22,14 +22,6 @@ class BertAdapterForTensorFlow(AbstractBertAdapter):
         self.tf_nsp_prefix = tf_nsp_prefix
         self.tf_sop_pefix = tf_sop_prefix
 
-    def _read_pretrained_weights(self, model_path, **kwargs):
-        if self.model_files is None:
-            self.model_files = self._parse_files(model_path, **kwargs)
-        ckpt = self.model_files["ckpt"]
-        ckpt_weight_names = [w for (w, _) in tf.train.list_variables(ckpt)]
-        ckpt_weights_map = {w: tf.train.load_variable(ckpt, w) for w in ckpt_weight_names}
-        return ckpt_weights_map
-
     def _adapte_bert_weights(self, model, model_config, **kwargs):
         self_prefix = model.bert_model.name if self.use_functional_api else model.name + "/" + model.bert_model.name
         ckpt_prefix = self.tf_bert_prefix

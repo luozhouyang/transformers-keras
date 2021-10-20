@@ -1,65 +1,69 @@
-import json
 import logging
 
 import tensorflow as tf
 
-from .abstract_adapter import AbstractAdapter, zip_weights
+from .abstract_adapter import AbstractAlbertAdapter
 
 
-class AlbertAdapter(AbstractAdapter):
-    def __init__(self, skip_embedding_mapping_in=False, **kwargs):
+class AlbertAdapterForTensorFlow(AbstractAlbertAdapter):
+    """Albert adapter for tensorflow"""
+
+    def __init__(
+        self,
+        tf_albert_prefix="bert",
+        tf_mlm_prefix="cls/predictions",
+        tf_nsp_prefix="cls/seq_relationship",
+        tf_sop_prefix="cls/seq_relationship",
+        **kwargs
+    ):
         super().__init__(**kwargs)
-        self.skip_embedding_mapping_in = skip_embedding_mapping_in
+        self.tf_albert_prefix = tf_albert_prefix
+        self.tf_mlm_prefix = tf_mlm_prefix
+        self.tf_sop_preifx = tf_sop_prefix
+        self.tf_nsp_prefix = tf_nsp_prefix
 
-    def adapte_config(self, config_file, **kwargs):
-        with open(config_file, mode="rt", encoding="utf8") as fin:
-            config = json.load(fin)
-
-        model_config = {
-            "vocab_size": config["vocab_size"],
-            "max_positions": config["max_position_embeddings"],
-            "embedding_size": config["embedding_size"],
-            "type_vocab_size": config["type_vocab_size"],
-            "num_layers": config["num_hidden_layers"],
-            "num_groups": config["num_hidden_groups"],
-            "num_layers_each_group": config["inner_group_num"],
-            "hidden_size": config["hidden_size"],
-            "num_attention_heads": config["num_attention_heads"],
-            "intermediate_size": config["intermediate_size"],
-            "activation": config["hidden_act"],
-            "hidden_dropout_rate": config["hidden_dropout_prob"],
-            "attention_dropout_rate": config["attention_probs_dropout_prob"],
-            "initializer_range": config["initializer_range"],
-        }
-        return model_config
-
-    def adapte_weights(self, model, ckpt, model_config, use_functional_api=True, **kwargs):
-        ckpt_weight_names = [x[0] for x in tf.train.list_variables(ckpt)]
-        self_weight_names = set([x.name for x in model.trainable_weights])
-        weight_mapping = {}
-        albert_weight_mapping = self._adapte_albert_weights(
-            model, ckpt, model_config, use_functional_api=use_functional_api, **kwargs
+    def _adapte_bert_weights(self, model, model_config, **kwargs):
+        # TODO: impl this more efficient
+        return self._adapte_albert_weights_legacy(
+            model, self.model_files["ckpt"], model_config, use_functional_api=self.use_functional_api, **kwargs
         )
-        weight_mapping.update(albert_weight_mapping)
 
-        mlm_weight_mapping = self._adapte_mlm_weights(model, ckpt, use_functional_api=use_functional_api, **kwargs)
-        weight_mapping.update(mlm_weight_mapping)
+    def _adapte_mlm_weights(self, model, model_config, **kwargs):
+        # TODO: impl this more efficient
+        return self._adapte_mlm_weights_legacy(
+            model, self.model_files["ckpt"], use_functional_api=self.use_functional_api, **kwargs
+        )
 
-        sop_weight_mapping = self._adapte_sop_weights(model, ckpt, use_functional_api=use_functional_api, **kwargs)
-        weight_mapping.update(sop_weight_mapping)
+    def _adapte_nsp_weights(self, model, model_config, **kwargs):
+        logging.info("Adapteing nsp weights is not supported yet. You can subclass this adapter to implement it!")
+        return {}
 
-        if kwargs.get("check_weights", False):
-            self._check_weights(weight_mapping, model, ckpt)
+    def _adapte_sop_weights(self, model, model_config, **kwargs):
+        # TODO: impl this more efficient
+        return self._adapte_sop_weights_legacy(
+            model, self.model_files["ckpt"], use_functional_api=self.use_functional_api, **kwargs
+        )
 
-    def _adapte_mlm_weights(self, model, ckpt, use_functional_api=True, **kwargs):
-        with_mlm = kwargs.get("with_mlm", False)
-        if not with_mlm:
-            logging.info("Skipping to adapte weights for MLM due to option `with_mlm` set to `False`")
+    def _zip_weights(self, model, model_config, weights_mapping, **kwargs):
+        zipping_weights, zipping_values = [], []
+        for m in model.trainable_weights:
+            name = m.name
+            if name in self.weights_to_skip:
+                continue
+            if name not in weights_mapping:
+                logging.warning("Model weight not in weights mapping: %s", name)
+                continue
+            zipping_weights.append(m)
+            zipping_values.append(self._pretrained_weights_map[weights_mapping[name]])
+        return zipping_weights, zipping_values
+
+    def _adapte_mlm_weights_legacy(self, model, ckpt, use_functional_api=True, **kwargs):
+        if not self.with_mlm:
             return {}
         self_mlm_prefix = "cls/predictions" if use_functional_api else model.name + "/cls/predictions"
-        ckpt_mlm_prefix = kwargs.get("ckpt_mlm_prefix", "cls/predictions")
-        logging.info("Adapting MLM weights, using model weight prefix: %s", self_mlm_prefix)
-        logging.info("Adapting MLM weights, using  ckpt weight prefix: %s", ckpt_mlm_prefix)
+        ckpt_mlm_prefix = self.ckpe_mlm_prefix
+        logging.info("Adapting mlm weights, using model mlm prefix: %s", self_mlm_prefix)
+        logging.info("Adapting mlm weights, using  ckpt mlm prefix: %s", ckpt_mlm_prefix)
         ckpt_weight_names = [x for (x, _) in tf.train.list_variables(ckpt) if str(x).startswith(ckpt_mlm_prefix)]
         self_weight_names = set([x.name for x in model.trainable_weights if str(x.name).startswith(self_mlm_prefix)])
         mapping = {}
@@ -70,23 +74,15 @@ class AlbertAdapter(AbstractAdapter):
                     logging.warning("weight: %s not in model weights", mw)
                     continue
                 mapping[mw] = w
-
-        # zip weight names and values
-        zipped_weights = zip_weights(model, ckpt, mapping, self_weight_names, **kwargs)
-        # set values to weights
-        tf.keras.backend.batch_set_value(zipped_weights)
-
         return mapping
 
-    def _adapte_sop_weights(self, model, ckpt, use_functional_api=True, **kwargs):
-        with_sop = kwargs.get("with_sop", False)
-        if not with_sop:
-            logging.info("Skipping to adapte weights for SOP due to option `with_sop` set to `False`")
+    def _adapte_sop_weights_legacy(self, model, ckpt, use_functional_api=True, **kwargs):
+        if not self.with_sop:
             return {}
         self_sop_prefix = "cls/seq_relationship" if use_functional_api else model.name + "/cls/seq_relationship"
-        ckpt_sop_prefix = kwargs.get("ckpt_sop_prefix", "cls/seq_relationship")
-        logging.info("Adapting SOP weights, using model weight prefix: %s", self_sop_prefix)
-        logging.info("Adapting SOP weights, using  ckpt weight prefix: %s", ckpt_sop_prefix)
+        ckpt_sop_prefix = self.tf_sop_preifx
+        logging.info("Adapting sop weights, using model sop prefix: %s", self_sop_prefix)
+        logging.info("Adapting sop weights, using  ckpt sop prefix: %s", ckpt_sop_prefix)
         ckpt_weight_names = [x for (x, _) in tf.train.list_variables(ckpt) if str(x).startswith(ckpt_sop_prefix)]
         self_weight_names = set([x.name for x in model.trainable_weights if str(x.name).startswith(self_sop_prefix)])
         mapping = {}
@@ -98,19 +94,14 @@ class AlbertAdapter(AbstractAdapter):
                     logging.warning("weight: %s not in model weights", mw)
                     continue
                 mapping[mw] = w
-        # zip weight names and values
-        zipped_weights = zip_weights(model, ckpt, mapping, self_weight_names, **kwargs)
-        # set values to weights
-        tf.keras.backend.batch_set_value(zipped_weights)
-
         return mapping
 
-    def _adapte_albert_weights(self, model, ckpt, model_config, use_functional_api=True, **kwargs):
+    def _adapte_albert_weights_legacy(self, model, ckpt, model_config, use_functional_api=True, **kwargs):
         mapping = {}
         self_albert_prefix = (
             model.albert_model.name if use_functional_api else model.name + "/" + model.albert_model.name
         )
-        ckpt_albert_prefix = kwargs.get("ckpt_albert_prefix", "bert")
+        ckpt_albert_prefix = self.tf_albert_prefix
         logging.info("Adapting albert weights, using model weight prefix: %s", self_albert_prefix)
         logging.info("Adapting albert weights, using  ckpt weight prefix: %s", ckpt_albert_prefix)
         self_weight_names = set([x.name for x in model.trainable_weights if str(x.name).startswith(self_albert_prefix)])
@@ -131,22 +122,6 @@ class AlbertAdapter(AbstractAdapter):
             **kwargs
         )
         mapping.update(encoder_mapping)
-
-        # skip weights
-        self_albert_prefix = (
-            model.albert_model.name if use_functional_api else model.name + "/" + model.albert_model.name
-        )
-        self._skip_weights(mapping, self_albert_prefix)
-
-        # zip weight names and values
-        zipped_weights = zip_weights(model, ckpt, mapping, self_weight_names, **kwargs)
-        # set values to weights
-        tf.keras.backend.batch_set_value(zipped_weights)
-
-        # check weights
-        if kwargs.get("check_weights", False):
-            self._check_weights(mapping, model, ckpt, **kwargs)
-
         return mapping
 
     def _adapte_embedding_weights(
@@ -248,16 +223,8 @@ class AlbertAdapter(AbstractAdapter):
                     mapping[k] = v
         return mapping
 
-    def _skip_weights(self, mapping, model_prefix):
-        if self.skip_token_embedding:
-            self._skip_weight(mapping, model_prefix + "/embeddings/word_embeddings:0")
-        if self.skip_position_embedding:
-            self._skip_weight(mapping, model_prefix + "/embeddings/position_embeddings:0")
-        if self.skip_segment_embedding:
-            self._skip_weight(mapping, model_prefix + "/embeddings/token_type_embeddings:0")
-        if self.skip_embedding_layernorm:
-            self._skip_weight(mapping, model_prefix + "/embeddings/LayerNorm/gamma:0")
-            self._skip_weight(mapping, model_prefix + "/embeddings/LayerNorm/beta:0")
-        if self.skip_pooler:
-            self._skip_weight(mapping, model_prefix + "/pooler/dense/kernel:0")
-            self._skip_weight(mapping, model_prefix + "/pooler/dense/bias:0")
+
+class AlbertAdapter(AlbertAdapterForTensorFlow):
+    """Default adapter for albert"""
+
+    pass

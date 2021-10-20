@@ -381,15 +381,12 @@ class AlbertPretrainedModel(tf.keras.Model):
     def from_pretrained(
         cls,
         pretrained_model_dir,
-        override_params=None,
         adapter=None,
+        override_params=None,
         use_functional_api=True,
         with_mlm=False,
+        with_nsp=False,
         with_sop=False,
-        ckpt_albert_prefix="bert",
-        ckpt_mlm_prefix="cls/predictions",
-        ckpt_sop_prefix="cls/seq_relationship",
-        check_weights=True,
         verbose=True,
         **kwargs
     ):
@@ -407,15 +404,28 @@ class AlbertPretrainedModel(tf.keras.Model):
             verbose: Python boolean.If True, logging more detailed informations when loadding pretrained weights
         """
         if not adapter:
-            adapter = AlbertAdapter(
-                skip_token_embedding=kwargs.pop("skip_token_embedding", False),
-                skip_position_embedding=kwargs.pop("skip_position_embedding", False),
-                skip_segment_embedding=kwargs.pop("skip_segment_embedding", False),
-                skip_embedding_layernorm=kwargs.pop("skip_embedding_layernorm", False),
-                skip_pooler=kwargs.pop("skip_pooler", False),
-            )
-        files = adapter.parse_files(pretrained_model_dir)
-        model_config = adapter.adapte_config(files["config_file"], **kwargs)
+            adapter = "default"
+        from transformers_keras.adapters.adapter_factory import AlbertAdapterFactory
+
+        adapter_kwargs = {}
+        keys = list(kwargs.keys())
+        for k in keys:
+            if str(k).startswith("skip_"):
+                adapter_kwargs[k] = kwargs.pop(k)
+            # if str(k).startswith('with_'):
+            #     adapter_kwargs[k] = kwargs.pop(k)
+            if str(k) in ["verbose", "check_weights"]:
+                adapter_kwargs[k] = kwargs.pop(k)
+        adapter = AlbertAdapterFactory.get(
+            name_or_adapter=adapter,
+            use_functional_api=use_functional_api,
+            with_mlm=with_mlm,
+            with_nsp=with_nsp,
+            with_sop=with_sop,
+            verbose=verbose,
+            **adapter_kwargs
+        )
+        model_config = adapter.adapte_config(model_path=pretrained_model_dir, **kwargs)
         logging.info("Load model config: \n%s", json.dumps(model_config, indent=4))
         if override_params:
             model_config.update(override_params)
@@ -424,39 +434,7 @@ class AlbertPretrainedModel(tf.keras.Model):
         assert model.albert_model is not None, "AlbertPretrainedModel must have an attribute: `albert_model`!"
         inputs = model.dummy_inputs()
         model(inputs=list(inputs), training=False)
-        adapter.adapte_weights(
-            model=model,
-            ckpt=files["ckpt"],
-            model_config=model_config,
-            use_functional_api=use_functional_api,
-            with_mlm=with_mlm,
-            with_sop=with_sop,
-            ckpt_albert_prefix=ckpt_albert_prefix,
-            ckpt_mlm_prefix=ckpt_mlm_prefix,
-            ckpt_sop_prefix=ckpt_sop_prefix,
-            check_weights=check_weights,
-            verbose=verbose,
-            **kwargs
-        )
-        return model
-
-    @classmethod
-    def from_config_file(cls, config_file, override_params=None, adapter=None, **kwargs):
-        if not adapter:
-            adapter = AlbertAdapter(
-                skip_token_embedding=kwargs.pop("skip_token_embedding", False),
-                skip_position_embedding=kwargs.pop("skip_position_embedding", False),
-                skip_segment_embedding=kwargs.pop("skip_segment_embedding", False),
-                skip_embedding_layernorm=kwargs.pop("skip_embedding_layernorm", False),
-            )
-        model_config = adapter.adapte_config(config_file, **kwargs)
-        if override_params:
-            model_config.update(override_params)
-        logging.info("Load model config: \n%s", json.dumps(model_config, indent=4))
-        model = cls(**model_config, **kwargs)
-        assert model.albert_model is not None, "AlbertPretrainedModel must have an attribute: `albert_model`!"
-        inputs = model.dummy_inputs()
-        model(inputs=list(inputs), training=False)
+        adapter.adapte_weights(model=model, model_config=model_config, model_path=pretrained_model_dir, **kwargs)
         return model
 
     @property
