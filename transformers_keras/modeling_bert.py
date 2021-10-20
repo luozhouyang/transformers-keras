@@ -1,10 +1,7 @@
 import json
 import logging
-import os
 
 import tensorflow as tf
-
-from transformers_keras.adapters.bert_adapter import BertAdapter
 
 from .modeling_utils import choose_activation
 
@@ -397,7 +394,9 @@ class BertModel(tf.keras.layers.Layer):
         output, all_hidden_states, all_attention_scores = self.bert_encoder(
             embedding, attention_mask, training=training
         )
+        # print('keras model sequence outputs: ', output)
         pooled_output = self.bert_pooler(output)
+        # print('keras model   pooled outputs: ', pooled_output)
         return output, pooled_output, all_hidden_states, all_attention_scores
 
 
@@ -408,15 +407,12 @@ class BertPretrainedModel(tf.keras.Model):
     def from_pretrained(
         cls,
         pretrained_model_dir,
+        adapter=None,
         override_params=None,
         use_functional_api=True,
-        adapter=None,
         with_mlm=False,
         with_nsp=False,
-        ckpt_bert_prefix="bert",
-        ckpt_mlm_prefix="cls/predictions",
-        ckpt_nsp_prefix="cls/seq_relationship",
-        check_weights=True,
+        with_sop=False,
         verbose=True,
         **kwargs
     ):
@@ -434,51 +430,26 @@ class BertPretrainedModel(tf.keras.Model):
             verbose: Python boolean.If True, logging more detailed informations when loadding pretrained weights
         """
         if not adapter:
-            adapter = BertAdapter(
-                skip_token_embedding=kwargs.pop("skip_token_embedding", False),
-                skip_position_embedding=kwargs.pop("skip_position_embedding", False),
-                skip_segment_embedding=kwargs.pop("skip_segment_embedding", False),
-                skip_embedding_layernorm=kwargs.pop("skip_embedding_layernorm", False),
-                skip_pooler=kwargs.pop("skip_pooler", False),
-            )
-        files = adapter.parse_files(pretrained_model_dir)
-        config_file = files["config_file"]
-        model_config = adapter.adapte_config(config_file, **kwargs)
-        logging.info("Load model config: \n%s", json.dumps(model_config, indent=4))
-        if override_params:
-            model_config.update(override_params)
-            logging.info("Overrided model config: \n%s", json.dumps(model_config, indent=4))
-        model = cls(**model_config, **kwargs)
-        assert model.bert_model is not None, "bert_model is None!"
-        inputs = model.dummy_inputs()
-        model(inputs=list(inputs), training=False)
-        adapter.adapte_weights(
-            model=model,
-            ckpt=files["ckpt"],
-            model_config=model_config,
-            use_functional_api=use_functional_api,
+            adapter = "default"
+        from transformers_keras.adapters.adapter_factory import BertAdapterFactory
+
+        adapter_kwargs = {}
+        keys = list(kwargs.keys())
+        for k in keys:
+            if str(k).startswith("skip_"):
+                adapter_kwargs[k] = kwargs.pop(k)
+            if str(k) in ["verbose", "check_weights"]:
+                adapter_kwargs[k] = kwargs.pop(k)
+        adapter = BertAdapterFactory.get(
+            name_or_adapter=adapter,
             with_mlm=with_mlm,
             with_nsp=with_nsp,
-            ckpt_bert_prefix=ckpt_bert_prefix,
-            ckpt_mlm_prefix=ckpt_mlm_prefix,
-            ckpt_nsp_prefix=ckpt_nsp_prefix,
-            check_weights=check_weights,
+            with_sop=with_sop,
+            use_functional_api=use_functional_api,
             verbose=verbose,
-            **kwargs
+            **adapter_kwargs
         )
-        return model
-
-    @classmethod
-    def from_config_file(cls, config_file, override_params=None, adapter=None, **kwargs):
-        if not adapter:
-            adapter = BertAdapter(
-                skip_token_embedding=kwargs.pop("skip_token_embedding", False),
-                skip_position_embedding=kwargs.pop("skip_position_embedding", False),
-                skip_segment_embedding=kwargs.pop("skip_segment_embedding", False),
-                skip_embedding_layernorm=kwargs.pop("skip_embedding_layernorm", False),
-                skip_pooler=kwargs.pop("skip_pooler", False),
-            )
-        model_config = adapter.adapte_config(config_file, **kwargs)
+        model_config = adapter.adapte_config(model_path=pretrained_model_dir, **kwargs)
         logging.info("Load model config: \n%s", json.dumps(model_config, indent=4))
         if override_params:
             model_config.update(override_params)
@@ -487,6 +458,7 @@ class BertPretrainedModel(tf.keras.Model):
         assert model.bert_model is not None, "bert_model is None!"
         inputs = model.dummy_inputs()
         model(inputs=list(inputs), training=False)
+        adapter.adapte_weights(model=model, model_config=model_config, model_path=pretrained_model_dir, **kwargs)
         return model
 
     @property
