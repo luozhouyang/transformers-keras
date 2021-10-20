@@ -22,7 +22,7 @@ class BertAdapterForTensorFlow(AbstractBertAdapter):
         self.tf_nsp_prefix = tf_nsp_prefix
         self.tf_sop_pefix = tf_sop_prefix
 
-    def _adapte_bert_weights(self, model, model_config, **kwargs):
+    def _adapte_backbone_weights(self, model, model_config, **kwargs):
         self_prefix = model.bert_model.name if self.use_functional_api else model.name + "/" + model.bert_model.name
         ckpt_prefix = self.tf_bert_prefix
         logging.info("Adapting bert backbone weights, using model prefix: %s", self_prefix)

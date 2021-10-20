@@ -22,7 +22,7 @@ class AlbertAdapterForTensorFlow(AbstractAlbertAdapter):
         self.tf_sop_preifx = tf_sop_prefix
         self.tf_nsp_prefix = tf_nsp_prefix
 
-    def _adapte_bert_weights(self, model, model_config, **kwargs):
+    def _adapte_backbone_weights(self, model, model_config, **kwargs):
         # TODO: impl this more efficient
         return self._adapte_albert_weights_legacy(
             model, self.model_files["ckpt"], model_config, use_functional_api=self.use_functional_api, **kwargs

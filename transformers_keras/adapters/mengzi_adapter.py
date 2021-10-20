@@ -46,7 +46,7 @@ class BertAdapterForLangboatMengzi(AbstractBertAdapter):
             torch_weights_map[k] = model[k].numpy()
         return torch_weights_map
 
-    def _adapte_bert_weights(self, model, model_config, **kwargs):
+    def _adapte_backbone_weights(self, model, model_config, **kwargs):
         mapping = {}
         model_prefix = model.bert_model.name if self.use_functional_api else model.name + "/" + model.bert_model.name
         torch_prefix = self.pt_bert_prefix

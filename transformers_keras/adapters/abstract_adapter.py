@@ -124,7 +124,7 @@ class BaseAdapter(AbstractAdapter):
         self._pretrained_weights_map = self._read_pretrained_weights(model_path, **kwargs)
 
         weights_mapping = {}
-        bert_weights_mapping = self._adapte_bert_weights(model, model_config, **kwargs)
+        bert_weights_mapping = self._adapte_backbone_weights(model, model_config, **kwargs)
         weights_mapping.update(bert_weights_mapping)
 
         if self.with_mlm:
@@ -154,7 +154,7 @@ class BaseAdapter(AbstractAdapter):
         self._check_weights(model, zipping_weights, zipping_values, weights_mapping, **kwargs)
 
     @abc.abstractmethod
-    def _adapte_bert_weights(self, model, model_config, **kwargs):
+    def _adapte_backbone_weights(self, model, model_config, **kwargs):
         raise NotImplementedError()
 
     @abc.abstractmethod
