@@ -49,7 +49,7 @@ class BertCharTokenizer:
                 idx += 1
         return vocab
 
-    def encode(self, text, add_cls=True, add_sep=True, **kwargs):
+    def _encode_legacy(self, text, add_cls=True, add_sep=True, **kwargs):
         tokens, ids, type_ids, attention_mask, offsets = [], [], [], [], []
         if self.do_lower_case:
             text = str(text).lower()
@@ -81,6 +81,32 @@ class BertCharTokenizer:
             type_ids=type_ids,
             attention_mask=attention_mask,
             offsets=offsets,
+        )
+        return encoding
+
+    def encode(self, sequence, pair=None, add_special_tokens=False, **kwargs):
+        """Encode text to encodings"""
+        sequence = sequence.lower() if self.do_lower_case else sequence
+        if not pair:
+            encoding = self._encode_sequence(sequence, add_special_tokens=add_special_tokens, **kwargs)
+            return encoding
+        encoding = self._encode_pair(sequence, pair, add_special_tokens=True, **kwargs)
+        return encoding
+
+    def _encode_sequence(self, sequence, add_special_tokens=False, **kwargs):
+        encoding = self._encode_legacy(sequence, add_cls=add_special_tokens, add_sep=add_special_tokens, **kwargs)
+        return encoding
+
+    def _encode_pair(self, sequence, pair, add_special_tokens=True, **kwargs):
+        seq_encoding = self._encode_legacy(sequence, add_cls=True, add_sep=True)
+        pai_encoding = self._encode_legacy(pair, add_cls=False, add_sep=True)
+        encoding = TokenizerEncoding(
+            text=seq_encoding.text + pai_encoding.text,
+            tokens=seq_encoding.tokens + pai_encoding.tokens,
+            ids=seq_encoding.ids + pai_encoding.ids,
+            type_ids=[0] * len(seq_encoding.type_ids) + [1] * len(pai_encoding.type_ids),
+            attention_mask=[1] * (len(seq_encoding.attention_mask) + len(pai_encoding.attention_mask)),
+            offsets=None,  # offsets set to None in CharLevel tokenizer
         )
         return encoding
 

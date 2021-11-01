@@ -33,9 +33,7 @@ class DatasetForAspectTermExtraction(Dataset):
         self.aspect_spans_key = aspect_spans_key
         self.tokenizer = BertCharTokenizer.from_file(vocab_file, do_lower_case=do_lower_case, **kwargs)
         self.instances = self._read_jsonl_files(input_files, **kwargs)
-
         self.question = question
-        self.question_encoding = self.tokenizer.encode(self.question, add_cls=False, add_sep=True)
 
     def __len__(self):
         return len(self.instances)
@@ -43,23 +41,20 @@ class DatasetForAspectTermExtraction(Dataset):
     def __getitem__(self, index):
         instance = self.instances[index]
         sequence = instance[self.sequence_key]
-        sequence_encoding = self.tokenizer.encode(sequence, add_cls=True, add_sep=True)
-        question_encoding = self.question_encoding
+        encoding = self.tokenizer.encode(sequence, self.question, add_special_tokens=True)
         aspect_spans = instance[self.aspect_spans_key]
-        input_length = len(sequence_encoding.ids) + len(question_encoding.ids)
-        start_ids, end_ids = [0] * input_length, [0] * input_length
-        tokens = sequence_encoding.tokens + question_encoding.tokens
+        start_ids, end_ids = [0] * len(encoding.ids), [0] * len(encoding.ids)
         for span in aspect_spans:
             # start + 1: [CLS] offset
             start, end = span[0] + 1, span[1]
-            assert "".join(tokens[start : end + 1]).lower() == str(sequence[span[0] : span[1]]).lower()
+            assert "".join(encoding.tokens[start : end + 1]).lower() == str(sequence[span[0] : span[1]]).lower()
             start_ids[start] = 1
             end_ids[end] = 1
         example = ExampleForAspectTermExtraction(
-            tokens=tokens,
-            input_ids=sequence_encoding.ids + question_encoding.ids,
-            segment_ids=[0] * len(sequence_encoding.ids) + [1] * len(question_encoding.ids),
-            attention_mask=[1] * (len(sequence_encoding.ids) + len(question_encoding.ids)),
+            tokens=encoding.tokens,
+            input_ids=encoding.ids,
+            segment_ids=encoding.type_ids,
+            attention_mask=encoding.attention_mask,
             start_ids=start_ids,
             end_ids=end_ids,
         )
