@@ -1,14 +1,49 @@
 import abc
 import json
 import logging
+import os
 
 import tensorflow as tf
 from tensorflow.python.util.decorator_utils import classproperty
+from tokenizers import BertWordPieceTokenizer
 
-TF_VERSION = tf.__version__
+
+class Dataset(abc.ABC):
+    """Data reader"""
+
+    @abc.abstractmethod
+    def __len__(self):
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def __getitem__(self, index):
+        raise NotImplementedError()
 
 
-class AbstractDataset(abc.ABC):
+class DatasetForBert(Dataset):
+    """Dataset for bert based models."""
+
+    def __init__(self, vocab_file, do_lower_case=True, **kwargs) -> None:
+        super().__init__()
+        self.tokenizer = BertWordPieceTokenizer.from_file(vocab_file, lowercase=do_lower_case)
+
+    def _read_jsonl_files(self, input_files, **kwargs):
+        instances = []
+        if isinstance(input_files, str):
+            input_files = [input_files]
+        for f in input_files:
+            if not os.path.exists(f):
+                continue
+            with open(f, mode="rt", encoding="utf-8") as fin:
+                for line in fin:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    instances.append(json.loads(line))
+        return instances
+
+
+class AbstractDataPipe(abc.ABC):
     """Abstract dataset builder"""
 
     @classproperty
@@ -38,37 +73,44 @@ class AbstractDataset(abc.ABC):
         return None
 
     @classmethod
+    def from_dataset(cls, dataset: Dataset, **kwargs):
+        examples = [dataset[idx] for idx in range(len(dataset))]
+        return cls.from_examples(examples, **kwargs)
+
+    @classmethod
+    def from_jsonl_files(cls, input_files, vocab_file, **kwargs):
+        dataset = cls._dataset_from_jsonl_files(input_files, vocab_file, **kwargs)
+        return cls.from_dataset(dataset, **kwargs)
+
+    @classmethod
+    def _dataset_from_jsonl_files(cls, input_files, vocab_file, **kwargs) -> Dataset:
+        raise NotImplementedError()
+
+    @classmethod
     def from_examples(cls, examples, verbose=True, n=5, **kwargs):
         logging.info("Load %d examples in total.", len(examples))
-        if verbose:
-            cls._show_examples(examples, n=n, **kwargs)
-        dataset = cls._zip_dataset(examples, **kwargs)
-        dataset = cls._build_dataset(dataset, **kwargs)
+        cls._show_examples(examples, verbose=verbose, n=n, **kwargs)
+        dataset = cls._transform_examples_to_dataset(examples, **kwargs)
+        dataset = cls._transform(dataset, **kwargs)
         return dataset
 
     @classmethod
     def from_tfrecord_files(cls, input_files, **kwargs):
-        dataset = cls._read_tfrecord(input_files, **kwargs)
-        dataset = cls._build_dataset(dataset, **kwargs)
+        dataset = cls._read_tfrecord_files(input_files, **kwargs)
+        dataset = cls._parse_tfrecord_dataset(dataset, **kwargs)
+        dataset = cls._transform(dataset, **kwargs)
         return dataset
 
     @classmethod
-    def from_jsonl_files(cls, input_files, tokenizer=None, vocab_file=None, **kwargs):
-        instances = cls._read_jsonl(input_files, **kwargs)
-        examples = cls._parse_instances_to_examples(instances, tokenizer=tokenizer, vocab_file=vocab_file, **kwargs)
-        dataset = cls.from_examples(examples, **kwargs)
-        return dataset
-
-    @classmethod
-    def jsonl_to_examples(cls, input_files, tokenizer=None, vocab_file=None, **kwargs):
-        instances = cls._read_jsonl(input_files, **kwargs)
-        examples = cls._parse_instances_to_examples(instances, tokenizer=tokenizer, vocab_file=vocab_file, **kwargs)
-        return examples
-
-    @classmethod
-    def jsonl_to_tfrecord(cls, input_files, output_files, tokenizer=None, vocab_file=None, **kwargs):
-        examples = cls.jsonl_to_examples(input_files, tokenizer=tokenizer, vocab_file=vocab_file, **kwargs)
+    def dataset_to_tfrecord(cls, dataset: Dataset, output_files, **kwargs):
+        examples = [dataset[idx] for idx in range(len(dataset))]
         cls.examples_to_tfrecord(examples, output_files, **kwargs)
+
+    @classmethod
+    def jsonl_to_examples(cls, input_files, vocab_file, **kwargs):
+        dataset = cls._dataset_from_jsonl_files(input_files, vocab_file, **kwargs)
+        examples = [dataset[idx] for idx in range(len(dataset))]
+        return examples
 
     @classmethod
     def examples_to_tfrecord(cls, examples, output_files, **kwargs):
@@ -77,7 +119,7 @@ class AbstractDataset(abc.ABC):
         writers = [tf.io.TFRecordWriter(f) for f in output_files]
         idx = 0
         for example in examples:
-            tfrecord_example = cls._example_to_tfrecord(example)
+            tfrecord_example = cls._transform_example_to_tfrecord(example, **kwargs)
             writers[idx].write(tfrecord_example.SerializeToString())
             idx += 1
             idx = idx % len(writers)
@@ -86,15 +128,24 @@ class AbstractDataset(abc.ABC):
         logging.info("Finished to write %d examples to tfrecords.", len(examples))
 
     @classmethod
-    def _example_to_tfrecord(cls, example, **kwargs):
+    def jsonl_to_tfrecord(cls, input_files, output_files, tokenizer=None, vocab_file=None, **kwargs):
+        examples = cls.jsonl_to_examples(input_files, tokenizer=tokenizer, vocab_file=vocab_file, **kwargs)
+        cls.examples_to_tfrecord(examples, output_files, **kwargs)
+
+    @classmethod
+    def _transform_example_to_tfrecord(cls, example, **kwargs) -> tf.train.Example:
         raise NotImplementedError()
 
     @classmethod
-    def _zip_dataset(cls, examples, **kwargs):
+    def _transform_examples_to_dataset(cls, examples, **kwargs) -> tf.data.Dataset:
         raise NotImplementedError()
 
     @classmethod
-    def _build_dataset(
+    def _parse_tfrecord_dataset(cls, dataset: tf.data.Dataset, **kwargs) -> tf.data.Dataset:
+        raise NotImplementedError()
+
+    @classmethod
+    def _transform(
         cls,
         dataset,
         batch_size=64,
@@ -110,18 +161,19 @@ class AbstractDataset(abc.ABC):
         pad_id=0,
         auto_shard_policy=None,
         drop_remainder=False,
+        to_dict=True,
         **kwargs,
     ):
         dataset = cls._filter(dataset, max_sequence_length=max_sequence_length, **kwargs)
-        if shuffle is True:
-            dataset = cls._shuffle(
-                dataset,
-                buffer_size=buffer_size,
-                seed=seed,
-                reshuffle_each_iteration=reshuffle_each_iteration,
-                **kwargs,
-            )
         dataset = cls._repeat(dataset, repeat=repeat, **kwargs)
+        dataset = cls._shuffle(
+            dataset,
+            shuffle=shuffle,
+            buffer_size=buffer_size,
+            seed=seed,
+            reshuffle_each_iteration=reshuffle_each_iteration,
+            **kwargs,
+        )
         assert padding in ["bucket", "batch", "fixed"], "Invalid padding: " + str(padding)
         if padding == "bucket":
             dataset = cls._bucket_padding(
@@ -151,7 +203,7 @@ class AbstractDataset(abc.ABC):
                 **kwargs,
             )
         dataset = dataset.prefetch(cls.AUTOTUNE)
-        dataset = cls._to_dict(dataset, **kwargs)
+        dataset = cls._to_dict(dataset, to_dict=to_dict, **kwargs)
         dataset = cls._auto_shard(dataset, auto_shard_policy=auto_shard_policy, **kwargs)
         return dataset
 
@@ -160,9 +212,10 @@ class AbstractDataset(abc.ABC):
         raise NotImplementedError()
 
     @classmethod
-    def _shuffle(cls, dataset, buffer_size, seed=None, reshuffle_each_iteration=True, **kwargs):
-        dataset = dataset.shuffle(buffer_size=buffer_size, seed=seed, reshuffle_each_iteration=reshuffle_each_iteration)
-        return dataset
+    def _shuffle(cls, dataset, shuffle=True, buffer_size=100000, seed=None, reshuffle_each_iteration=True, **kwargs):
+        if not shuffle:
+            return dataset
+        return dataset.shuffle(buffer_size=buffer_size, seed=seed, reshuffle_each_iteration=reshuffle_each_iteration)
 
     @classmethod
     def _repeat(cls, dataset, repeat=None, **kwargs):
@@ -193,7 +246,7 @@ class AbstractDataset(abc.ABC):
         raise NotImplementedError()
 
     @classmethod
-    def _to_dict(cls, dataset, **kwargs):
+    def _to_dict(cls, dataset, to_dict=True, **kwargs):
         raise NotImplementedError()
 
     @classmethod
@@ -228,7 +281,7 @@ class AbstractDataset(abc.ABC):
         return dataset
 
     @classmethod
-    def _read_jsonl(cls, input_files, **kwargs):
+    def _read_jsonl_files(cls, input_files, **kwargs):
         if isinstance(input_files, str):
             input_files = [input_files]
         instances = []
@@ -248,7 +301,7 @@ class AbstractDataset(abc.ABC):
         raise NotImplementedError()
 
     @classmethod
-    def _read_tfrecord(cls, input_files, **kwargs):
+    def _read_tfrecord_files(cls, input_files, **kwargs):
         if isinstance(input_files, str):
             input_files = [input_files]
         if len(input_files) == 1:
@@ -260,12 +313,7 @@ class AbstractDataset(abc.ABC):
                 cycle_length=len(input_files),
                 num_parallel_calls=cls.AUTOTUNE,
             )
-        dataset = cls._parse_tfrecord(dataset, **kwargs)
         return dataset
-
-    @classmethod
-    def _parse_tfrecord(cls, dataset, **kwargs):
-        raise NotImplementedError()
 
     @classmethod
     def _auto_shard(cls, dataset, auto_shard_policy=None, **kwargs):
@@ -277,7 +325,9 @@ class AbstractDataset(abc.ABC):
         return dataset
 
     @classmethod
-    def _show_examples(cls, examples, n=5, **kwargs):
+    def _show_examples(cls, examples, verbose=True, n=5, **kwargs):
+        if not verbose:
+            return
         n = min(n, len(examples))
         logging.info("Showing %d examples.", n)
         for i in range(n):

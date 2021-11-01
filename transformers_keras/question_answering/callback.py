@@ -12,16 +12,18 @@ class BaseMetricForQuestionAnswering(tf.keras.callbacks.Callback):
 
     @classmethod
     def from_jsonl_files(cls, input_files, vocab_file, limit=None, **kwargs):
-        examples = DatasetForQuestionAnswering.jsonl_to_examples(input_files, vocab_file=vocab_file, **kwargs)
+        dataset = DatasetForQuestionAnswering(input_files, vocab_file, **kwargs)
+        examples = [dataset[idx] for idx in range(len(dataset))]
         if limit is not None and limit > 0:
             examples = examples[:limit]
         return cls(examples, **kwargs)
 
-    def __init__(self, examples, **kwargs):
+    def __init__(self, examples: List[ExampleForQuestionAnswering], batch_size=32, **kwargs):
         super().__init__()
         self.examples = examples
-        self.dataset = DatasetForQuestionAnswering.from_examples(self.examples, **kwargs)
         self.em = ExactMatch()
+        self.batch_size = batch_size
+        self.dataset = self._transform_examples_to_dataset(examples, **kwargs)
 
     def on_epoch_end(self, epoch, logs):
         outputs = self.model.predict(self.dataset)
@@ -39,9 +41,40 @@ class BaseMetricForQuestionAnswering(tf.keras.callbacks.Callback):
     def _compute_metric(self, gold_answers, pred_answers, epoch=0):
         raise NotImplementedError()
 
+    def _transform_examples_to_dataset(self, examples, **kwargs) -> tf.data.Dataset:
+        """transform examples to dataset"""
+
+        def _to_dataset(x, dtype=tf.int32):
+            x = tf.ragged.constant(x, dtype=dtype)
+            d = tf.data.Dataset.from_tensor_slices(x)
+            d = d.map(lambda x: x)
+            return d
+
+        dataset = tf.data.Dataset.zip(
+            (
+                _to_dataset(x=[e.input_ids for e in examples], dtype=tf.int32),
+                _to_dataset(x=[e.segment_ids for e in examples], dtype=tf.int32),
+                _to_dataset(x=[e.attention_mask for e in examples], dtype=tf.int32),
+            )
+        )
+        pad_id = tf.constant(0, dtype=tf.int32)
+        # fmt: off
+        dataset = dataset.padded_batch(
+            batch_size=self.batch_size,
+            padded_shapes=([None,], [None,], [None,]),
+            padding_values=(pad_id, pad_id, pad_id),
+            drop_remainder=False,
+        )
+        # fmt: on
+        dataset = dataset.map(lambda a, b, c: ({"input_ids": a, "segment_ids": b, "attention_mask": c}, None))
+        return dataset
+
 
 class EMForQuestionAnswering(BaseMetricForQuestionAnswering):
     """Exact Match metric for question answering."""
+
+    def __init__(self, examples: List[ExampleForQuestionAnswering], batch_size=32, **kwargs):
+        super().__init__(examples, batch_size=batch_size, **kwargs)
 
     def _compute_metric(self, gold_answers, pred_answers, epoch=0):
         acc = self.em(gold_answers, pred_answers, dim=1)

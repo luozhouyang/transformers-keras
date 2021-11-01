@@ -1,7 +1,7 @@
 import json
 import unittest
 
-from transformers_keras.datapipe.tc_dataset import DatasetForTokenClassification
+from transformers_keras.datapipe.tc_dataset import DataPipeForTokenClassification
 
 
 class DatasetTest(unittest.TestCase):
@@ -17,7 +17,7 @@ class DatasetTest(unittest.TestCase):
 
     def test_dataset(self):
         print("====from_jsonl_files")
-        d = DatasetForTokenClassification.from_jsonl_files(
+        d = DataPipeForTokenClassification.from_jsonl_files(
             "testdata/token_classify.jsonl",
             vocab_file="testdata/vocab.bert.txt",
             label_vocab_file="testdata/labels.txt",
@@ -26,7 +26,7 @@ class DatasetTest(unittest.TestCase):
         print(next(iter(d)))
 
         print("====jsonl_to_examples")
-        examples = DatasetForTokenClassification.jsonl_to_examples(
+        examples = DataPipeForTokenClassification.jsonl_to_examples(
             "testdata/token_classify.jsonl",
             vocab_file="testdata/vocab.bert.txt",
             label_vocab_file="testdata/labels.txt",
@@ -35,14 +35,14 @@ class DatasetTest(unittest.TestCase):
             print(examples[i])
 
         print("====from_examples")
-        d = DatasetForTokenClassification.from_examples(examples, batch_size=2)
+        d = DataPipeForTokenClassification.from_examples(examples, batch_size=2)
         print(next(iter(d)))
 
         print("====examples_to_tfrecord")
-        DatasetForTokenClassification.examples_to_tfrecord(examples, ["testdata/token_classify.tfrecord"])
+        DataPipeForTokenClassification.examples_to_tfrecord(examples, ["testdata/token_classify.tfrecord"])
 
         print("====from_tfrecord_files")
-        d = DatasetForTokenClassification.from_tfrecord_files("testdata/token_classify.tfrecord")
+        d = DataPipeForTokenClassification.from_tfrecord_files("testdata/token_classify.tfrecord")
         print(next(iter(d)))
 
 

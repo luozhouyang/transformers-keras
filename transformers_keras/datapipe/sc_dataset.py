@@ -2,17 +2,101 @@
 from collections import namedtuple
 
 import tensorflow as tf
-from tokenizers import BertWordPieceTokenizer
 
-from .abc_dataset import AbstractDataset
+from .abc_dataset import AbstractDataPipe, DatasetForBert
 
 ExampleForSequenceClassification = namedtuple(
     "ExampleForSequenceClassification", ["tokens", "input_ids", "segment_ids", "attention_mask", "label"]
 )
 
 
-class DatasetForSequenceClassification(AbstractDataset):
+class DatasetForSequenceClassification(DatasetForBert):
+    """Dataset for sequence classification"""
+
+    def __init__(
+        self, input_files, vocab_file, add_special_tokens=True, sequence_key="sequence", label_key="label", **kwargs
+    ) -> None:
+        super().__init__(vocab_file, **kwargs)
+        self.instances = self._read_jsonl_files(input_files, **kwargs)
+        self.sequence_key = sequence_key
+        self.label_key = label_key
+        self.add_special_tokens = add_special_tokens
+
+    def __len__(self):
+        return len(self.instances)
+
+    def __getitem__(self, index):
+        instance = self.instances[index]
+        sequence, label = instance[self.sequence_key], instance[self.label_key]
+        encoding = self.tokenizer.encode(sequence, add_special_tokens=self.add_special_tokens)
+        return ExampleForSequenceClassification(
+            tokens=encoding.tokens,
+            input_ids=encoding.ids,
+            segment_ids=encoding.type_ids,
+            attention_mask=encoding.attention_mask,
+            label=int(label),
+        )
+
+
+class DataPipeForSequenceClassification(AbstractDataPipe):
     """Dataset builder for sequence classification."""
+
+    @classmethod
+    def _dataset_from_jsonl_files(cls, input_files, vocab_file, **kwargs) -> DatasetForSequenceClassification:
+        return DatasetForSequenceClassification(input_files, vocab_file, **kwargs)
+
+    @classmethod
+    def _transform_examples_to_dataset(cls, examples, **kwargs) -> tf.data.Dataset:
+        """zip dataset"""
+
+        def _to_dataset(x, dtype=tf.int32):
+            x = tf.ragged.constant(x, dtype=dtype)
+            d = tf.data.Dataset.from_tensor_slices(x)
+            d = d.map(lambda x: x)
+            return d
+
+        dataset = tf.data.Dataset.zip(
+            (
+                _to_dataset([e.input_ids for e in examples]),
+                _to_dataset([e.segment_ids for e in examples]),
+                _to_dataset([e.attention_mask for e in examples]),
+                _to_dataset([e.label for e in examples]),
+            )
+        )
+        return dataset
+
+    @classmethod
+    def _transform_example_to_tfrecord(cls, example, **kwargs) -> tf.train.Example:
+        feature = {
+            "input_ids": cls._int64_feature([int(x) for x in example.input_ids]),
+            "segment_ids": cls._int64_feature([int(x) for x in example.segment_ids]),
+            "attention_mask": cls._int64_feature([int(x) for x in example.attention_mask]),
+            "label": cls._int64_feature([int(example.label)]),
+        }
+        return tf.train.Example(features=tf.train.Features(feature=feature))
+
+    @classmethod
+    def _parse_tfrecord_dataset(cls, dataset: tf.data.Dataset, **kwargs) -> tf.data.Dataset:
+        features = {
+            "input_ids": tf.io.VarLenFeature(tf.int64),
+            "segment_ids": tf.io.VarLenFeature(tf.int64),
+            "attention_mask": tf.io.VarLenFeature(tf.int64),
+            "label": tf.io.VarLenFeature(tf.int64),
+        }
+        dataset = dataset.map(
+            lambda x: tf.io.parse_example(x, features),
+            num_parallel_calls=cls.AUTOTUNE,
+        ).prefetch(cls.AUTOTUNE)
+        dataset = dataset.map(
+            lambda x: (
+                tf.cast(tf.sparse.to_dense(x["input_ids"]), tf.int32),
+                tf.cast(tf.sparse.to_dense(x["segment_ids"]), tf.int32),
+                tf.cast(tf.sparse.to_dense(x["attention_mask"]), tf.int32),
+                tf.cast(tf.squeeze(tf.sparse.to_dense(x["label"])), tf.int32),
+            ),
+            num_parallel_calls=cls.AUTOTUNE,
+        ).prefetch(cls.AUTOTUNE)
+        return dataset
 
     @classmethod
     def _filter(cls, dataset, max_sequence_length=512, **kwargs):
@@ -76,88 +160,11 @@ class DatasetForSequenceClassification(AbstractDataset):
         return dataset
 
     @classmethod
-    def _zip_dataset(cls, examples, **kwargs):
-        """zip dataset"""
-
-        def _to_dataset(x, dtype=tf.int32):
-            x = tf.ragged.constant(x, dtype=dtype)
-            d = tf.data.Dataset.from_tensor_slices(x)
-            d = d.map(lambda x: x)
-            return d
-
-        dataset = tf.data.Dataset.zip(
-            (
-                _to_dataset([e.input_ids for e in examples]),
-                _to_dataset([e.segment_ids for e in examples]),
-                _to_dataset([e.attention_mask for e in examples]),
-                _to_dataset([e.label for e in examples]),
-            )
-        )
-        return dataset
-
-    @classmethod
-    def _to_dict(cls, dataset, **kwargs):
+    def _to_dict(cls, dataset, to_dict=True, **kwargs):
+        if not to_dict:
+            return dataset
         dataset = dataset.map(
             lambda a, b, c, y: ({"input_ids": a, "segment_ids": b, "attention_mask": c}, y),
             num_parallel_calls=cls.AUTOTUNE,
         ).prefetch(cls.AUTOTUNE)
         return dataset
-
-    @classmethod
-    def _parse_tfrecord(cls, dataset, **kwargs):
-        features = {
-            "input_ids": tf.io.VarLenFeature(tf.int64),
-            "segment_ids": tf.io.VarLenFeature(tf.int64),
-            "attention_mask": tf.io.VarLenFeature(tf.int64),
-            "label": tf.io.VarLenFeature(tf.int64),
-        }
-        dataset = dataset.map(
-            lambda x: tf.io.parse_example(x, features),
-            num_parallel_calls=cls.AUTOTUNE,
-        ).prefetch(cls.AUTOTUNE)
-        dataset = dataset.map(
-            lambda x: (
-                tf.cast(tf.sparse.to_dense(x["input_ids"]), tf.int32),
-                tf.cast(tf.sparse.to_dense(x["segment_ids"]), tf.int32),
-                tf.cast(tf.sparse.to_dense(x["attention_mask"]), tf.int32),
-                tf.cast(tf.squeeze(tf.sparse.to_dense(x["label"])), tf.int32),
-            ),
-            num_parallel_calls=cls.AUTOTUNE,
-        ).prefetch(cls.AUTOTUNE)
-        return dataset
-
-    @classmethod
-    def _example_to_tfrecord(cls, example: ExampleForSequenceClassification, **kwargs):
-        feature = {
-            "input_ids": cls._int64_feature([int(x) for x in example.input_ids]),
-            "segment_ids": cls._int64_feature([int(x) for x in example.segment_ids]),
-            "attention_mask": cls._int64_feature([int(x) for x in example.attention_mask]),
-            "label": cls._int64_feature([int(example.label)]),
-        }
-        return tf.train.Example(features=tf.train.Features(feature=feature))
-
-    @classmethod
-    def _parse_instances_to_examples(
-        cls, instances, tokenizer: BertWordPieceTokenizer = None, vocab_file=None, **kwargs
-    ):
-        assert tokenizer or vocab_file, "`tokenizer` or `vocab_file` must be provided."
-        if tokenizer is None:
-            tokenizer = BertWordPieceTokenizer.from_file(
-                vocab_file,
-                lowercase=kwargs.get("do_lower_case", True),
-            )
-        examples = []
-        for instance in instances:
-            sequence = instance[kwargs.get("sequence_key", "sequence")]
-            label = instance[kwargs.get("label_key", "label")]
-            encoding = tokenizer.encode(sequence)
-            examples.append(
-                ExampleForSequenceClassification(
-                    tokens=encoding.tokens,
-                    input_ids=encoding.ids,
-                    segment_ids=encoding.type_ids,
-                    attention_mask=encoding.attention_mask,
-                    label=int(label),
-                )
-            )
-        return examples

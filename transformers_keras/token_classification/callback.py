@@ -6,7 +6,7 @@ import numpy as np
 import tensorflow as tf
 from seqeval.metrics import classification_report
 from transformers_keras.common.label_tokenizer import LabelTokenizerForTokenClassification
-from transformers_keras.datapipe.tc_dataset import DatasetForTokenClassification, ExampleForTokenClassification
+from transformers_keras.datapipe.tc_dataset import DataPipeForTokenClassification, ExampleForTokenClassification
 
 
 class SeqEvalForTokenClassification(tf.keras.callbacks.Callback):
@@ -14,7 +14,7 @@ class SeqEvalForTokenClassification(tf.keras.callbacks.Callback):
 
     @classmethod
     def from_conll_files(cls, input_files, vocab_file, label_vocab_file, o_token="O", sep="\t", **kwargs):
-        examples = DatasetForTokenClassification.conll_to_examples(
+        examples = DataPipeForTokenClassification.conll_to_examples(
             input_files,
             tokenizer=None,
             vocab_file=vocab_file,

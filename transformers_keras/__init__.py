@@ -13,33 +13,33 @@ from transformers_keras.adapters.mengzi_adapter import BertAdapterForLangboatMen
 from transformers_keras.common.char_tokenizer import BertCharTokenizer, TokenizerEncoding
 from transformers_keras.common.label_tokenizer import LabelTokenizerForTokenClassification
 from transformers_keras.common.metrics import ExactMatch, F1ForSequence
-from transformers_keras.datapipe.abc_dataset import AbstractDataset
+from transformers_keras.datapipe.abc_dataset import AbstractDataPipe
 from transformers_keras.datapipe.mlm_dataset import (
-    DatasetForMaskedLanguageModel,
+    DataPipeForMaskedLanguageModel,
     ExampleForMaskedLanguageModel,
     WholeWordMask,
 )
 from transformers_keras.datapipe.qa_dataset import (
-    DatasetForQuestionAnswering,
-    DatasetForQuestionAnsweringX,
+    DataPipeForQuestionAnswering,
+    DataPipeForQuestionAnsweringX,
     ExampleForQuestionAnswering,
     ExampleForQuestionAnsweringX,
 )
 from transformers_keras.datapipe.sa_dataset import (
-    DatasetForAspectTermExtraction,
+    DataPipeForAspectTermExtraction,
     DatasetForOpinionTermExtractionAndClassification,
     ExampleForAspectTermExtraction,
 )
-from transformers_keras.datapipe.sc_dataset import DatasetForSequenceClassification, ExampleForSequenceClassification
+from transformers_keras.datapipe.sc_dataset import DataPipeForSequenceClassification, ExampleForSequenceClassification
 from transformers_keras.datapipe.se_dataset import (
-    DatasetForHardNegativeSimCSE,
-    DatasetForSupervisedSimCSE,
-    DatasetForUnsupervisedSimCSE,
+    DataPipeForHardNegativeSimCSE,
+    DataPipeForSupervisedSimCSE,
+    DataPipeForUnsupervisedSimCSE,
     ExampleForHardNegativeSimCSE,
     ExampleForSupervisedSimCSE,
     ExampleForUnsupervisedSimCSE,
 )
-from transformers_keras.datapipe.tc_dataset import DatasetForTokenClassification, ExampleForTokenClassification
+from transformers_keras.datapipe.tc_dataset import DataPipeForTokenClassification, ExampleForTokenClassification
 from transformers_keras.distiller import Distiller
 from transformers_keras.lm.mlm import BertForMaskedLanguageModel
 from transformers_keras.modeling_albert import (

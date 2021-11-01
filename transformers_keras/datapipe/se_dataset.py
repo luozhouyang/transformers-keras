@@ -5,7 +5,7 @@ from typing import List
 import tensorflow as tf
 from tokenizers import BertWordPieceTokenizer
 
-from .abc_dataset import AbstractDataset
+from .abc_dataset import AbstractDataPipe, DatasetForBert
 
 ExampleForUnsupervisedSimCSE = namedtuple(
     "ExampleForUnsupervisedSimCSE",
@@ -49,8 +49,141 @@ ExampleForHardNegativeSimCSE = namedtuple(
 )
 
 
-class DatasetForUnsupervisedSimCSE(AbstractDataset):
+class DatasetForUnupervisedSimCSE(DatasetForBert):
+    """Dataset for unsup SimCSE"""
+
+    def __init__(self, input_file, vocab_file, add_special_tokens=True, sequence_key="sequence", **kwargs) -> None:
+        super().__init__(vocab_file, **kwargs)
+        self.instances = self._read_jsonl_files(input_file, **kwargs)
+        self.add_special_tokens = add_special_tokens
+        self.sequence_key = sequence_key
+
+    def __len__(self):
+        return len(self.instances)
+
+    def __getitem__(self, index) -> ExampleForUnsupervisedSimCSE:
+        instance = self.instances[index]
+        sequence = instance[self.sequence_key]
+        seq_encoding = self.tokenizer.encode(sequence, add_special_tokens=self.add_special_tokens)
+        example = ExampleForUnsupervisedSimCSE(
+            tokens=seq_encoding.tokens,
+            input_ids=seq_encoding.ids,
+            segment_ids=seq_encoding.type_ids,
+            attention_mask=seq_encoding.attention_mask,
+        )
+        return example
+
+
+class DatasetForSupervisedSimCSE(DatasetForUnupervisedSimCSE):
+    """Dataset for supervised SimCSE"""
+
+    def __init__(self, input_file, vocab_file, pos_sequence_key="pos_sequence", **kwargs) -> None:
+        super().__init__(input_file, vocab_file, **kwargs)
+        self.pos_sequence_key = pos_sequence_key
+
+    def __getitem__(self, index) -> ExampleForSupervisedSimCSE:
+        instance = self.instances[index]
+        seq, pos_seq = instance[self.sequence_key], instance[self.pos_sequence_key]
+        seq_encoding = self.tokenizer.encode(seq, add_special_tokens=self.add_special_tokens)
+        pos_encoding = self.tokenizer.encode(pos_seq, add_special_tokens=self.add_special_tokens)
+        example = ExampleForSupervisedSimCSE(
+            tokens=seq_encoding.tokens,
+            input_ids=seq_encoding.ids,
+            segment_ids=seq_encoding.type_ids,
+            attention_mask=seq_encoding.attention_mask,
+            pos_tokens=pos_encoding.tokens,
+            pos_input_ids=pos_encoding.ids,
+            pos_segment_ids=pos_encoding.type_ids,
+            pos_attention_mask=pos_encoding.attention_mask,
+        )
+        return example
+
+
+class DatasetForHardNegativeSimCSE(DatasetForSupervisedSimCSE):
+    """Dataset for hard negative SimCSE"""
+
+    def __init__(self, input_file, vocab_file, neg_sequence_key="neg_sequence", **kwargs) -> None:
+        super().__init__(input_file, vocab_file, **kwargs)
+        self.neg_sequence_key = neg_sequence_key
+
+    def __getitem__(self, index) -> ExampleForHardNegativeSimCSE:
+        instance = self.instances[index]
+        pos_seq, neg_seq = instance[self.pos_sequence_key], instance[self.neg_sequence_key]
+        seq_encoding = self.tokenizer.encode(instance[self.sequence_key], add_special_tokens=self.add_special_tokens)
+        pos_encoding = self.tokenizer.encode(pos_seq, add_special_tokens=self.add_special_tokens)
+        neg_encoding = self.tokenizer.encode(neg_seq, add_special_tokens=self.add_special_tokens)
+        example = ExampleForHardNegativeSimCSE(
+            tokens=seq_encoding.tokens,
+            input_ids=seq_encoding.ids,
+            segment_ids=seq_encoding.type_ids,
+            attention_mask=seq_encoding.attention_mask,
+            pos_tokens=pos_encoding.tokens,
+            pos_input_ids=pos_encoding.ids,
+            pos_segment_ids=pos_encoding.type_ids,
+            pos_attention_mask=pos_encoding.attention_mask,
+            neg_tokens=neg_encoding.tokens,
+            neg_input_ids=neg_encoding.ids,
+            neg_segment_ids=neg_encoding.type_ids,
+            neg_attention_mask=neg_encoding.attention_mask,
+        )
+        return example
+
+
+class DataPipeForUnsupervisedSimCSE(AbstractDataPipe):
     """Dataset builder for unsupervised SimCSE"""
+
+    @classmethod
+    def _dataset_from_jsonl_files(cls, input_files, vocab_file, **kwargs) -> DatasetForUnupervisedSimCSE:
+        return DatasetForUnupervisedSimCSE(input_files, vocab_file, **kwargs)
+
+    @classmethod
+    def _transform_examples_to_dataset(cls, examples, **kwargs) -> tf.data.Dataset:
+        """Zip examples to dataset"""
+
+        def _to_dataset(x, dtype=tf.int32):
+            x = tf.ragged.constant(x, dtype=dtype)
+            d = tf.data.Dataset.from_tensor_slices(x)
+            d = d.map(lambda x: x)
+            return d
+
+        dataset = tf.data.Dataset.zip(
+            (
+                _to_dataset([e.input_ids for e in examples], dtype=tf.int32),
+                _to_dataset([e.segment_ids for e in examples], dtype=tf.int32),
+                _to_dataset([e.attention_mask for e in examples], dtype=tf.int32),
+            )
+        )
+        return dataset
+
+    @classmethod
+    def _transform_example_to_tfrecord(cls, example, **kwargs) -> tf.train.Example:
+        feature = {
+            "input_ids": cls._int64_feature([int(x) for x in example.input_ids]),
+            "segment_ids": cls._int64_feature([int(x) for x in example.segment_ids]),
+            "attention_mask": cls._int64_feature([int(x) for x in example.attention_mask]),
+        }
+        return tf.train.Example(features=tf.train.Features(feature=feature))
+
+    @classmethod
+    def _parse_tfrecord_dataset(cls, dataset: tf.data.Dataset, **kwargs) -> tf.data.Dataset:
+        features = {
+            "input_ids": tf.io.VarLenFeature(tf.int64),
+            "segment_ids": tf.io.VarLenFeature(tf.int64),
+            "attention_mask": tf.io.VarLenFeature(tf.int64),
+        }
+        dataset = dataset.map(
+            lambda x: tf.io.parse_example(x, features),
+            num_parallel_calls=cls.AUTOTUNE,
+        ).prefetch(cls.AUTOTUNE)
+        dataset = dataset.map(
+            lambda x: (
+                tf.cast(tf.sparse.to_dense(x["input_ids"]), tf.int32),
+                tf.cast(tf.sparse.to_dense(x["segment_ids"]), tf.int32),
+                tf.cast(tf.sparse.to_dense(x["attention_mask"]), tf.int32),
+            ),
+            num_parallel_calls=cls.AUTOTUNE,
+        ).prefetch(cls.AUTOTUNE)
+        return dataset
 
     @classmethod
     def _filter(cls, dataset, max_sequence_length=512, **kwargs):
@@ -112,7 +245,27 @@ class DatasetForUnsupervisedSimCSE(AbstractDataset):
         return dataset
 
     @classmethod
-    def _zip_dataset(cls, examples: List[ExampleForUnsupervisedSimCSE], **kwargs):
+    def _to_dict(cls, dataset, to_dict=True, **kwargs):
+        if not to_dict:
+            return dataset
+        dataset = dataset.map(
+            lambda x, y, z: ({"input_ids": x, "segment_ids": y, "attention_mask": z}, None),
+            num_parallel_calls=cls.AUTOTUNE,
+        ).prefetch(cls.AUTOTUNE)
+        return dataset
+
+
+class DataPipeForSupervisedSimCSE(AbstractDataPipe):
+    """Dataset builder for supervised SimCSE"""
+
+    @classmethod
+    def _dataset_from_jsonl_files(cls, input_files, vocab_file, **kwargs) -> DatasetForSupervisedSimCSE:
+        return DatasetForSupervisedSimCSE(input_files, vocab_file, **kwargs)
+
+    @classmethod
+    def _transform_examples_to_dataset(cls, examples, **kwargs) -> tf.data.Dataset:
+        """Zip examples to dataset"""
+
         def _to_dataset(x, dtype=tf.int32):
             x = tf.ragged.constant(x, dtype=dtype)
             d = tf.data.Dataset.from_tensor_slices(x)
@@ -121,50 +274,25 @@ class DatasetForUnsupervisedSimCSE(AbstractDataset):
 
         dataset = tf.data.Dataset.zip(
             (
-                _to_dataset([e.input_ids for e in examples], dtype=tf.int32),
-                _to_dataset([e.segment_ids for e in examples], dtype=tf.int32),
-                _to_dataset([e.attention_mask for e in examples], dtype=tf.int32),
+                _to_dataset([e.input_ids for e in examples]),
+                _to_dataset([e.segment_ids for e in examples]),
+                _to_dataset([e.attention_mask for e in examples]),
+                _to_dataset([e.pos_input_ids for e in examples]),
+                _to_dataset([e.pos_segment_ids for e in examples]),
+                _to_dataset([e.pos_attention_mask for e in examples]),
             )
         )
         return dataset
 
     @classmethod
-    def _to_dict(cls, dataset, **kwargs):
-        dataset = dataset.map(
-            lambda x, y, z: ({"input_ids": x, "segment_ids": y, "attention_mask": z}, None),
-            num_parallel_calls=cls.AUTOTUNE,
-        ).prefetch(cls.AUTOTUNE)
-        return dataset
-
-    @classmethod
-    def _parse_instances_to_examples(
-        cls, instances, tokenizer: BertWordPieceTokenizer = None, vocab_file=None, **kwargs
-    ):
-        assert tokenizer or vocab_file, "`tokenizer` or `vocab_file` must be provided."
-        if tokenizer is None:
-            tokenizer = BertWordPieceTokenizer.from_file(
-                vocab_file,
-                lowercase=kwargs.get("do_lower_case", True),
-            )
-        examples = []
-        for instance in instances:
-            sequence = instance[kwargs.get("sequence_key", "sequence")]
-            seq_encoding = tokenizer.encode(sequence)
-            example = ExampleForUnsupervisedSimCSE(
-                tokens=seq_encoding.tokens,
-                input_ids=seq_encoding.ids,
-                segment_ids=seq_encoding.type_ids,
-                attention_mask=seq_encoding.attention_mask,
-            )
-            examples.append(example)
-        return examples
-
-    @classmethod
-    def _parse_tfrecord(cls, dataset, **kwargs):
+    def _parse_tfrecord_dataset(cls, dataset: tf.data.Dataset, **kwargs) -> tf.data.Dataset:
         features = {
             "input_ids": tf.io.VarLenFeature(tf.int64),
             "segment_ids": tf.io.VarLenFeature(tf.int64),
             "attention_mask": tf.io.VarLenFeature(tf.int64),
+            "pos_input_ids": tf.io.VarLenFeature(tf.int64),
+            "pos_segment_ids": tf.io.VarLenFeature(tf.int64),
+            "pos_attention_mask": tf.io.VarLenFeature(tf.int64),
         }
         dataset = dataset.map(
             lambda x: tf.io.parse_example(x, features),
@@ -175,23 +303,25 @@ class DatasetForUnsupervisedSimCSE(AbstractDataset):
                 tf.cast(tf.sparse.to_dense(x["input_ids"]), tf.int32),
                 tf.cast(tf.sparse.to_dense(x["segment_ids"]), tf.int32),
                 tf.cast(tf.sparse.to_dense(x["attention_mask"]), tf.int32),
+                tf.cast(tf.sparse.to_dense(x["pos_input_ids"]), tf.int32),
+                tf.cast(tf.sparse.to_dense(x["pos_segment_ids"]), tf.int32),
+                tf.cast(tf.sparse.to_dense(x["pos_attention_mask"]), tf.int32),
             ),
             num_parallel_calls=cls.AUTOTUNE,
         ).prefetch(cls.AUTOTUNE)
         return dataset
 
     @classmethod
-    def _example_to_tfrecord(cls, example, **kwargs):
+    def _transform_example_to_tfrecord(cls, example, **kwargs) -> tf.train.Example:
         feature = {
             "input_ids": cls._int64_feature([int(x) for x in example.input_ids]),
             "segment_ids": cls._int64_feature([int(x) for x in example.segment_ids]),
             "attention_mask": cls._int64_feature([int(x) for x in example.attention_mask]),
+            "pos_input_ids": cls._int64_feature([int(x) for x in example.pos_input_ids]),
+            "pos_segment_ids": cls._int64_feature([int(x) for x in example.pos_segment_ids]),
+            "pos_attention_mask": cls._int64_feature([int(x) for x in example.pos_attention_mask]),
         }
         return tf.train.Example(features=tf.train.Features(feature=feature))
-
-
-class DatasetForSupervisedSimCSE(AbstractDataset):
-    """Dataset builder for supervised SimCSE"""
 
     @classmethod
     def _filter(cls, dataset, max_sequence_length=512, **kwargs):
@@ -257,27 +387,9 @@ class DatasetForSupervisedSimCSE(AbstractDataset):
         return dataset
 
     @classmethod
-    def _zip_dataset(cls, examples: List[ExampleForSupervisedSimCSE], **kwargs):
-        def _to_dataset(x, dtype=tf.int32):
-            x = tf.ragged.constant(x, dtype=dtype)
-            d = tf.data.Dataset.from_tensor_slices(x)
-            d = d.map(lambda x: x)
-            return d
-
-        dataset = tf.data.Dataset.zip(
-            (
-                _to_dataset([e.input_ids for e in examples]),
-                _to_dataset([e.segment_ids for e in examples]),
-                _to_dataset([e.attention_mask for e in examples]),
-                _to_dataset([e.pos_input_ids for e in examples]),
-                _to_dataset([e.pos_segment_ids for e in examples]),
-                _to_dataset([e.pos_attention_mask for e in examples]),
-            )
-        )
-        return dataset
-
-    @classmethod
-    def _to_dict(cls, dataset, **kwargs):
+    def _to_dict(cls, dataset, to_dict=True, **kwargs):
+        if not to_dict:
+            return dataset
         dataset = dataset.map(
             lambda a, b, c, e, f, g: (
                 {
@@ -294,41 +406,63 @@ class DatasetForSupervisedSimCSE(AbstractDataset):
         ).prefetch(cls.AUTOTUNE)
         return dataset
 
-    @classmethod
-    def _parse_instances_to_examples(
-        cls, instances, tokenizer: BertWordPieceTokenizer = None, vocab_file=None, **kwargs
-    ):
-        assert tokenizer or vocab_file, "`tokenizer` or `vocab_file` must be provided."
-        if tokenizer is None:
-            tokenizer = BertWordPieceTokenizer.from_file(
-                vocab_file,
-                lowercase=kwargs.get("do_lower_case", True),
-            )
-        examples = []
-        for instance in instances:
-            sequence = instance[kwargs.get("sequence_key", "sequence")]
-            seq_encoding = tokenizer.encode(sequence)
-            pos_sequence = instance[kwargs.get("pos_sequence_key", "pos_sequence")]
-            pos_encoding = tokenizer.encode(pos_sequence)
-            example = ExampleForSupervisedSimCSE(
-                tokens=seq_encoding.tokens,
-                input_ids=seq_encoding.ids,
-                segment_ids=seq_encoding.type_ids,
-                attention_mask=seq_encoding.attention_mask,
-                pos_tokens=pos_encoding.tokens,
-                pos_input_ids=pos_encoding.ids,
-                pos_segment_ids=pos_encoding.type_ids,
-                pos_attention_mask=pos_encoding.attention_mask,
-            )
-            examples.append(example)
-        return examples
+
+class DataPipeForHardNegativeSimCSE(AbstractDataPipe):
+    """Dataset builder for hard negavtive SimCSE"""
 
     @classmethod
-    def _parse_tfrecord(cls, dataset, **kwargs):
+    def _dataset_from_jsonl_files(cls, input_files, vocab_file, **kwargs) -> DatasetForHardNegativeSimCSE:
+        return DatasetForHardNegativeSimCSE(input_files, vocab_file, **kwargs)
+
+    @classmethod
+    def _transform_examples_to_dataset(cls, examples, **kwargs) -> tf.data.Dataset:
+        """Zip examples to dataset"""
+
+        def _to_dataset(x, dtype=tf.int32):
+            x = tf.ragged.constant(x, dtype=dtype)
+            d = tf.data.Dataset.from_tensor_slices(x)
+            d = d.map(lambda x: x)
+            return d
+
+        dataset = tf.data.Dataset.zip(
+            (
+                _to_dataset([e.input_ids for e in examples], dtype=tf.int32),
+                _to_dataset([e.segment_ids for e in examples], dtype=tf.int32),
+                _to_dataset([e.attention_mask for e in examples], dtype=tf.int32),
+                _to_dataset([e.pos_input_ids for e in examples], dtype=tf.int32),
+                _to_dataset([e.pos_segment_ids for e in examples], dtype=tf.int32),
+                _to_dataset([e.pos_attention_mask for e in examples], dtype=tf.int32),
+                _to_dataset([e.neg_input_ids for e in examples], dtype=tf.int32),
+                _to_dataset([e.neg_segment_ids for e in examples], dtype=tf.int32),
+                _to_dataset([e.neg_attention_mask for e in examples], dtype=tf.int32),
+            )
+        )
+        return dataset
+
+    @classmethod
+    def _transform_example_to_tfrecord(cls, example, **kwargs) -> tf.train.Example:
+        feature = {
+            "input_ids": cls._int64_feature([int(x) for x in example.input_ids]),
+            "segment_ids": cls._int64_feature([int(x) for x in example.segment_ids]),
+            "attention_mask": cls._int64_feature([int(x) for x in example.attention_mask]),
+            "pos_input_ids": cls._int64_feature([int(x) for x in example.pos_input_ids]),
+            "pos_segment_ids": cls._int64_feature([int(x) for x in example.pos_segment_ids]),
+            "pos_attention_mask": cls._int64_feature([int(x) for x in example.pos_attention_mask]),
+            "neg_input_ids": cls._int64_feature([int(x) for x in example.neg_input_ids]),
+            "neg_segment_ids": cls._int64_feature([int(x) for x in example.neg_segment_ids]),
+            "neg_attention_mask": cls._int64_feature([int(x) for x in example.neg_attention_mask]),
+        }
+        return tf.train.Example(features=tf.train.Features(feature=feature))
+
+    @classmethod
+    def _parse_tfrecord_dataset(cls, dataset: tf.data.Dataset, **kwargs) -> tf.data.Dataset:
         features = {
             "input_ids": tf.io.VarLenFeature(tf.int64),
             "segment_ids": tf.io.VarLenFeature(tf.int64),
             "attention_mask": tf.io.VarLenFeature(tf.int64),
+            "neg_input_ids": tf.io.VarLenFeature(tf.int64),
+            "neg_segment_ids": tf.io.VarLenFeature(tf.int64),
+            "neg_attention_mask": tf.io.VarLenFeature(tf.int64),
             "pos_input_ids": tf.io.VarLenFeature(tf.int64),
             "pos_segment_ids": tf.io.VarLenFeature(tf.int64),
             "pos_attention_mask": tf.io.VarLenFeature(tf.int64),
@@ -345,26 +479,13 @@ class DatasetForSupervisedSimCSE(AbstractDataset):
                 tf.cast(tf.sparse.to_dense(x["pos_input_ids"]), tf.int32),
                 tf.cast(tf.sparse.to_dense(x["pos_segment_ids"]), tf.int32),
                 tf.cast(tf.sparse.to_dense(x["pos_attention_mask"]), tf.int32),
+                tf.cast(tf.sparse.to_dense(x["neg_input_ids"]), tf.int32),
+                tf.cast(tf.sparse.to_dense(x["neg_segment_ids"]), tf.int32),
+                tf.cast(tf.sparse.to_dense(x["neg_attention_mask"]), tf.int32),
             ),
             num_parallel_calls=cls.AUTOTUNE,
         ).prefetch(cls.AUTOTUNE)
         return dataset
-
-    @classmethod
-    def _example_to_tfrecord(cls, example, **kwargs):
-        feature = {
-            "input_ids": cls._int64_feature([int(x) for x in example.input_ids]),
-            "segment_ids": cls._int64_feature([int(x) for x in example.segment_ids]),
-            "attention_mask": cls._int64_feature([int(x) for x in example.attention_mask]),
-            "pos_input_ids": cls._int64_feature([int(x) for x in example.pos_input_ids]),
-            "pos_segment_ids": cls._int64_feature([int(x) for x in example.pos_segment_ids]),
-            "pos_attention_mask": cls._int64_feature([int(x) for x in example.pos_attention_mask]),
-        }
-        return tf.train.Example(features=tf.train.Features(feature=feature))
-
-
-class DatasetForHardNegativeSimCSE(AbstractDataset):
-    """Dataset builder for hard negavtive SimCSE"""
 
     @classmethod
     def _filter(cls, dataset, max_sequence_length=512, **kwargs):
@@ -433,30 +554,9 @@ class DatasetForHardNegativeSimCSE(AbstractDataset):
         return dataset
 
     @classmethod
-    def _zip_dataset(cls, examples: List[ExampleForUnsupervisedSimCSE], **kwargs):
-        def _to_dataset(x, dtype=tf.int32):
-            x = tf.ragged.constant(x, dtype=dtype)
-            d = tf.data.Dataset.from_tensor_slices(x)
-            d = d.map(lambda x: x)
-            return d
-
-        dataset = tf.data.Dataset.zip(
-            (
-                _to_dataset([e.input_ids for e in examples], dtype=tf.int32),
-                _to_dataset([e.segment_ids for e in examples], dtype=tf.int32),
-                _to_dataset([e.attention_mask for e in examples], dtype=tf.int32),
-                _to_dataset([e.pos_input_ids for e in examples], dtype=tf.int32),
-                _to_dataset([e.pos_segment_ids for e in examples], dtype=tf.int32),
-                _to_dataset([e.pos_attention_mask for e in examples], dtype=tf.int32),
-                _to_dataset([e.neg_input_ids for e in examples], dtype=tf.int32),
-                _to_dataset([e.neg_segment_ids for e in examples], dtype=tf.int32),
-                _to_dataset([e.neg_attention_mask for e in examples], dtype=tf.int32),
-            )
-        )
-        return dataset
-
-    @classmethod
-    def _to_dict(cls, dataset, **kwargs):
+    def _to_dict(cls, dataset, to_dict=True, **kwargs):
+        if not to_dict:
+            return dataset
         dataset = dataset.map(
             lambda a, b, c, e, f, g, h, i, j: (
                 {
@@ -475,86 +575,3 @@ class DatasetForHardNegativeSimCSE(AbstractDataset):
             num_parallel_calls=cls.AUTOTUNE,
         ).prefetch(cls.AUTOTUNE)
         return dataset
-
-    @classmethod
-    def _parse_instances_to_examples(
-        cls, instances, tokenizer: BertWordPieceTokenizer = None, vocab_file=None, **kwargs
-    ):
-        assert tokenizer or vocab_file, "`tokenizer` or `vocab_file` must be provided."
-        if tokenizer is None:
-            tokenizer = BertWordPieceTokenizer.from_file(
-                vocab_file,
-                lowercase=kwargs.get("do_lower_case", True),
-            )
-        examples = []
-        for instance in instances:
-            sequence = instance[kwargs.get("sequence_key", "sequence")]
-            seq_encoding = tokenizer.encode(sequence)
-            pos_sequence = instance[kwargs.get("pos_sequence_key", "pos_sequence")]
-            pos_encoding = tokenizer.encode(pos_sequence)
-            neg_sequence = instance[kwargs.get("neg_sequence_key", "neg_sequence")]
-            neg_encoding = tokenizer.encode(neg_sequence)
-            example = ExampleForHardNegativeSimCSE(
-                tokens=seq_encoding.tokens,
-                input_ids=seq_encoding.ids,
-                segment_ids=seq_encoding.type_ids,
-                attention_mask=seq_encoding.attention_mask,
-                pos_tokens=pos_encoding.tokens,
-                pos_input_ids=pos_encoding.ids,
-                pos_segment_ids=pos_encoding.type_ids,
-                pos_attention_mask=pos_encoding.attention_mask,
-                neg_tokens=neg_encoding.tokens,
-                neg_input_ids=neg_encoding.ids,
-                neg_segment_ids=neg_encoding.type_ids,
-                neg_attention_mask=neg_encoding.attention_mask,
-            )
-            examples.append(example)
-        return examples
-
-    @classmethod
-    def _parse_tfrecord(cls, dataset, **kwargs):
-        features = {
-            "input_ids": tf.io.VarLenFeature(tf.int64),
-            "segment_ids": tf.io.VarLenFeature(tf.int64),
-            "attention_mask": tf.io.VarLenFeature(tf.int64),
-            "neg_input_ids": tf.io.VarLenFeature(tf.int64),
-            "neg_segment_ids": tf.io.VarLenFeature(tf.int64),
-            "neg_attention_mask": tf.io.VarLenFeature(tf.int64),
-            "pos_input_ids": tf.io.VarLenFeature(tf.int64),
-            "pos_segment_ids": tf.io.VarLenFeature(tf.int64),
-            "pos_attention_mask": tf.io.VarLenFeature(tf.int64),
-        }
-        dataset = dataset.map(
-            lambda x: tf.io.parse_example(x, features),
-            num_parallel_calls=cls.AUTOTUNE,
-        ).prefetch(cls.AUTOTUNE)
-        dataset = dataset.map(
-            lambda x: (
-                tf.cast(tf.sparse.to_dense(x["input_ids"]), tf.int32),
-                tf.cast(tf.sparse.to_dense(x["segment_ids"]), tf.int32),
-                tf.cast(tf.sparse.to_dense(x["attention_mask"]), tf.int32),
-                tf.cast(tf.sparse.to_dense(x["pos_input_ids"]), tf.int32),
-                tf.cast(tf.sparse.to_dense(x["pos_segment_ids"]), tf.int32),
-                tf.cast(tf.sparse.to_dense(x["pos_attention_mask"]), tf.int32),
-                tf.cast(tf.sparse.to_dense(x["neg_input_ids"]), tf.int32),
-                tf.cast(tf.sparse.to_dense(x["neg_segment_ids"]), tf.int32),
-                tf.cast(tf.sparse.to_dense(x["neg_attention_mask"]), tf.int32),
-            ),
-            num_parallel_calls=cls.AUTOTUNE,
-        ).prefetch(cls.AUTOTUNE)
-        return dataset
-
-    @classmethod
-    def _example_to_tfrecord(cls, example, **kwargs):
-        feature = {
-            "input_ids": cls._int64_feature([int(x) for x in example.input_ids]),
-            "segment_ids": cls._int64_feature([int(x) for x in example.segment_ids]),
-            "attention_mask": cls._int64_feature([int(x) for x in example.attention_mask]),
-            "pos_input_ids": cls._int64_feature([int(x) for x in example.pos_input_ids]),
-            "pos_segment_ids": cls._int64_feature([int(x) for x in example.pos_segment_ids]),
-            "pos_attention_mask": cls._int64_feature([int(x) for x in example.pos_attention_mask]),
-            "neg_input_ids": cls._int64_feature([int(x) for x in example.neg_input_ids]),
-            "neg_segment_ids": cls._int64_feature([int(x) for x in example.neg_segment_ids]),
-            "neg_attention_mask": cls._int64_feature([int(x) for x in example.neg_attention_mask]),
-        }
-        return tf.train.Example(features=tf.train.Features(feature=feature))
