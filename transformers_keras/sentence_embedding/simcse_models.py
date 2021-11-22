@@ -53,7 +53,7 @@ class AbstractSimCSE(BertPretrainedModel):
         raise NotImplementedError()
 
     def train_step(self, data):
-        x = data
+        x, _ = data
         batch_size = tf.shape(x["input_ids"])[0]
         y_true = tf.range(0, batch_size)
         with tf.GradientTape() as tape:
@@ -73,7 +73,7 @@ class AbstractSimCSE(BertPretrainedModel):
         return results
 
     def test_step(self, data):
-        x = data
+        x, _ = data
         batch_size = tf.shape(x["input_ids"])[0]
         y_true = tf.range(0, batch_size)
         y_pred, loss = self.forward(x, y_true, training=False)
@@ -99,7 +99,7 @@ class UnsupervisedSimCSE(AbstractSimCSE):
         # shape: (batch_size, batch_size)
         cosine = tf.matmul(norm_embedding_a, norm_embedding_b, transpose_b=True)
         # softmax temperature
-        cosine = cosine / 0.05
+        cosine = cosine / self.temperature
         loss = tf.keras.losses.sparse_categorical_crossentropy(labels, cosine, from_logits=True)
         return loss, cosine
 
