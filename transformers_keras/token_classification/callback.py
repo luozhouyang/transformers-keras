@@ -1,40 +1,82 @@
 import logging
 import os
-from typing import List
 
 import numpy as np
 import tensorflow as tf
 from seqeval.metrics import classification_report
-from transformers_keras.common.label_tokenizer import LabelTokenizerForTokenClassification
-from transformers_keras.datapipe.tc_dataset import DataPipeForTokenClassification, ExampleForTokenClassification
+from smile_datasets import BertCharLevelTokenizer, LabelTokenizerForTokenClassification, ParserForTokenClassification
+
+from . import readers
 
 
 class SeqEvalForTokenClassification(tf.keras.callbacks.Callback):
     """Seqeval for token classification"""
 
     @classmethod
-    def from_conll_files(cls, input_files, vocab_file, label_vocab_file, o_token="O", sep="\t", **kwargs):
-        examples = DataPipeForTokenClassification.conll_to_examples(
-            input_files,
-            tokenizer=None,
-            vocab_file=vocab_file,
-            label_tokenizer=None,
-            label_vocab_file=label_vocab_file,
-            sep=sep,
-            **kwargs
-        )
-        label_tokenizer = LabelTokenizerForTokenClassification.from_file(label_vocab_file, o_token=o_token)
-        return cls(examples=examples, label_tokenizer=label_tokenizer, **kwargs)
+    def from_jsonl_files(
+        cls,
+        input_files,
+        feature_tokenizer: BertCharLevelTokenizer = None,
+        feature_vocab_file=None,
+        label_tokenizer: LabelTokenizerForTokenClassification = None,
+        label_vocab_file=None,
+        feature_key="feature",
+        label_key="label",
+        **kwargs
+    ):
+        feature_tokenizer = feature_tokenizer or BertCharLevelTokenizer.from_file(feature_vocab_file, **kwargs)
+        label_tokenizer = label_tokenizer or LabelTokenizerForTokenClassification.from_file(label_vocab_file, **kwargs)
+        instances = []
+        for instance in readers.read_jsonl_files_for_prediction(
+            input_files, feature_key=feature_key, label_key=label_key, **kwargs
+        ):
+            instances.append(instance)
+        return cls(instances, feature_tokenizer=feature_tokenizer, label_tokenizer=label_tokenizer, **kwargs)
+
+    @classmethod
+    def from_conll_files(
+        cls,
+        input_files,
+        feature_tokenizer: BertCharLevelTokenizer = None,
+        feature_vocab_file=None,
+        label_tokenizer: LabelTokenizerForTokenClassification = None,
+        label_vocab_file=None,
+        sep="[\\s\t]+",
+        **kwargs
+    ):
+        feature_tokenizer = feature_tokenizer or BertCharLevelTokenizer.from_file(feature_vocab_file, **kwargs)
+        label_tokenizer = label_tokenizer or LabelTokenizerForTokenClassification.from_file(label_vocab_file, **kwargs)
+        instances = []
+        for instance in readers.read_conll_files_for_prediction(input_files, sep=sep, **kwargs):
+            instances.append(instance)
+        return cls(instances, feature_tokenizer=feature_tokenizer, label_tokenizer=label_tokenizer, **kwargs)
 
     def __init__(
         self,
-        examples: List[ExampleForTokenClassification],
+        instances,
+        feature_tokenizer: BertCharLevelTokenizer,
         label_tokenizer: LabelTokenizerForTokenClassification,
         batch_size=32,
+        do_lower_case=True,
+        o_token="O",
         **kwargs
     ):
         super().__init__()
+        parser = ParserForTokenClassification.from_tokenizer(
+            feature_tokenizer=feature_tokenizer,
+            label_tokenizer=label_tokenizer,
+            do_lower_case=do_lower_case,
+            o_token=o_token,
+            **kwargs
+        )
+        examples = []
+        for instance in instances:
+            e = parser.parse(instance, **kwargs)
+            if not e:
+                continue
+            examples.append(e)
         self.examples = examples
+        self.feature_tokenizer = feature_tokenizer
         self.label_tokenizer = label_tokenizer
         self.batch_size = batch_size
 

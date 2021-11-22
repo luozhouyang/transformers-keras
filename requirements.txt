@@ -2,3 +2,4 @@ tensorflow>=2.0.0
 tensorflow-addons
 tokenizers
 seqeval
+smile-datasets==0.0.5

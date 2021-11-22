@@ -18,7 +18,10 @@ class CallbackTest(unittest.TestCase):
 
     def test_seqeval_for_token_classification(self):
         callback = SeqEvalForTokenClassification.from_conll_files(
-            "testdata/conll.txt", "testdata/vocab.bert.txt", "testdata/labels.txt", sep="\\s+"
+            "testdata/conll.txt",
+            feature_vocab_file="testdata/vocab.bert.txt",
+            label_vocab_file="testdata/labels.txt",
+            sep="\\s+",
         )
         model = BertForTokenClassification.from_pretrained(BERT_PATH, override_params={"num_labels": 3})
         callback.model = model
@@ -26,7 +29,10 @@ class CallbackTest(unittest.TestCase):
 
     def test_seqeval_for_crf_token_classification(self):
         callback = SeqEvalForCRFTokenClassification.from_conll_files(
-            "testdata/conll.txt", "testdata/vocab.bert.txt", "testdata/labels.txt", sep="\\s+"
+            "testdata/conll.txt",
+            feature_vocab_file="testdata/vocab.bert.txt",
+            label_vocab_file="testdata/labels.txt",
+            sep="\\s+",
         )
         model = BertCRFForTokenClassification.from_pretrained(BERT_PATH, override_params={"num_labels": 3})
         callback.model = model

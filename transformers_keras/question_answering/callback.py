@@ -3,19 +3,41 @@ from typing import List
 
 import numpy as np
 import tensorflow as tf
+from smile_datasets import ExampleForQuestionAnswering, ParserForQuestionAnswering
+from tokenizers import BertWordPieceTokenizer
 from transformers_keras.common.metrics import ExactMatch, F1ForSequence
-from transformers_keras.datapipe.qa_dataset import DatasetForQuestionAnswering, ExampleForQuestionAnswering
+
+from . import readers
 
 
 class BaseMetricForQuestionAnswering(tf.keras.callbacks.Callback):
     """Base metric for qa."""
 
     @classmethod
-    def from_jsonl_files(cls, input_files, vocab_file, limit=None, **kwargs):
-        dataset = DatasetForQuestionAnswering(input_files, vocab_file, **kwargs)
-        examples = [dataset[idx] for idx in range(len(dataset))]
-        if limit is not None and limit > 0:
-            examples = examples[:limit]
+    def from_jsonl_files(
+        cls,
+        input_files,
+        tokenizer: BertWordPieceTokenizer = None,
+        vocab_file=None,
+        context_key="context",
+        question_key="question",
+        do_lower_case=True,
+        limit=None,
+        **kwargs
+    ):
+        parser = ParserForQuestionAnswering(
+            tokenizer=tokenizer, vocab_file=vocab_file, do_lower_case=do_lower_case, **kwargs
+        )
+        examples = []
+        for instance in readers.read_jsonl_files_for_prediction(
+            input_files, conetxt_key=context_key, question_key=question_key, **kwargs
+        ):
+            e = parser.parse(instance, **kwargs)
+            if not e:
+                continue
+            examples.append(e)
+            if limit is not None and len(examples) == limit:
+                break
         return cls(examples, **kwargs)
 
     def __init__(self, examples: List[ExampleForQuestionAnswering], batch_size=32, **kwargs):
