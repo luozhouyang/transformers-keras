@@ -45,9 +45,9 @@ class BertForQuestionAnswering(BertPretrainedModel):
 
         sequence_output, _, _, _ = bert_model(input_ids, segment_ids, attention_mask)
         logits = tf.keras.layers.Dense(num_labels, name="dense")(sequence_output)
-        head_logits = tf.keras.layers.Lambda(lambda x: x[:, :, 0], name="head")(logits)
-        tail_logits = tf.keras.layers.Lambda(lambda x: x[:, :, 1], name="tail")(logits)
-        super().__init__(inputs=[input_ids, segment_ids, attention_mask], outputs=[head_logits, tail_logits], **kwargs)
+        start_logits = tf.keras.layers.Lambda(lambda x: x[:, :, 0], name="start")(logits)
+        end_logits = tf.keras.layers.Lambda(lambda x: x[:, :, 1], name="end")(logits)
+        super().__init__(inputs=[input_ids, segment_ids, attention_mask], outputs=[start_logits, end_logits], **kwargs)
 
 
 class AlbertForQuestionAnswering(AlbertPretrainedModel):
@@ -98,9 +98,9 @@ class AlbertForQuestionAnswering(AlbertPretrainedModel):
 
         sequence_output, _, _, _ = albert_model(input_ids, segment_ids, attention_mask)
         logits = tf.keras.layers.Dense(num_labels, name="dense")(sequence_output)
-        head_logits = tf.keras.layers.Lambda(lambda x: x[:, :, 0], name="head")(logits)
-        tail_logits = tf.keras.layers.Lambda(lambda x: x[:, :, 1], name="tail")(logits)
-        super().__init__(inputs=[input_ids, segment_ids, attention_mask], outputs=[head_logits, tail_logits], **kwargs)
+        start_logits = tf.keras.layers.Lambda(lambda x: x[:, :, 0], name="start")(logits)
+        end_logits = tf.keras.layers.Lambda(lambda x: x[:, :, 1], name="end")(logits)
+        super().__init__(inputs=[input_ids, segment_ids, attention_mask], outputs=[start_logits, end_logits], **kwargs)
 
 
 class BertForQuestionAnsweringX(BertPretrainedModel):
@@ -146,12 +146,12 @@ class BertForQuestionAnsweringX(BertPretrainedModel):
 
         sequence_output, pooled_output, _, _ = bert_model(input_ids, segment_ids, attention_mask)
         logits = tf.keras.layers.Dense(num_labels, name="dense")(sequence_output)
-        head_logits = tf.keras.layers.Lambda(lambda x: x[:, :, 0], name="head")(logits)
-        tail_logits = tf.keras.layers.Lambda(lambda x: x[:, :, 1], name="tail")(logits)
+        start_logits = tf.keras.layers.Lambda(lambda x: x[:, :, 0], name="start")(logits)
+        end_logits = tf.keras.layers.Lambda(lambda x: x[:, :, 1], name="end")(logits)
         class_logits = tf.keras.layers.Dense(num_classes, name="class")(pooled_output)
 
         super().__init__(
-            inputs=[input_ids, segment_ids, attention_mask], outputs=[head_logits, tail_logits, class_logits], **kwargs
+            inputs=[input_ids, segment_ids, attention_mask], outputs=[start_logits, end_logits, class_logits], **kwargs
         )
 
 
@@ -204,9 +204,9 @@ class AlbertForQuestionAnsweringX(BertPretrainedModel):
 
         sequence_output, pooled_output, _, _ = albert_model(input_ids, segment_ids, attention_mask)
         logits = tf.keras.layers.Dense(num_labels, name="dense")(sequence_output)
-        head_logits = tf.keras.layers.Lambda(lambda x: x[:, :, 0], name="head")(logits)
-        tail_logits = tf.keras.layers.Lambda(lambda x: x[:, :, 1], name="tail")(logits)
+        start_logits = tf.keras.layers.Lambda(lambda x: x[:, :, 0], name="start")(logits)
+        end_logits = tf.keras.layers.Lambda(lambda x: x[:, :, 1], name="end")(logits)
         class_logits = tf.keras.layers.Dense(num_classes, name="class")(pooled_output)
         super().__init__(
-            inputs=[input_ids, segment_ids, attention_mask], outputs=[head_logits, tail_logits, class_logits], **kwargs
+            inputs=[input_ids, segment_ids, attention_mask], outputs=[start_logits, end_logits, class_logits], **kwargs
         )
