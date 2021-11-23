@@ -92,6 +92,6 @@ from transformers_keras.token_classification.crf_models import (
 from transformers_keras.token_classification.models import AlbertForTokenClassification, BertForTokenClassification
 
 __name__ = "transformers_keras"
-__version__ = "0.5.0"
+__version__ = "0.5.1"
 
 logging.basicConfig(format="%(asctime)s %(levelname)7s %(filename)20s %(lineno)4d] %(message)s", level=logging.INFO)
